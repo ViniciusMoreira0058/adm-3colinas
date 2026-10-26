@@ -86,6 +86,7 @@ const S = {
   P: [], T: [], topSel: null, equipe: [], peers: [], isOwner: false,
   loaded: { pessoas: false, tarefas: false, estoque: false, pista: false, tops: false },
   f: { q: "", tipo: "participante", status: "todos", adm: "" },
+  sel: { on: false, tipo: "", ids: new Set() },   // seleção para apagar em massa (só o dono)
 };
 let db = null;
 let localSeq = 0;
@@ -335,10 +336,18 @@ function vPessoas(tipo) {
   const tick = (p, k, i, t) => `<button type="button" class="tick ${p[k] ? "on" : ""}" data-tog="${k}" data-id="${p.id}" title="${t}" aria-label="${t}: ${p[k] ? "sim" : "não"}" aria-pressed="${!!p[k]}">${ico(i)}</button>`;
   const ticks = p => lg ? "" : `<div class="ticks">${tick(p, "msgGrupo", "chat", "Mensagem do grupo enviada")}${tick(p, "noGrupo", "group", "Entrou no grupo")}${tick(p, "nfc", "nfc", "NFC registrado")}</div>`;
   const cyc = (list, k, p) => chip(list, p[k], `data-cyc="${k}" data-id="${p.id}" title="Clique para avançar o status"`);
+  const sel = S.isOwner && S.sel.on && S.sel.tipo === tipo;
+  if (!sel) S.sel.ids.clear();
+  const visiveis = new Set(rows.map(p => p.id));
+  S.sel.ids.forEach(id => { if (!visiveis.has(id)) S.sel.ids.delete(id); });
+  const nSel = S.sel.ids.size, todos = rows.length > 0 && nSel === rows.length;
+  const caixa = p => sel ? `<input type="checkbox" class="selbox" data-sel="${p.id}" ${S.sel.ids.has(p.id) ? "checked" : ""} aria-label="Selecionar ${esc(p.nome)}">` : "";
+  const nomeTipo = lg ? "legendários" : "participantes";
   const atest = p => `${cyc(ATESTADO, "atestado", p)}${p.dataAtestado && p.atestado !== "confirmado" ? `<div class="hint" style="font-size:12px;margin-top:3px">${esc(p.dataAtestado)}</div>` : ""}`;
   return `
   <div class="head"><div><h2>${lg ? "Legendários" : "Participantes"}</h2><p>${lg ? "Servos do TOP: equipe, atestado e termo LGND." : "Cadastro, atestado, termo, grupo e NFC de cada participante."} Toque no status para avançar. Quem mexer por último vira o ADM responsável.</p></div>
     <div class="actions">
+      ${S.isOwner && total ? `<button class="btn ${sel ? "primary" : ""}" type="button" data-act="selecionar" aria-pressed="${sel}">${ico("check")} ${sel ? "Concluir seleção" : "Selecionar"}</button>` : ""}
       <button class="btn" type="button" data-act="colar">${ico("paste")} Colar lista</button>
       <button class="btn primary" type="button" data-act="novo">${ico("plus")} ${lg ? "Novo legendário" : "Novo participante"}</button>
     </div></div>
@@ -348,11 +357,19 @@ function vPessoas(tipo) {
     <select class="sel" id="admSel" aria-label="ADM responsável"><option value="">Todos os ADMs</option>${admOptions().map(a => `<option ${S.f.adm === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>
   </div>
   <div class="seg" role="group" aria-label="Filtro">${fil.map(([v, l]) => `<button type="button" data-fil="${v}" aria-pressed="${S.f.status === v}">${l}</button>`).join("")}</div>
+  ${sel ? `<div class="selbar">
+    <label class="selall"><input type="checkbox" data-selall="1" ${todos ? "checked" : ""} ${rows.length ? "" : "disabled"}> Selecionar todos${rows.length < total ? " desta lista" : ""} <span class="num">(${rows.length})</span></label>
+    <span class="hint num">${nSel} selecionado(s)</span>
+    <div class="actions">
+      <button class="btn danger" type="button" data-act="apagar-sel" ${nSel ? "" : "disabled"}>Apagar selecionados</button>
+      <button class="btn danger" type="button" data-act="apagar-todos">Apagar todos os ${nomeTipo}</button>
+    </div></div>` : ""}
   <div class="hint num">${rows.length} de ${total} ${lg ? "legendários" : "participantes"}</div>
   ${rows.length ? `
   <div class="table-wrap people"><table>
-    <thead><tr><th>Nome</th><th>WhatsApp</th>${lg ? "<th>Equipe</th>" : ""}<th>Atestado</th><th>Termo</th>${lg ? "" : "<th>Grupo · NFC</th><th>Família</th>"}<th>Responsável</th><th></th></tr></thead>
-    <tbody>${rows.map(p => `<tr>
+    <thead><tr>${sel ? `<th style="width:36px"><input type="checkbox" class="selbox" data-selall="1" ${todos ? "checked" : ""} aria-label="Selecionar todos"></th>` : ""}<th>Nome</th><th>WhatsApp</th>${lg ? "<th>Equipe</th>" : ""}<th>Atestado</th><th>Termo</th>${lg ? "" : "<th>Grupo · NFC</th><th>Família</th>"}<th>Responsável</th><th></th></tr></thead>
+    <tbody>${rows.map(p => `<tr class="${S.sel.ids.has(p.id) ? "picked" : ""}">
+      ${sel ? `<td>${caixa(p)}</td>` : ""}
       <td><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div></td>
       <td class="num" style="white-space:nowrap"><div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">${waBtn(p)}<span class="hint" style="font-size:12px">${esc(p.telefone || "sem telefone")}</span></div></td>
       ${lg ? `<td>${esc(p.equipe || "—")}</td>` : ""}
@@ -362,8 +379,8 @@ function vPessoas(tipo) {
       <td>${respHtml(p)}</td>
       <td><button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></td>
     </tr>`).join("")}</tbody></table></div>
-  <div class="cards">${rows.map(p => `<article class="pcard">
-      <div class="top"><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(p.equipe) : ""}</small></div>
+  <div class="cards">${rows.map(p => `<article class="pcard ${S.sel.ids.has(p.id) ? "picked" : ""}">
+      <div class="top">${caixa(p)}<div class="pname" style="flex:1">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(p.equipe) : ""}</small></div>
         <button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></div>
       <div class="row"><span class="lbl">Atestado</span>${cyc(ATESTADO, "atestado", p)}<span class="lbl">Termo</span>${cyc(TERMO, "termo", p)}</div>
       <div class="row" style="justify-content:space-between"><div class="row">${ticks(p)}${!lg && p.familia ? `<span class="tag">Família ${String(p.familia).padStart(2, "0")}</span>` : ""}</div>${waBtn(p)}</div>
@@ -757,6 +774,31 @@ function personForm(p, tipo) {
   };
 }
 
+/* Só o dono: apaga os selecionados ou todos do tipo (no TOP aberto), com confirmação digitada. */
+function apagarEmMassa(todos) {
+  const tipo = S.view === "legendarios" ? "legendario" : "participante";
+  const lg = tipo === "legendario";
+  const alvo = todos ? S.P.filter(p => lg ? p.tipo === "legendario" : p.tipo !== "legendario") : S.P.filter(p => S.sel.ids.has(p.id));
+  if (!alvo.length) { toast("Nada selecionado."); return; }
+  const nome = lg ? (alvo.length > 1 ? "legendários" : "legendário") : (alvo.length > 1 ? "participantes" : "participante");
+  modal(`
+    <h3>Apagar ${alvo.length} ${nome}?</h3>
+    <p class="hint" style="margin:0">${todos ? `Isso apaga <b>todos os ${lg ? "legendários" : "participantes"}</b> do ${esc(topName())}` : `Isso apaga os <b>${alvo.length} selecionados</b>`}, para todos da equipe. <b>Não dá para desfazer.</b></p>
+    <ul class="hint" style="margin:0;max-height:140px;overflow:auto;padding-left:18px">${alvo.slice(0, 12).map(p => `<li>${esc(p.nome)}</li>`).join("")}${alvo.length > 12 ? `<li>e mais ${alvo.length - 12}…</li>` : ""}</ul>
+    <div class="field"><label for="f-conf">Para confirmar, digite <b>APAGAR</b></label><input id="f-conf" name="conf" autocomplete="off" autocapitalize="characters"></div>
+    <div class="warn-text" id="confWarn" hidden></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary danger-fill" type="submit">Apagar ${alvo.length}</button></div></div>`,
+  async (fd) => {
+    if (String(fd.get("conf") || "").trim().toUpperCase() !== "APAGAR") { const w = $("#confWarn"); w.hidden = false; w.textContent = "Digite APAGAR para confirmar."; $("#f-conf").focus(); return; }
+    closeModal();
+    S.sel = { on: false, tipo: "", ids: new Set() };
+    toast(`Apagando ${alvo.length}…`);
+    await save(async () => {
+      for (let i = 0; i < alvo.length; i += 8) await Promise.all(alvo.slice(i, i + 8).map(p => api.remove("pessoas", p.id)));
+    }, `${alvo.length} ${nome} apagado(s)`);
+  });
+}
+
 function pasteForm(tipo) {
   const lg = tipo === "legendario";
   modal(`
@@ -1088,6 +1130,12 @@ document.addEventListener("click", e => {
     if (t.dataset.ok !== "1") { t.dataset.ok = "1"; t.textContent = "Confirmar finalização"; return; }
     save(() => api.update("tops", d.topFin, { status: "finalizado", finalizadoEm: new Date().toISOString().slice(0, 10) }), "TOP finalizado e guardado no histórico"); return;
   }
+  if (d.act === "selecionar" && S.isOwner) {
+    const tipo = S.view === "legendarios" ? "legendario" : "participante";
+    const on = !(S.sel.on && S.sel.tipo === tipo);
+    S.sel = { on, tipo, ids: new Set() }; render(); return;
+  }
+  if ((d.act === "apagar-sel" || d.act === "apagar-todos") && S.isOwner) { apagarEmMassa(d.act === "apagar-todos"); return; }
   if (d.act === "limpar-ex") {
     if (t.dataset.ok !== "1") { t.dataset.ok = "1"; t.textContent = "Confirmar: apagar exemplos"; return; }
     const ex = S.P.filter(p => p.exemplo);
@@ -1125,6 +1173,8 @@ document.addEventListener("input", e => {
   if (e.target.id === "q") { S.f.q = e.target.value; render(); }
 });
 document.addEventListener("change", e => {
+  if (e.target.dataset.sel && S.isOwner) { const id = e.target.dataset.sel; e.target.checked ? S.sel.ids.add(id) : S.sel.ids.delete(id); render(); return; }
+  if (e.target.dataset.selall && S.isOwner) { S.sel.ids = new Set(e.target.checked ? filterPeople().map(p => p.id) : []); render(); return; }
   if (e.target.id === "admSel") { S.f.adm = e.target.value; render(); }
   if (e.target.dataset.fam && !podeEditar()) { toast("Seu acesso é somente leitura."); render(); return; }
   if (e.target.dataset.fam) { const v = e.target.value; if (v) touch(e.target.dataset.fam, { familia: Number(v) }, `Família ${v.padStart(2, "0")} definida`); }
