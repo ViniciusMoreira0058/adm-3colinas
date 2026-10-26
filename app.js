@@ -1018,6 +1018,7 @@ async function iniciarSessao() {
     return;
   }
   sessaoOk = true;
+  showSplash();
   aplicarPerfil(p);
   if ($(".login")) closeModal();
   conectarDados();
@@ -1026,7 +1027,7 @@ async function iniciarSessao() {
 function entrarDemo(e) {
   aplicarPerfil(e); e.user_id = e.user_id || "demo"; e.visto_em = new Date().toISOString();
   S.peers = [{ membro: e.id, nome: e.nome, tela: S.view }];
-  closeModal(); conectarDados(); toast(`Demonstração: entrou como ${e.nome.split(" ")[0]}`);
+  showSplash(); closeModal(); conectarDados(); toast(`Demonstração: entrou como ${e.nome.split(" ")[0]}`);
 }
 async function sair() {
   setMenu(false);
@@ -1135,9 +1136,15 @@ document.addEventListener("keydown", e => {
   else if ($(".app").classList.contains("menu-open")) { setMenu(false); $("#menuBtn").focus(); }
 });
 
-/* ---------- Abertura: trilha de luz subindo a crista até o cume enquanto o app carrega ---------- */
-const splashStart = Date.now();
-let splashDone = false;
+/* ---------- Abertura: trilha de luz subindo a crista até o cume enquanto o app carrega ----------
+   Aparece depois do login (ou na hora, para quem já está logado). */
+let splashStart = 0, splashDone = true;
+function showSplash() {
+  if (!splashDone) return;
+  splashDone = false; splashStart = Date.now();
+  $("#splash").classList.remove("out");
+  setTimeout(() => { if (!splashDone && !precisaLogin()) hideSplash(); }, 9000);
+}
 function hideSplash() {
   if (splashDone) return; splashDone = true;
   setTimeout(() => {
@@ -1145,7 +1152,6 @@ function hideSplash() {
     if (precisaLogin()) setTimeout(() => { if (precisaLogin() && !$(".login")) loginForm(); }, 350);
   }, Math.max(0, 2800 - (Date.now() - splashStart)));
 }
-setTimeout(() => { if (!precisaLogin()) hideSplash(); }, 9000);
 
 /* ---------- Dados ---------- */
 render();
@@ -1187,13 +1193,17 @@ function conectarDados() {
 }
 if (DEMO) {
   S.equipe = ADM_DEMO.membros.map(m => ({ ...m }));
-  setTimeout(hideSplash, 600);
+  loginForm();
 } else {
   sb.auth.onAuthStateChange((ev, session) => {
     if (ev === "PASSWORD_RECOVERY") { authMode = "newpass"; if (splashDone) loginForm(); return; }
     if (ev === "SIGNED_IN" && session && !sessaoOk && authMode !== "newpass") setTimeout(() => iniciarSessao().catch(e => loginForm(erroAmigavel(e), true)), 0);
   });
   if (/type=recovery/.test(location.hash)) authMode = "newpass";
+  // quem já tem sessão salva vê a abertura; os outros vão direto para o login
+  let temSessao = false;
+  try { temSessao = Object.keys(localStorage).some(k => /^sb-.+-auth-token$/.test(k)); } catch (e) {}
+  if (temSessao && authMode !== "newpass") showSplash(); else loginForm();
   sb.auth.getSession().then(async ({ data }) => {
     if (data.session && authMode !== "newpass") { try { await iniciarSessao(); } catch (e) { loginForm(erroAmigavel(e), true); } }
     if (!sessaoOk) hideSplash();
