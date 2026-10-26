@@ -19,9 +19,9 @@ As permissões são conferidas no banco (RLS), não só na tela. Bloquear algué
 
 ## Colocar no ar
 
-1. **Supabase**: crie um projeto novo (plano Free). Se o Supabase não deixar criar mais um projeto grátis, use o projeto do Bold: as tabelas deste app começam com `adm_` e não se misturam com as dele.
+1. **Supabase**: o app usa o mesmo projeto do Bold (`jgoewqyfihdzpurlvaxe`). As tabelas deste app começam com `adm_` e não se misturam com as do Bold. Quem já tem login no Bold entra aqui com o mesmo e-mail e senha.
    Confira o e-mail do dono no fim do `supabase/schema.sql` (seção 8, hoje `barbeariavm0058@gmail.com`). Vá em **SQL Editor → New query**, cole o arquivo inteiro e clique em **Run**. Ele já cria o checklist, o estoque, a pista e o TOP 1922 da planilha.
-2. **app.js**: preencha `SUPABASE_URL` e `SUPABASE_KEY` nas primeiras linhas. O URL fica em **Connect** (botão no alto) ou é `https://<código-do-projeto>.supabase.co`. Use a chave **anon / publishable**. Nunca coloque a *service_role / secret key*.
+2. **app.js**: `SUPABASE_URL` e `SUPABASE_KEY` já estão preenchidos com o projeto do Bold. Para trocar de projeto, mude essas duas linhas. O URL fica em **Connect** (botão no alto) ou é `https://<código-do-projeto>.supabase.co`. Use a chave **anon / publishable**. Nunca coloque a *service_role / secret key*.
 3. **Vercel**: **Add New → Project** → importe este repositório → **Deploy**. Não precisa configurar nada.
 4. **Supabase → Authentication → URL Configuration**: em **Redirect URLs** adicione o endereço da Vercel (ex.: `https://adm-3colinas.vercel.app`). Se o projeto for só deste app, coloque o mesmo endereço também em **Site URL**. Se estiver usando o projeto do Bold, **não mude o Site URL**, só adicione o Redirect URL.
 5. **Primeiro acesso do dono**: abra o app, toque em **Primeiro acesso? Criar minha senha**, use o e-mail do passo 1 e confirme pelo link que chega no e-mail.

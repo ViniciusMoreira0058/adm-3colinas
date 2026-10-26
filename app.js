@@ -5,8 +5,8 @@
    (Project Settings → API). Use só a chave anon / publishable.
    Com SUPABASE_URL vazio (ou ?demo=1 no endereço) o app abre em modo demonstração.
    ===================================================================== */
-const SUPABASE_URL = "";
-const SUPABASE_KEY = "";
+const SUPABASE_URL = "https://jgoewqyfihdzpurlvaxe.supabase.co";
+const SUPABASE_KEY = "sb_publishable_QBxqFv2T9W-4-XTj_OSVEA_d1olCthu"; // chave pública (publishable/anon): segura no navegador, a RLS protege os dados
 (() => {
 const DEMO = !SUPABASE_URL || !SUPABASE_KEY || new URLSearchParams(location.search).has("demo");
 const sb = DEMO ? null : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -985,7 +985,7 @@ function loginForm(aviso, erro) {
         const cad = await sb.rpc("adm_email_cadastrado", { p_email: email });
         if (cad.error) throw cad.error;
         if (!cad.data) throw new Error("Esse e-mail não está cadastrado. Peça ao coordenador para cadastrar você na aba Usuários.");
-        const { data, error } = await sb.auth.signUp({ email, password: senha, options: { emailRedirectTo: APP_URL } });
+        const { data, error } = await sb.auth.signUp({ email, password: senha, options: { emailRedirectTo: APP_URL, data: { app: "adm3colinas" } } });
         if (error) throw error;
         if (data.user && data.user.identities && data.user.identities.length === 0) throw new Error("Esse e-mail já tem senha. Volte e use Entrar, ou Esqueci minha senha.");
         if (data.session) { await iniciarSessao(); return; }
