@@ -88,7 +88,7 @@ const S = {
   loaded: { pessoas: false, tarefas: false, estoque: false, pista: false, tops: false },
   f: { q: "", tipo: "participante", status: "todos", adm: "" },
   sel: { on: false, tipo: "", ids: new Set() },   // seleção para apagar em massa (só o dono)
-  pf: { quem: "participante", oque: "qualquer", adm: "" },   // filtros de Pendências
+  pf: { quem: "participante", oque: "qualquer", adm: "", aba: store.get("pend-aba") || "doc" },   // filtros de Pendências (aba: doc | pag)
   hf: { q: "", quem: "", aba: "", acao: "" }, hist: [], histOk: false, histErro: "",   // Histórico (só o dono)
 };
 let db = null;
@@ -2078,19 +2078,21 @@ function toast(msg) {
 
 /* ---------- Eventos ---------- */
 const pending = new Map();
-const WRITE_KEYS = ["editDia", "act", "edit", "obs", "editTask", "editItem", "editTop", "topFin", "cyc", "tog", "task", "step", "kits", "editAdm", "cronoIni", "cronoFim", "cronoItem"];
+const WRITE_KEYS = ["editDia", "act", "edit", "obs", "editTask", "editItem", "editTop", "topFin", "cyc", "tog", "task", "step", "kits", "editAdm", "cronoIni", "cronoFim", "cronoItem", "pagOk"];
 function debounceWrite(key, fn, ms = 500) { clearTimeout(pending.get(key)); pending.set(key, setTimeout(() => { pending.delete(key); fn(); }, ms)); }
 
 document.addEventListener("click", e => {
   const cob = e.target.closest("a[data-cobrar]");
   if (cob) { const p = S.P.find(x => x.id === cob.dataset.cobrar); if (p) registrarCobranca(p); return; }
+  const cobPag = e.target.closest("a[data-cobrar-pag]");
+  if (cobPag) { const p = S.P.find(x => x.id === cobPag.dataset.cobrarPag); if (p) registrarAvisoPag(p); return; }
   const t = e.target.closest("button, [data-close]");
   if (!t) return;
   if (t.matches("[data-close]") && e.target === t) { closeModal(); return; }
   if (t.matches("[data-close-btn]")) { closeModal(); return; }
   const d = t.dataset;
   if (d.go) { go(d.go); return; }
-  if (d.pf) { S.pf[d.pf] = d.v; render(); return; }
+  if (d.pf) { S.pf[d.pf] = d.v; if (d.pf === "aba") store.set("pend-aba", d.v); render(); return; }
   if (d.aviso) {
     if (d.aviso === "abrir") { avisoModal(); return; }
     marcarAvisoVisto(); closeModal();
@@ -2152,6 +2154,7 @@ document.addEventListener("click", e => {
   if (d.edit) { personForm(S.P.find(p => p.id === d.edit)); return; }
   if (d.obs) { obsForm(S.P.find(p => p.id === d.obs)); return; }
   if (d.dup) { dupForm(S.P.find(p => p.id === d.dup)); return; }
+  if (d.pagOk) { const p = S.P.find(x => x.id === d.pagOk); if (p) touch(p.id, { inscricao: "ativa", pagoEm: new Date().toISOString() }, `${p.nome.split(" ")[0]}: pagamento confirmado`); return; }
   if (d.cronoAdm) { S.cronoAdm = d.cronoAdm; store.set("crono-adm", d.cronoAdm); render(); scrollTo({ top: 0, behavior: "smooth" }); return; }
   if (d.act === "crono-equipes") { if (S.isOwner) equipesForm(); return; }
   if (d.act === "csg-colar") { csgColarForm(); return; }
@@ -2239,12 +2242,62 @@ function pendLista() {
     .filter(p => { const k = pendDe(p); return oque === "qualquer" ? k.length : k.includes(oque); })
     .sort((a, b) => (a.cobradoEm || "").localeCompare(b.cobradoEm || "") || norm(a.nome).localeCompare(norm(b.nome)));
 }
+/* Pagamentos pendentes: inscrição com boleto em aberto (vem do relatório da plataforma: inscricao = "pendente") */
+const MSG_PAGAMENTO = "Olá {nome}, tudo bem? Aqui é {adm}, da equipe ADM do {top} Legendários 3 Colinas. Consta no sistema que o pagamento do boleto da sua inscrição ainda está pendente. Consegue verificar e pagar o quanto antes para garantir a sua vaga? Se já pagou, pode desconsiderar esta mensagem e, se puder, me mande o comprovante. Qualquer dúvida estou à disposição.";
+const msgPagamento = () => store.get("adm3-msg-pagamento") || MSG_PAGAMENTO;
+const pagPendente = p => p.inscricao === "pendente";
+const abaPag = () => S.pf.aba === "pag";
+function textoPagamento(p, tpl = msgPagamento()) {
+  const first = String(p.nome || "").trim().split(/\s+/)[0] || "";
+  return tpl.replace(/\{nome\}/g, first).replace(/\{adm\}/g, (ME.adm || "a equipe").split(" ")[0])
+    .replace(/\{top\}/g, topName()).replace(/\{pendencias\}/g, "pagamento do boleto");
+}
+function pagLista() {
+  const { quem, adm } = S.pf;
+  return S.P.filter(pagPendente).filter(p => quem === "todos" || (quem === "legendario") === (p.tipo === "legendario"))
+    .filter(p => !adm || (p.adm || "") === adm)
+    .sort((a, b) => (a.cobradoPagEm || "").localeCompare(b.cobradoPagEm || "") || norm(a.nome).localeCompare(norm(b.nome)));
+}
+function registrarAvisoPag(p) { if (podeEditar()) touch(p.id, { cobradoPagEm: new Date().toISOString() }); }
+function vPagamentos(abas) {
+  const rows = pagLista(), todos = S.P.filter(pagPendente), ed = podeEditar();
+  const seg = (k, v, l) => `<button type="button" data-pf="${k}" data-v="${v}" aria-pressed="${S.pf[k] === v}">${l}</button>`;
+  const avisados = todos.filter(p => p.cobradoPagEm).length;
+  return `
+  <div class="head"><div><h2>Pendências</h2><p>Quem está com o <b>pagamento do boleto pendente</b>. Toque em <b>Avisar</b> para abrir o WhatsApp com a mensagem pronta, ou em <b>Avisar todos</b> para mandar um depois do outro. Quando a pessoa pagar, toque em <b>Pago</b>.</p></div>
+    <div class="actions">
+      <button class="btn" type="button" data-pend-act="msg">${ico("chat")} Editar mensagem</button>
+      <button class="btn" type="button" data-pend-act="copiar" ${rows.length ? "" : "disabled"}>${ico("paste")} Copiar lista</button>
+      ${ed ? `<button class="btn primary" type="button" data-pend-act="seq" ${rows.length ? "" : "disabled"}>${ico("wa")} Avisar todos (${rows.filter(p => waNumber(p.telefone)).length})</button>` : ""}
+    </div></div>
+  ${abas}
+  <div class="kpis">
+    <div class="kpi ${todos.length ? "alert" : ""}"><span class="lbl">Pagamento pendente</span><span class="val num">${todos.length}</span><span class="sub">senderistas e legendários</span></div>
+    <div class="kpi"><span class="lbl">Já avisados</span><span class="val num">${avisados}</span><span class="sub">de ${todos.length}</span></div>
+    <div class="kpi"><span class="lbl">Ainda não avisados</span><span class="val num">${todos.length - avisados}</span><span class="sub">${todos.filter(p => !waNumber(p.telefone)).length} sem telefone</span></div>
+  </div>
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Quem">${seg("quem", "participante", "Senderistas")}${seg("quem", "legendario", "Legendários")}${seg("quem", "todos", "Todos")}</div>
+    <select class="sel" id="pfAdm" aria-label="ADM responsável"><option value="">Todos os ADMs</option>${admOptions().map(a => `<option ${S.pf.adm === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>
+  </div>
+  ${rows.length ? `<section class="panel"><div class="list pend">${rows.map(p => `<div class="li pendrow">
+      <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
+        <div class="pendtags"><span class="chip wait">Boleto pendente</span></div>
+        <small class="hint">${esc(p.telefone || "sem telefone")} · ${esc(p.adm || "Sem ADM")}${p.cobradoPagEm ? ` · avisado ${esc(quando(p.cobradoPagEm))}` : " · ainda não avisado"}</small></div>
+      <div class="actions">${ed ? `<button class="btn sm" type="button" data-pag-ok="${p.id}">${ico("check")} Pago</button>` : ""}
+      ${waNumber(p.telefone) ? `<a class="wa" href="${waCobrar(p, textoPagamento(p))}" target="_blank" rel="noopener" data-cobrar-pag="${p.id}">${ico("wa")} Avisar</a>` : `<span class="wa off">${ico("wa")} Sem telefone</span>`}</div>
+    </div>`).join("")}</div></section>`
+  : `<section class="panel"><div class="empty">Ninguém com pagamento pendente neste filtro.</div></section>`}`;
+}
 function diasParaTop() {
   const ini = (topDoc() || {}).inicio; if (!ini) return null;
   const d = Math.ceil((new Date(ini + "T00:00:00") - new Date()) / 864e5);
   return isNaN(d) ? null : d;
 }
 function vPendencias() {
+  const nDoc = S.P.filter(p => pendDe(p).length).length, nPag = S.P.filter(pagPendente).length;
+  const abas = `<div class="seg" role="group" aria-label="Tipo de pendência"><button type="button" data-pf="aba" data-v="doc" aria-pressed="${!abaPag()}">Documentos e grupo <span class="num" style="opacity:.75">${nDoc}</span></button><button type="button" data-pf="aba" data-v="pag" aria-pressed="${abaPag()}">Pagamentos pendentes <span class="num" style="opacity:.75">${nPag}</span></button></div>`;
+  if (abaPag()) return vPagamentos(abas);
   const vivos = S.P.filter(p => !cancelado(p));
   const conta = k => vivos.filter(p => pendDe(p).includes(k)).length;
   const rows = pendLista(), dias = diasParaTop();
@@ -2257,6 +2310,7 @@ function vPendencias() {
       <button class="btn" type="button" data-pend-act="copiar" ${rows.length ? "" : "disabled"}>${ico("paste")} Copiar lista</button>
       ${podeEditar() ? `<button class="btn primary" type="button" data-pend-act="seq" ${rows.length ? "" : "disabled"}>${ico("wa")} Cobrar em sequência (${rows.length})</button>` : ""}
     </div></div>
+  ${abas}
   ${dias != null ? `<div class="banner"><span>${dias > 0 ? `Faltam <b>${dias} dia${dias > 1 ? "s" : ""}</b> para o ${esc(topName())}.` : dias === 0 ? `O ${esc(topName())} começa hoje.` : `O ${esc(topName())} já começou.`} ${rows.length} pessoa(s) com pendência neste filtro.</span></div>` : ""}
   <div class="kpis">
     <button class="kpi ${conta("atestado") ? "alert" : ""}" type="button" data-pf="oque" data-v="atestado"><span class="lbl">Sem atestado</span><span class="val num">${conta("atestado")}</span><span class="sub">senderistas e legendários</span></button>
@@ -2287,40 +2341,43 @@ function registrarCobranca(p) {
   touch(p.id, data);
 }
 function msgForm() {
+  const pag = abaPag(), chave = pag ? "adm3-msg-pagamento" : "adm3-msg-cobranca", PADRAO = pag ? MSG_PAGAMENTO : MSG_COBRANCA;
   modal(`
-    <h3>Mensagem de cobrança</h3>
-    <p class="hint" style="margin:0">Use <b>{nome}</b>, <b>{adm}</b>, <b>{top}</b> e <b>{pendencias}</b>: o app troca pelo primeiro nome da pessoa, o seu nome, o nome do TOP e o que falta. Fica salva neste aparelho.</p>
-    <div class="field"><label for="f-msg">Mensagem</label><textarea id="f-msg" name="msg" style="min-height:150px">${esc(msgCobranca())}</textarea></div>
+    <h3>${pag ? "Mensagem do boleto pendente" : "Mensagem de cobrança"}</h3>
+    <p class="hint" style="margin:0">Use <b>{nome}</b>, <b>{adm}</b>${pag ? " e <b>{top}</b>" : ", <b>{top}</b> e <b>{pendencias}</b>"}: o app troca pelo primeiro nome da pessoa, o seu nome${pag ? " e o nome do TOP" : ", o nome do TOP e o que falta"}. Fica salva neste aparelho.</p>
+    <div class="field"><label for="f-msg">Mensagem</label><textarea id="f-msg" name="msg" style="min-height:150px">${esc(pag ? msgPagamento() : msgCobranca())}</textarea></div>
     <div class="modal-foot"><div><button class="btn ghost" type="button" id="msgPadrao">Voltar ao padrão</button></div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
-  fd => { store.set("adm3-msg-cobranca", String(fd.get("msg") || "").trim() || MSG_COBRANCA); closeModal(); toast("Mensagem salva"); render(); });
-  $("#msgPadrao").onclick = () => { $("#f-msg").value = MSG_COBRANCA; };
+  fd => { store.set(chave, String(fd.get("msg") || "").trim() || PADRAO); closeModal(); toast("Mensagem salva"); render(); });
+  $("#msgPadrao").onclick = () => { $("#f-msg").value = PADRAO; };
 }
 function cobrarSequencia() {
-  const fila = pendLista().filter(p => waNumber(p.telefone));
+  const pag = abaPag(), texto = pag ? textoPagamento : textoCobranca, registrar = pag ? registrarAvisoPag : registrarCobranca;
+  const fila = (pag ? pagLista() : pendLista()).filter(p => waNumber(p.telefone));
   if (!fila.length) { toast("Ninguém com telefone nesse filtro."); return; }
   let i = 0;
   const passo = () => {
-    if (i >= fila.length) { closeModal(); toast(`Cobrança concluída: ${fila.length} pessoa(s)`); return; }
+    if (i >= fila.length) { closeModal(); toast(`${pag ? "Aviso" : "Cobrança"} concluído: ${fila.length} pessoa(s)`); return; }
     const p = S.P.find(x => x.id === fila[i].id) || fila[i];
     modal(`
-      <h3>Cobrar ${i + 1} de ${fila.length}</h3>
+      <h3>${pag ? "Avisar" : "Cobrar"} ${i + 1} de ${fila.length}</h3>
       <div class="bar"><i style="width:${pct(i, fila.length)}%"></i></div>
-      <div><b style="font-size:18px">${esc(p.nome)}</b><div class="pendtags">${pendDe(p).map(k => `<span class="chip wait">${PEND[k]}</span>`).join("")}</div>
-        <small class="hint">${esc(p.telefone || "")} · ${esc(p.adm || "Sem ADM")}${p.cobradoEm ? " · cobrado " + esc(quando(p.cobradoEm)) : ""}</small></div>
-      <div class="field"><label for="f-txt">Mensagem (pode ajustar antes de enviar)</label><textarea id="f-txt" style="min-height:130px">${esc(textoCobranca(p))}</textarea></div>
+      <div><b style="font-size:18px">${esc(p.nome)}</b><div class="pendtags">${pag ? '<span class="chip wait">Boleto pendente</span>' : pendDe(p).map(k => `<span class="chip wait">${PEND[k]}</span>`).join("")}</div>
+        <small class="hint">${esc(p.telefone || "")} · ${esc(p.adm || "Sem ADM")}${(pag ? p.cobradoPagEm : p.cobradoEm) ? (pag ? " · avisado " : " · cobrado ") + esc(quando(pag ? p.cobradoPagEm : p.cobradoEm)) : ""}</small></div>
+      <div class="field"><label for="f-txt">Mensagem (pode ajustar antes de enviar)</label><textarea id="f-txt" style="min-height:130px">${esc(texto(p))}</textarea></div>
       <div class="modal-foot"><div><button class="btn ghost" type="button" data-close-btn>Parar</button></div>
         <div class="actions"><button class="btn" type="button" id="seqPular">Pular</button><a class="btn primary" id="seqWa" href="#" target="_blank" rel="noopener">${ico("wa")} Abrir WhatsApp</a></div></div>`, () => {});
     const wa = $("#seqWa");
     const atual = () => { wa.href = waCobrar(p, $("#f-txt").value); };
     atual(); $("#f-txt").addEventListener("input", atual);
-    wa.addEventListener("click", () => { registrarCobranca(p); i++; setTimeout(passo, 400); });
+    wa.addEventListener("click", () => { registrar(p); i++; setTimeout(passo, 400); });
     $("#seqPular").onclick = () => { i++; passo(); };
   };
   passo();
 }
 async function copiarPendencias() {
-  const rows = pendLista();
-  const txt = `Pendências · ${topName()}\n\n` + rows.map(p => `• ${p.nome}: ${listaE(pendDe(p).map(k => k === "grupo" ? "grupo" : k))}${p.adm ? ` (${p.adm})` : ""}`).join("\n");
+  const pag = abaPag(), rows = pag ? pagLista() : pendLista();
+  const txt = pag ? `Pagamento do boleto pendente · ${topName()}\n\n` + rows.map(p => `• ${p.nome}${p.telefone ? " · " + p.telefone : ""}${p.adm ? ` (${p.adm})` : ""}`).join("\n")
+    : `Pendências · ${topName()}\n\n` + rows.map(p => `• ${p.nome}: ${listaE(pendDe(p).map(k => k === "grupo" ? "grupo" : k))}${p.adm ? ` (${p.adm})` : ""}`).join("\n");
   try { await navigator.clipboard.writeText(txt); toast(`Lista copiada (${rows.length})`); }
   catch { modal(`<h3>Copiar lista</h3><textarea style="min-height:240px;width:100%" readonly>${esc(txt)}</textarea><div class="modal-foot"><span></span><button class="btn" type="button" data-close-btn>Fechar</button></div>`, () => {}); }
 }
@@ -2330,7 +2387,7 @@ const CAMPOS = { nome: "Nome", telefone: "Telefone", email: "E-mail", atestado: 
   cidade: "Cidade", idade: "Idade", familia: "Família", nfc: "NFC", msgGrupo: "Mensagem do grupo", noGrupo: "Entrou no grupo", obs: "Observações",
   equipe: "Equipe", status: "Status", qtd: "Quantidade", titulo: "Tarefa", responsavel: "Responsável", fornecedor: "Fornecedor", item: "Item",
   local: "Local", trechos: "Trechos", kitsMRE: "Kits MRE", topAtual: "TOP atual", inscricao: "Inscrição", ficha: "Dados da inscrição",
-  tipo: "Tipo", top: "TOP", mais40: "+40", cobradoEm: "Cobrado em", fase: "Fase", ordem: "Ordem", metaMRE: "Meta MRE", alertaBaixo: "Alerta de estoque",
+  tipo: "Tipo", top: "TOP", mais40: "+40", cobradoEm: "Cobrado em", cobradoPagEm: "Avisado do boleto em", pagoEm: "Pagamento confirmado em", fase: "Fase", ordem: "Ordem", metaMRE: "Meta MRE", alertaBaixo: "Alerta de estoque",
   inicio: "Início", fim: "Fim", finalizadoEm: "Finalizado em", resp: "Responsável", dia: "Dia" };
 const IGNORAR = ["adm", "admId", "admEm", "atualizado", "obsPor", "obsEm"];
 function abaDoRegistro(col, d) {

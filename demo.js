@@ -1075,6 +1075,7 @@ window.ADM_DEMO = {
 "col": "pessoas",
 "id": "ex02",
 "data": {
+"inscricao": "pendente",
 "adm": "Thalisson",
 "atestado": "aguardando",
 "cidade": "Ribeirão Preto",
@@ -1138,6 +1139,7 @@ window.ADM_DEMO = {
 "col": "pessoas",
 "id": "ex05",
 "data": {
+"inscricao": "pendente",
 "adm": "Henrique",
 "atestado": "pendente",
 "cidade": "Batatais",
@@ -1178,6 +1180,7 @@ window.ADM_DEMO = {
 "col": "pessoas",
 "id": "ex07",
 "data": {
+"inscricao": "pendente",
 "adm": "Henrique",
 "atestado": "aguardando",
 "cidade": "Campinas",
