@@ -232,6 +232,22 @@ button.chip:hover { border-color: currentColor; }
 .crono-eq small { color: var(--muted); font-size: 12px; }
 .crono-eq span { font-size: 13px; font-weight: 600; }
 .crono-eq span i { font-style: normal; }
+.csg-dias { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.csg-dia { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit; cursor: pointer; text-align: left; min-width: 92px; }
+.csg-dia span { font-size: 12px; color: var(--muted); }
+.csg-dia.fora { opacity: .45; }
+.csg-filtro { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.csg-filtro label { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.csg-filtro input[type=date] { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; }
+.csg-lista { display: flex; flex-direction: column; }
+.csg-row { display: grid; grid-template-columns: 30px 1fr minmax(60px, 160px) 44px; gap: 10px; align-items: center; padding: 9px 2px; border-bottom: 1px solid var(--line); }
+.csg-row .pos { color: var(--muted); font-size: 13px; text-align: center; }
+.csg-row .nm { min-width: 0; display: flex; flex-direction: column; }
+.csg-row .nm b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.csg-row .bar { margin: 0; }
+.csg-row .n { text-align: right; font-size: 15px; }
+.csg-nomes { display: flex; flex-wrap: wrap; gap: 6px; max-height: 50vh; overflow: auto; }
+.csg-nomes .chip .linkbtn { padding: 0 2px; font-size: 12px; }
 .crono-grupo { margin-bottom: 12px; }
 .crono-grupo h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: flex; gap: 8px; align-items: center; }
 .crono-eq[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-soft); }

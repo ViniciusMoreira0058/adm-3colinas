@@ -151,6 +151,7 @@ const VIEWS = [
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
+  { id: "consagracao", l: "Consagração", i: "group" },
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
@@ -816,6 +817,249 @@ async function gerarCronoPdf(qual, adms = [cronoAdm()]) {
   a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
   toast("PDF gerado: " + nome);
 }
+/* ---------- Consagração (40 dias) ----------
+   Todo dia um ADM cola a lista de quem participou. Cada dia fica em config/consag-<AAAA-MM-DD> { dia, nomes[], por, em };
+   o período (início e total de dias) fica em config/consag-cfg. A contagem junta os nomes iguais (sem acento/maiúscula). */
+const CSG_RE = /^consag-(\d{4}-\d{2}-\d{2})$/;
+const hojeISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const fmtDia = (iso, ano) => { const [a, m, d] = String(iso || "").split("-"); return d ? `${d}/${m}${ano ? "/" + a : ""}` : ""; };
+const somaDias = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const difDias = (a, b) => Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 864e5);
+const csgCfg = () => { const c = (S.cfgDocs || {})["consag-cfg"] || {}; const dias = csgDias(); return { inicio: c.inicio || (dias[0] || {}).dia || hojeISO(), total: Number(c.total) || 40 }; };
+function csgDias() {
+  return Object.entries(S.cfgDocs || {}).map(([k, d]) => { const m = CSG_RE.exec(k); return m && { ...d, dia: m[1], nomes: d.nomes || [] }; })
+    .filter(Boolean).sort((a, b) => a.dia < b.dia ? -1 : 1);
+}
+// nome bonito: "JOÃO DA SILVA" / "joão da silva" → "João da Silva" (se já veio com maiúsculas e minúsculas, mantém)
+const PEQ = new Set(["da", "de", "do", "das", "dos", "e"]);
+const capNome = n => (n === n.toUpperCase() || n === n.toLowerCase())
+  ? n.toLowerCase().split(" ").map((w, i) => i && PEQ.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : n;
+// lê a lista colada (do WhatsApp, planilha ou bloco de notas): tira numeração, marcadores, emojis e repetidos
+function lerNomesColados(txt) {
+  const vistos = new Map();
+  String(txt || "").split(/\r?\n|;|\t/).forEach(l => {
+    let n = l.replace(/^\s*\[[^\]]{4,30}\]\s*[^:]{1,40}:\s*/, "")
+      .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}\u{2705}\u{2714}\u{2713}]/gu, " ")
+      .replace(/^[\s•*·>\-–—]*\d{1,3}\s*[.)\-–—ºª°:]?\s*/, "").replace(/^[\s•*·>\-–—]+/, "")
+      .replace(/\s*\(.*?\)\s*/g, " ").replace(/\s+/g, " ").trim();
+    if (n.length < 3 || !/[a-zà-ú]/i.test(n) || /\d/.test(n) || /:$/.test(n)) return;
+    if (/^(lista|consagra|presen|participantes|dia\b|hoje\b)/i.test(norm(n))) return;
+    const k = norm(n); if (!vistos.has(k)) vistos.set(k, capNome(n));
+  });
+  return [...vistos.values()];
+}
+// contagem de presenças entre duas datas (inclusive)
+function csgContagem(de, ate) {
+  const dias = csgDias().filter(d => (!de || d.dia >= de) && (!ate || d.dia <= ate));
+  const P = new Map();
+  dias.forEach(d => d.nomes.forEach(n => { const k = norm(n); const p = P.get(k) || { nome: n, n: 0, prim: d.dia, ult: d.dia };
+    p.n++; p.nome = n; p.ult = d.dia; P.set(k, p); }));
+  const pessoas = [...P.values()].sort((a, b) => b.n - a.n || a.nome.localeCompare(b.nome, "pt-BR"));
+  return { dias, pessoas, totalPres: dias.reduce((a, d) => a + d.nomes.length, 0) };
+}
+function vConsagracao() {
+  const cfg = csgCfg(), hoje = hojeISO(), todos = csgDias();
+  const F = S.csg || (S.csg = { de: "", ate: "", q: "" });
+  const { dias, pessoas, totalPres } = csgContagem(F.de, F.ate);
+  const nDia = Math.min(cfg.total, Math.max(0, difDias(cfg.inicio, hoje) + 1));
+  const ultimo = todos[todos.length - 1], dHoje = todos.find(d => d.dia === hoje);
+  const q = norm(F.q), lista = q ? pessoas.filter(p => norm(p.nome).includes(q)) : pessoas;
+  const maxN = Math.max(1, dias.length), ed = podeEditar();
+  const periodo = F.de || F.ate ? `${F.de ? fmtDia(F.de) : "início"} a ${F.ate ? fmtDia(F.ate) : "hoje"}` : "período todo";
+  return `
+  <div class="head"><div><h2>Consagração</h2><p>${cfg.total} dias · começou em ${fmtDia(cfg.inicio, true)}${nDia ? ` · hoje é o <b>dia ${nDia} de ${cfg.total}</b>` : ""}. Cole todo dia a lista de quem participou: o app soma quantas vezes cada pessoa esteve.</p></div>
+    <div class="actions"><button class="btn" type="button" data-act="csg-pdf">${ico("upload")} Exportar PDF</button>${ed ? `<button class="btn" type="button" data-act="csg-cfg">${ico("edit")} Período</button><button class="btn primary" type="button" data-act="csg-colar">${ico("paste")} Colar lista do dia</button>` : ""}</div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Dias com lista</span><span class="val num">${todos.length}<small style="font-size:18px;color:var(--muted)"> / ${cfg.total}</small></span><div class="bar good"><i style="width:${pct(todos.length, cfg.total)}%"></i></div></div>
+    <div class="kpi"><span class="lbl">Pessoas diferentes</span><span class="val num">${fmtNum(pessoas.length)}</span><span class="sub">no ${esc(periodo)}</span></div>
+    <div class="kpi"><span class="lbl">Média por dia</span><span class="val num">${dias.length ? Math.round(totalPres / dias.length) : "—"}</span><span class="sub num">${fmtNum(totalPres)} presenças em ${dias.length} dia(s)</span></div>
+    <div class="kpi ${dHoje ? "" : "alert"}"><span class="lbl">Hoje</span><span class="val num">${dHoje ? dHoje.nomes.length : "—"}</span><span class="sub">${dHoje ? "por " + esc((dHoje.por || {}).nome || "ADM") : ultimo ? "lista ainda não colada · último dia " + fmtDia(ultimo.dia) : "nenhuma lista ainda"}</span></div>
+  </div>
+  ${todos.length ? `<section class="panel"><h3>Dias <small>toque para ver ou corrigir a lista</small></h3><div class="csg-dias">${[...todos].reverse().map(d => `<button type="button" class="csg-dia ${d.dia >= (F.de || "0") && d.dia <= (F.ate || "9") ? "" : "fora"}" data-csg-dia="${d.dia}"><b>${fmtDia(d.dia)}</b><span class="num">Dia ${difDias(cfg.inicio, d.dia) + 1}</span><span class="num">${d.nomes.length} pessoas</span></button>`).join("")}</div></section>` : ""}
+  <section class="panel">
+    <h3>Presenças <small>${esc(periodo)}</small></h3>
+    <div class="csg-filtro">
+      <label>De <input type="date" id="csgDe" value="${esc(F.de)}"></label>
+      <label>Até <input type="date" id="csgAte" value="${esc(F.ate)}"></label>
+      ${F.de || F.ate ? `<button class="btn sm" type="button" data-act="csg-todo">Período todo</button>` : ""}
+      <div class="search" style="flex:1;min-width:180px">${ico("search")}<input id="csgQ" type="search" placeholder="Buscar nome" value="${esc(F.q)}" aria-label="Buscar nome"></div>
+    </div>
+    ${lista.length ? `<div class="csg-lista">${lista.map((p, i) => `<div class="csg-row"><span class="pos num">${i + 1}</span><div class="nm"><b>${esc(p.nome)}</b><small class="hint">desde ${fmtDia(p.prim)} · última ${fmtDia(p.ult)}</small></div>
+      <div class="bar good" title="${pct(p.n, maxN)}% dos dias"><i style="width:${pct(p.n, maxN)}%"></i></div><span class="n num"><b>${p.n}</b>×</span></div>`).join("")}</div>`
+      : `<div class="empty">${todos.length ? "Ninguém encontrado." : "Nenhuma lista colada ainda. Toque em <b>Colar lista do dia</b>."}</div>`}
+  </section>`;
+}
+function csgColarForm(dia) {
+  const ex = (S.cfgDocs || {})["consag-" + (dia || hojeISO())];
+  modal(`
+    <h3>Colar lista da consagração</h3>
+    <div class="field"><label for="f-csgdia">Dia</label><input type="date" id="f-csgdia" value="${esc(dia || hojeISO())}" max="${hojeISO()}"></div>
+    <div class="field"><label for="f-csgtxt">Lista de participantes</label><textarea id="f-csgtxt" rows="10" placeholder="Cole aqui a lista do grupo (um nome por linha). Numeração, emojis e nomes repetidos são ignorados."></textarea></div>
+    <p class="hint" id="csgPrev" style="margin:0">${ex ? `Esse dia já tem ${ex.nomes.length} nome(s): o que você colar será somado.` : "Nenhuma linha ainda."}</p>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar lista</button></div></div>`,
+  () => {
+    const d = $("#f-csgdia").value, nomes = lerNomesColados($("#f-csgtxt").value);
+    if (!d) { toast("Escolha o dia."); return; }
+    if (!nomes.length) { toast("Nenhum nome encontrado na lista."); return; }
+    const atual = ((S.cfgDocs || {})["consag-" + d] || {}).nomes || [], ks = new Set(atual.map(norm));
+    const novos = nomes.filter(n => !ks.has(norm(n)));
+    closeModal();
+    save(() => api.set("config", "consag-" + d, { dia: d, nomes: [...atual, ...novos], por: eu(), em: new Date().toISOString() }),
+      `${fmtDia(d)}: ${novos.length} nome(s) salvos${nomes.length - novos.length ? ` · ${nomes.length - novos.length} já estavam` : ""}`);
+  });
+  const prev = () => { const d = $("#f-csgdia").value, n = lerNomesColados($("#f-csgtxt").value), at = (((S.cfgDocs || {})["consag-" + d] || {}).nomes || []).map(norm);
+    const novos = n.filter(x => !at.includes(norm(x))).length;
+    $("#csgPrev").textContent = n.length ? `${n.length} nome(s) encontrados${at.length ? ` · ${novos} novos neste dia, ${n.length - novos} já estavam` : ""}: ${n.slice(0, 6).join(", ")}${n.length > 6 ? "…" : ""}` : at.length ? `Esse dia já tem ${at.length} nome(s): o que você colar será somado.` : "Nenhuma linha ainda."; };
+  $("#f-csgtxt").addEventListener("input", prev); $("#f-csgdia").addEventListener("change", prev);
+}
+function csgDiaForm(dia) {
+  const d = (S.cfgDocs || {})["consag-" + dia]; if (!d) return;
+  const ed = podeEditar(); let nomes = [...(d.nomes || [])];
+  const corpo = () => `
+    <h3>Consagração · ${fmtDia(dia, true)} <small class="hint">Dia ${difDias(csgCfg().inicio, dia) + 1}</small></h3>
+    <p class="hint" style="margin:0">${nomes.length} pessoa(s) · lista colada por ${esc((d.por || {}).nome || "ADM")}${ed ? ". Toque no ✕ para tirar um nome." : ""}</p>
+    <div class="csg-nomes">${nomes.map((n, i) => `<span class="chip">${esc(n)}${ed ? ` <button class="linkbtn" type="button" data-csgrm="${i}" aria-label="Tirar ${esc(n)}">✕</button>` : ""}</span>`).join("")}</div>
+    <div class="modal-foot">${ed ? `<button class="btn ghost bad-text" type="button" id="csgApagar">Apagar este dia</button>` : "<span></span>"}<div class="actions">
+      <button class="btn" type="button" id="csgPdfDia">${ico("upload")} PDF do dia</button>${ed ? `<button class="btn" type="button" id="csgMais">${ico("paste")} Colar mais</button><button class="btn primary" type="submit">Salvar</button>` : `<button class="btn primary" type="button" data-close-btn>Fechar</button>`}</div></div>`;
+  modal(corpo(), () => { closeModal(); if (ed) save(() => api.update("config", "consag-" + dia, { nomes }), "Lista atualizada"); });
+  const f = $("#mform");
+  const ligar = () => {
+    f.querySelectorAll("[data-csgrm]").forEach(b => b.onclick = () => { nomes.splice(+b.dataset.csgrm, 1); f.innerHTML = corpo(); ligar(); });
+    const ap = $("#csgApagar"); if (ap) ap.onclick = () => { if (ap.dataset.ok !== "1") { ap.dataset.ok = "1"; ap.textContent = "Confirmar: apagar o dia"; return; } closeModal(); save(() => api.remove("config", "consag-" + dia), "Dia apagado"); };
+    const mais = $("#csgMais"); if (mais) mais.onclick = () => csgColarForm(dia);
+    $("#csgPdfDia").onclick = () => csgPdfForm(dia);
+  };
+  ligar();
+}
+function csgCfgForm() {
+  const c = csgCfg();
+  modal(`
+    <h3>Período da consagração</h3>
+    <div class="form">
+      <div class="field"><label for="f-csgini">Primeiro dia</label><input type="date" id="f-csgini" value="${esc(c.inicio)}"></div>
+      <div class="field"><label for="f-csgtot">Quantidade de dias</label><input type="number" id="f-csgtot" min="1" max="365" value="${c.total}" inputmode="numeric"></div>
+    </div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  () => { const inicio = $("#f-csgini").value, total = Math.max(1, Number($("#f-csgtot").value) || 40); closeModal();
+    save(() => api.set("config", "consag-cfg", { inicio, total }), "Período salvo"); });
+}
+function csgPdfForm(diaFixo) {
+  const todos = csgDias(), F = S.csg || {};
+  if (!todos.length) { toast("Ainda não tem nenhuma lista colada."); return; }
+  const ult = (todos.find(d => d.dia === diaFixo) || todos[todos.length - 1]).dia;
+  modal(`
+    <h3>Exportar Lista Consagração</h3>
+    <div class="seg" role="group" aria-label="O que exportar" id="csgModo"><button type="button" data-m="dia" aria-pressed="true">Um dia</button><button type="button" data-m="per" aria-pressed="false">Período</button></div>
+    <div class="field" id="csgBoxDia"><label for="f-pdd">Dia</label><select id="f-pdd">${[...todos].reverse().map(d => `<option value="${d.dia}" ${d.dia === ult ? "selected" : ""}>${fmtDia(d.dia, true)} · Dia ${difDias(csgCfg().inicio, d.dia) + 1} · ${d.nomes.length} pessoas</option>`).join("")}</select></div>
+    <div class="form" id="csgBoxPer" hidden>
+      <div class="field"><label for="f-pde">De</label><input type="date" id="f-pde" value="${esc(F.de || todos[0].dia)}"></div>
+      <div class="field"><label for="f-pate">Até</label><input type="date" id="f-pate" value="${esc(F.ate || todos[todos.length - 1].dia)}"></div>
+    </div>
+    <p class="hint" style="margin:0">O PDF traz o nome de cada pessoa e quantas vezes participou. No celular, <b>Enviar no WhatsApp</b> abre o WhatsApp com o PDF anexado.</p>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn" type="submit" id="csgBaixar">${ico("upload")} Baixar PDF</button><button class="btn primary" type="button" id="csgWa">${ico("wa")} Enviar no WhatsApp</button></div></div>`,
+  () => gerar(false));
+  let modo = "dia";
+  $("#csgModo").onclick = e => { const b = e.target.closest("[data-m]"); if (!b) return; modo = b.dataset.m;
+    $("#csgModo").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); $("#csgBoxDia").hidden = modo !== "dia"; $("#csgBoxPer").hidden = modo === "dia"; };
+  $("#csgWa").onclick = () => gerar(true);
+  async function gerar(wa) {
+    const de = modo === "dia" ? $("#f-pdd").value : $("#f-pde").value, ate = modo === "dia" ? de : $("#f-pate").value;
+    if (!de || !ate || de > ate) { toast("Confira as datas do período."); return; }
+    const bts = [$("#csgBaixar"), $("#csgWa")]; bts.forEach(b => b.disabled = true);
+    try { await gerarCsgPdf(modo, de, ate, wa); closeModal(); }
+    catch (e) { console.error(e); toast(erroAmigavel(e)); bts.forEach(b => b.disabled = false); }
+  }
+}
+// entrega o PDF: "Enviar no WhatsApp" abre o compartilhar do celular (o WhatsApp recebe o arquivo);
+// onde não dá para anexar (computador), baixa o PDF e abre o WhatsApp com a mensagem para anexar
+async function entregarPdf(blob, nome, titulo, wa) {
+  const arq = typeof File === "function" ? new File([blob], nome, { type: "application/pdf" }) : null;
+  const podeArq = arq && navigator.canShare && navigator.canShare({ files: [arq] });
+  if (podeArq && (wa || matchMedia("(pointer: coarse)").matches)) {
+    try { await navigator.share({ files: [arq], title: titulo, text: wa ? titulo : undefined }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  if (wa) { window.open("https://wa.me/?text=" + encodeURIComponent(titulo + " (PDF baixado: " + nome + ")"), "_blank"); toast("PDF baixado. Anexe no WhatsApp que abriu."); }
+  else toast("PDF gerado: " + nome);
+}
+async function gerarCsgPdf(modo, de, ate, wa) {
+  const jsPDF = await carregarPdf();
+  const cfg = csgCfg(), { dias, pessoas, totalPres } = csgContagem(modo === "dia" ? null : de, ate);
+  const doDia = modo === "dia" ? (csgDias().find(d => d.dia === de) || { nomes: [] }) : null;
+  // no PDF do dia: quem veio naquele dia e quantas vezes já participou até ele
+  const linhas = doDia ? doDia.nomes.map(n => pessoas.find(p => norm(p.nome) === norm(n)) || { nome: n, n: 1, prim: de, ult: de }).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+    : pessoas;
+  const [logo, faixa] = await Promise.all([imagemDataUrl("assets/logo.png"), faixaPdf()]);
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const NAVY = [11, 17, 25], LARANJA = [255, 122, 26], TINTA = [30, 20, 11], CINZA = [123, 101, 83], LINHA = [241, 220, 199], CREME = [255, 248, 242], VERDE = [29, 138, 85];
+  const gerado = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const adm = ME.adm || "-";
+  const nDia = d => difDias(cfg.inicio, d) + 1;
+  const sub = doDia ? `${fmtDia(de, true)} · DIA ${nDia(de)} DE ${cfg.total}` : `${fmtDia(de, true)} A ${fmtDia(ate, true)} · ${dias.length} DIA(S) COM LISTA`;
+  const resumo = doDia ? [["ADM responsável", adm, [255, 170, 100]], ["Participantes", String(linhas.length)]]
+    : [["ADM responsável", adm, [255, 170, 100]], ["Pessoas", String(pessoas.length)], ["Média/dia", dias.length ? String(Math.round(totalPres / dias.length)) : "-"]];
+  const cabecalho = primeira => {
+    const alt = primeira ? 44 : 16;
+    doc.setFillColor(...NAVY); doc.rect(0, 0, W, alt, "F");
+    if (faixa) { doc.saveGraphicsState(); doc.rect(0, 0, W, alt, null); doc.clip(); doc.discardPath();
+      const h = W * 330 / 2400 * 1.6; doc.addImage(faixa, "JPEG", W - h * 2400 / 330, primeira ? 0 : -6, h * 2400 / 330, h, "faixa", "FAST"); doc.restoreGraphicsState(); }
+    doc.setFillColor(...LARANJA); doc.rect(0, alt, W, 1.2, "F");
+    if (primeira) {
+      if (logo) try { doc.addImage(logo, "PNG", 12, 7, 18.2, 23, "logo"); } catch (e) {}
+      doc.setTextColor(...LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5);
+      doc.text("ADM 3COLINAS  ·  LEGENDÁRIOS BASE 3 COLINAS", 35, 12, { charSpace: 0.5 });
+      doc.setTextColor(255, 255, 255); doc.setFontSize(21); doc.text("LISTA CONSAGRAÇÃO", 35, 22);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(220, 210, 200); doc.text(sub, 35, 28.5);
+      doc.setFontSize(7.5); doc.setTextColor(170, 160, 150); doc.text(`${cfg.total} dias de consagração · ADM responsável: ${adm}`, 35, 33);
+      // resumo em "cartões" logo abaixo da faixa (no retrato não cabe ao lado do título)
+      const wc = (W - 24 - (resumo.length - 1) * 4) / resumo.length;
+      resumo.forEach(([lbl, val, cor], k) => {
+        const x = 12 + k * (wc + 4);
+        doc.setFillColor(...CREME); doc.setDrawColor(...LINHA); doc.setLineWidth(0.3); doc.roundedRect(x, 50, wc, 16, 2, 2, "FD");
+        doc.setFillColor(...(cor ? LARANJA : NAVY)); doc.rect(x, 52, 1.2, 12, "F");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); doc.setTextColor(...CINZA); doc.text(lbl.toUpperCase(), x + 5, 55.5, { charSpace: 0.3 });
+        doc.setFontSize(13); doc.setTextColor(...TINTA); doc.text(val, x + 5, 62.5, { maxWidth: wc - 7 });
+      });
+    } else {
+      if (logo) try { doc.addImage(logo, "PNG", 10, 2.2, 9.1, 11.5, "logo"); } catch (e) {}
+      doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.text("LISTA CONSAGRAÇÃO", 23, 9.6);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(220, 210, 200); doc.text(`${sub} · ADM ${adm} · continuação`, 23 + doc.getTextWidth("LISTA CONSAGRAÇÃO") * 10.5 / 7.5 + 4, 9.6);
+    }
+  };
+  cabecalho(true);
+  doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor(...CINZA);
+  doc.text(doDia ? "Presenças = quantas vezes a pessoa participou até este dia" : `Presenças no período · ${fmtNum(totalPres)} no total`, 12, 73);
+  doc.text(`Gerado em ${gerado} por ${adm}`, W - 12, 73, { align: "right" });
+  const base = doDia ? nDia(de) : Math.max(1, dias.length);
+  doc.autoTable({
+    startY: 76, margin: { left: 12, right: 12, top: 22, bottom: 14 }, theme: "plain",
+    head: [["#", "NOME", "PRESENÇAS", doDia ? "PRIMEIRA VEZ" : "FREQUÊNCIA", doDia ? "" : "ÚLTIMA VEZ"]],
+    body: linhas.map((p, i) => [String(i + 1), p.nome, String(p.n), doDia ? fmtDia(p.prim) : pct(p.n, base) + "%", doDia ? "" : fmtDia(p.ult)]),
+    styles: { font: "helvetica", fontSize: 9, cellPadding: { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 }, textColor: TINTA, valign: "middle", lineColor: LINHA, lineWidth: { bottom: 0.2 } },
+    headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7.5, cellPadding: { top: 2.8, bottom: 2.8, left: 2.5, right: 2.5 }, lineWidth: 0 },
+    alternateRowStyles: { fillColor: CREME },
+    columnStyles: { 0: { cellWidth: 12, halign: "center", textColor: CINZA }, 1: { cellWidth: "auto", fontStyle: "bold" }, 2: { cellWidth: 26, halign: "center", fontStyle: "bold" }, 3: { cellWidth: 30, halign: "center" }, 4: { cellWidth: doDia ? 1 : 26, halign: "center", textColor: CINZA } },
+    didParseCell: c => {
+      if (c.section === "head") { if (c.column.index === 2) c.cell.styles.fillColor = [40, 24, 10]; if (c.column.index !== 1) c.cell.styles.halign = "center"; return; }
+      if (c.column.index === 2) c.cell.styles.textColor = LARANJA.map(v => Math.round(v * 0.82));
+      if (c.column.index === 3 && !doDia) { const v = parseInt(c.cell.raw) || 0; c.cell.styles.textColor = v >= 75 ? VERDE : v >= 40 ? [168, 111, 0] : CINZA; }
+    },
+    didDrawPage: () => { if (doc.getNumberOfPages() > 1 && doc.internal.getCurrentPageInfo().pageNumber > 1) cabecalho(false); },
+  });
+  const pg = doc.getNumberOfPages();
+  for (let i = 1; i <= pg; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...LARANJA); doc.setLineWidth(0.5); doc.line(12, H - 9.5, W - 12, H - 9.5);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...TINTA); doc.text("ADM 3COLINAS", 12, H - 5.5);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(...CINZA); doc.text(`Lista Consagração · ${sub.toLowerCase()} · ADM ${adm}`, 12 + doc.getTextWidth("ADM 3COLINAS") + 3, H - 5.5);
+    doc.text(`Página ${i} de ${pg}`, W - 12, H - 5.5, { align: "right" });
+  }
+  const dd = d => fmtDia(d, true).replace(/\//g, "-");
+  const nome = `Lista consagracao ${doDia ? dd(de) : dd(de) + " a " + dd(ate)}.pdf`;
+  await entregarPdf(doc.output("blob"), nome, `Lista Consagração ${doDia ? fmtDia(de, true) : fmtDia(de, true) + " a " + fmtDia(ate, true)}`, wa);
+}
 /* Dividir os ADMs em equipes (só o dono): cada equipe tem nome, ADM responsável e integrantes; coordenadores veem todas */
 function equipesForm() {
   const E = eqDoc();
@@ -1209,6 +1453,7 @@ function render() {
     : v === "familias" ? vFamilias()
     : v === "checklist" ? vChecklist()
     : v === "cronograma" ? vCronograma()
+    : v === "consagracao" ? vConsagracao()
     : v === "estoque" ? vEstoque()
     : vPista());
   const view = $("#view");
@@ -1747,6 +1992,9 @@ document.addEventListener("click", e => {
   if (d.act === "sair") { sair(); return; }
   if (d.act === "rede") { redeInfo(); return; }
   if (d.act === "crono-pdf") { cronoPdfForm(); return; }
+  if (d.act === "csg-pdf") { csgPdfForm(); return; }
+  if (d.act === "csg-todo") { S.csg = { ...(S.csg || {}), de: "", ate: "" }; render(); return; }
+  if (d.csgDia) { csgDiaForm(d.csgDia); return; }
   if (t.id === "notifBtn") { pedirNotificacao(); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
@@ -1790,6 +2038,8 @@ document.addEventListener("click", e => {
   if (d.dup) { dupForm(S.P.find(p => p.id === d.dup)); return; }
   if (d.cronoAdm) { S.cronoAdm = d.cronoAdm; store.set("crono-adm", d.cronoAdm); render(); scrollTo({ top: 0, behavior: "smooth" }); return; }
   if (d.act === "crono-equipes") { if (S.isOwner) equipesForm(); return; }
+  if (d.act === "csg-colar") { csgColarForm(); return; }
+  if (d.act === "csg-cfg") { csgCfgForm(); return; }
   if (d.cronoDia) { S.cronoDia = d.cronoDia; store.set("crono-dia", d.cronoDia); render(); return; }
   if (d.cronoIni) { cronoMarcar(d.cronoIni, { ini: agoraHM(), iniPor: ME.adm, iniEm: new Date().toISOString() }, "Início marcado " + agoraHM()); return; }
   if (d.cronoFim) { cronoMarcar(d.cronoFim, { fim: agoraHM(), fimPor: ME.adm, fimEm: new Date().toISOString() }, "Fim marcado " + agoraHM()); return; }
@@ -1825,12 +2075,14 @@ document.addEventListener("click", e => {
 document.addEventListener("input", e => {
   if (e.target.id === "q") { S.f.q = e.target.value; render(); }
   if (e.target.id === "hq") { S.hf.q = e.target.value; render(); }
+  if (e.target.id === "csgQ") { S.csg.q = e.target.value; render(); const q = $("#csgQ"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
 });
 document.addEventListener("change", e => {
   if (e.target.dataset.sel && S.isOwner) { const id = e.target.dataset.sel; e.target.checked ? S.sel.ids.add(id) : S.sel.ids.delete(id); render(); return; }
   if (e.target.dataset.selall && S.isOwner) { S.sel.ids = new Set(e.target.checked ? filterPeople().map(p => p.id) : []); render(); return; }
   if (e.target.id === "admSel") { S.f.adm = e.target.value; render(); }
   if (e.target.id === "pfAdm") { S.pf.adm = e.target.value; render(); }
+  if (e.target.id === "csgDe" || e.target.id === "csgAte") { S.csg[e.target.id === "csgDe" ? "de" : "ate"] = e.target.value; render(); }
   const hk = { hQuem: "quem", hAba: "aba", hAcao: "acao" }[e.target.id];
   if (hk) { S.hf[hk] = e.target.value; render(); }
   if (e.target.dataset.fam && !podeEditar()) { toast("Seu acesso é somente leitura."); render(); return; }
@@ -2389,7 +2641,7 @@ function conectarDados() {
     S.cronoCriando = S.cronoCriando || new Set();
     if (ficha && navigator.onLine !== false && !db.estado().offline && !S.cfgDocs[ficha] && !S.cronoCriando.has(ficha)) {
       S.cronoCriando.add(ficha); db.doc("config/" + ficha).set({ _adm: eu() }).catch(() => {}).finally(() => S.cronoCriando.delete(ficha)); }
-    if (S.view === "cronograma" || S.view === "painel") render();
+    if (S.view === "cronograma" || S.view === "consagracao" || S.view === "painel") render();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });

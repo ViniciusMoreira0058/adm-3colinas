@@ -968,6 +968,66 @@ window.ADM_DEMO = {
 },
 {
 "col": "config",
+"id": "consag-cfg",
+"data": {"inicio": "2026-10-16", "total": 40}
+},
+{
+"col": "config",
+"id": "consag-2026-10-16",
+"data": {"dia": "2026-10-16", "nomes": ["Bruno Teixeira", "Camila Andrade", "Eduarda Pires", "Gabriela Martins", "Heitor Campos", "Isabela Freitas", "João Pedro Lima", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Otávio Cardoso", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Yasmin Castro", "Gustavo Mendes", "Marcos Antunes", "Renata Farias"], "por": {"id": "m-thal", "nome": "Thalisson"}, "em": "2026-10-16T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-17",
+"data": {"dia": "2026-10-17", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Daniel Rocha", "Eduarda Pires", "Gabriela Martins", "Isabela Freitas", "João Pedro Lima", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Rafaela Souza", "Tatiane Lopes", "Gustavo Mendes", "Marcos Antunes"], "por": {"id": "m-dono", "nome": "Vinicius Moreira"}, "em": "2026-10-17T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-18",
+"data": {"dia": "2026-10-18", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Daniel Rocha", "Gabriela Martins", "Heitor Campos", "João Pedro Lima", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Patrícia Gomes", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Vitor Araújo", "Yasmin Castro", "Gustavo Mendes", "Marcos Antunes", "Diego Alves"], "por": {"id": "m-thal", "nome": "Thalisson"}, "em": "2026-10-18T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-19",
+"data": {"dia": "2026-10-19", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Eduarda Pires", "Felipe Nogueira", "Gabriela Martins", "Heitor Campos", "João Pedro Lima", "Karina Moura", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Yasmin Castro", "Gustavo Mendes", "Marcos Antunes", "Renata Farias"], "por": {"id": "m-dono", "nome": "Vinicius Moreira"}, "em": "2026-10-19T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-20",
+"data": {"dia": "2026-10-20", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Daniel Rocha", "Eduarda Pires", "Felipe Nogueira", "Gabriela Martins", "Heitor Campos", "Isabela Freitas", "João Pedro Lima", "Karina Moura", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Yasmin Castro", "Gustavo Mendes", "Marcos Antunes", "Renata Farias", "Diego Alves"], "por": {"id": "m-thal", "nome": "Thalisson"}, "em": "2026-10-20T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-21",
+"data": {"dia": "2026-10-21", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Camila Andrade", "Daniel Rocha", "Eduarda Pires", "Felipe Nogueira", "Heitor Campos", "Isabela Freitas", "João Pedro Lima", "Karina Moura", "Lucas Barbosa", "Nicolas Pereira", "Patrícia Gomes", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Gustavo Mendes", "Letícia Ramos", "Marcos Antunes"], "por": {"id": "m-dono", "nome": "Vinicius Moreira"}, "em": "2026-10-21T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-22",
+"data": {"dia": "2026-10-22", "nomes": ["Bruno Teixeira", "Daniel Rocha", "Eduarda Pires", "Gabriela Martins", "Heitor Campos", "Isabela Freitas", "João Pedro Lima", "Mariana Duarte", "Nicolas Pereira", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Vitor Araújo", "Yasmin Castro", "Gustavo Mendes", "Marcos Antunes", "Renata Farias"], "por": {"id": "m-thal", "nome": "Thalisson"}, "em": "2026-10-22T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-23",
+"data": {"dia": "2026-10-23", "nomes": ["Bruno Teixeira", "Daniel Rocha", "Eduarda Pires", "Gabriela Martins", "Heitor Campos", "João Pedro Lima", "Mariana Duarte", "Nicolas Pereira", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Gustavo Mendes", "Renata Farias"], "por": {"id": "m-dono", "nome": "Vinicius Moreira"}, "em": "2026-10-23T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-24",
+"data": {"dia": "2026-10-24", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Camila Andrade", "Eduarda Pires", "Gabriela Martins", "Heitor Campos", "João Pedro Lima", "Karina Moura", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Patrícia Gomes", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Yasmin Castro", "Gustavo Mendes", "Marcos Antunes"], "por": {"id": "m-thal", "nome": "Thalisson"}, "em": "2026-10-24T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-25",
+"data": {"dia": "2026-10-25", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Camila Andrade", "Daniel Rocha", "Eduarda Pires", "Felipe Nogueira", "Gabriela Martins", "Heitor Campos", "João Pedro Lima", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Patrícia Gomes", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Gustavo Mendes", "Marcos Antunes", "Renata Farias"], "por": {"id": "m-dono", "nome": "Vinicius Moreira"}, "em": "2026-10-25T06:30:00.000Z"}
+},
+{
+"col": "config",
+"id": "consag-2026-10-26",
+"data": {"dia": "2026-10-26", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Daniel Rocha", "Eduarda Pires", "Gabriela Martins", "Heitor Campos", "João Pedro Lima", "Karina Moura", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Otávio Cardoso", "Patrícia Gomes", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Vitor Araújo", "Gustavo Mendes", "Marcos Antunes", "Renata Farias"], "por": {"id": "m-thal", "nome": "Thalisson"}, "em": "2026-10-26T06:30:00.000Z"}
+},
+{
+"col": "config",
 "id": "equipes-top1922",
 "data": {"equipes": [{"id": "eq1", "nome": "Equipe Trilha", "adms": [{"id": "m-thal", "nome": "Thalisson"}, {"id": "m-rafa", "nome": "Rafael Lima"}]}, {"id": "eq2", "nome": "Equipe Base", "adms": [{"id": "m-bru", "nome": "Bruno Costa"}, {"id": "m-hen", "nome": "Henrique"}]}], "coord": [{"id": "m-die", "nome": "Diego Souza"}]}
 },
@@ -1226,6 +1286,7 @@ window.ADM_DEMO = {
 "legendarios",
 "familias",
 "cronograma",
+"consagracao",
 "checklist"
 ],
 "ativo": true,
