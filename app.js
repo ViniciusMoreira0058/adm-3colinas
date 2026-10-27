@@ -1148,8 +1148,13 @@ function loginForm(aviso, erro) {
     try {
       if (email) store.set("adm-email", email);
       if (m === "login") {
-        const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+        // sem internet: confere a senha com a que ficou guardada (protegida) neste aparelho no último login
+        if (navigator.onLine === false) { await entrarOffline(email, senha); return; }
+        let res; try { res = await ADM_DADOS.comPrazo(sb.auth.signInWithPassword({ email, password: senha }), 15000); } catch (e) { res = { error: e }; }
+        const { error } = res;
+        if (error && ADM_DADOS.ehRede(error) && contaOffline(email)) { await entrarOffline(email, senha); return; }
         if (error) throw new Error(/invalid/i.test(error.message) ? "E-mail ou senha incorretos." : /confirm/i.test(error.message) ? "Confirme seu e-mail pelo link que enviamos antes de entrar." : error.message);
+        senhaLogin = { email, senha };
         await iniciarSessao();
       } else if (m === "signup" || m === "newpass") {
         if (senha.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres.");
@@ -1182,16 +1187,64 @@ function aplicarPerfil(p) {
   document.body.classList.toggle("ro", ME.acesso.nivel === "leitura" && !ME.dono);
 }
 let sessaoOk = false;
+/* Login sem internet: no login com internet o app guarda neste aparelho uma "impressão" da senha (PBKDF2, não a senha)
+   e o perfil. Sem internet, confere a senha digitada com essa impressão e abre com os dados guardados. */
+let senhaLogin = null, loginOffline = null;
+const contas = () => { try { return JSON.parse(localStorage.getItem("adm3-contas") || "{}"); } catch { return {}; } };
+const contaOffline = email => contas()[email];
+async function impressao(senha, sal) {
+  const enc = new TextEncoder();
+  const k = await crypto.subtle.importKey("raw", enc.encode(senha), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: enc.encode(sal), iterations: 200000 }, k, 256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+async function guardarContaOffline(email, senha, perfil) {
+  if (!crypto.subtle || !email) return;
+  try {
+    const sal = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, "0")).join("");
+    const c = contas(); c[email] = { sal, hash: await impressao(senha, sal), perfil, em: new Date().toISOString() };
+    store.set("adm3-contas", JSON.stringify(c));
+  } catch (e) { console.error(e); }
+}
+function esquecerConta(email) { const c = contas(); if (c[email]) { delete c[email]; store.set("adm3-contas", JSON.stringify(c)); } }
+async function entrarOffline(email, senha) {
+  const c = contaOffline(email);
+  if (!c) throw new Error("Sem internet. Para entrar sem internet, você precisa ter entrado pelo menos uma vez neste aparelho com internet.");
+  if (!crypto.subtle || await impressao(senha, c.sal) !== c.hash) throw new Error("E-mail ou senha incorretos.");
+  loginOffline = { email, senha };   // só na memória: usado para entrar de verdade quando a internet voltar
+  await iniciarSessao(c.perfil);
+}
+// internet de volta depois de um login sem internet: entra de verdade para poder enviar a fila
+async function concluirLoginOffline() {
+  if (!loginOffline || navigator.onLine === false) return;
+  const { email, senha } = loginOffline;
+  let res; try { res = await sb.auth.signInWithPassword({ email, password: senha }); } catch (e) { res = { error: e }; }
+  if (res.error) {
+    if (ADM_DADOS.ehRede(res.error)) return;   // tenta de novo depois
+    loginOffline = null; esquecerConta(email);
+    toast("Sua senha mudou. Entre de novo para enviar as alterações guardadas."); setTimeout(() => location.reload(), 2500); return;
+  }
+  loginOffline = null;
+  const r = await sb.rpc("adm_vincular");
+  if (!r.error && (!r.data || r.data.inativo)) { esquecerConta(email); ADM_DADOS.limparLocal(ME.id); await sb.auth.signOut(); location.reload(); return; }
+  if (!r.error) { store.set("adm3-perfil", JSON.stringify(r.data)); aplicarPerfil(r.data); }
+  if (db) db.recarregar().catch(() => {}).finally(renderNav);
+}
 const perfilSalvo = () => { try { return JSON.parse(localStorage.getItem("adm3-perfil") || "null"); } catch { return null; } };
-async function iniciarSessao() {
+async function iniciarSessao(perfilOffline) {
   if (sessaoOk) return;
   let r;
-  try { if (navigator.onLine === false && perfilSalvo()) throw new TypeError("Failed to fetch"); r = await ADM_DADOS.comPrazo(Promise.resolve(sb.rpc("adm_vincular")), 12000); }
+  try { if (perfilOffline || (navigator.onLine === false && perfilSalvo())) throw new TypeError("Failed to fetch"); r = await ADM_DADOS.comPrazo(Promise.resolve(sb.rpc("adm_vincular")), 12000); }
   catch (e) { r = { error: e }; }
   let p = r.data;
   // sem internet: entra com o último perfil guardado neste aparelho e os dados guardados
-  if (r.error) { if (ADM_DADOS.ehRede(r.error) && perfilSalvo()) { p = perfilSalvo(); S.fila = { ...(S.fila || {}), offline: true }; } else throw r.error; }
-  else if (p && !p.inativo) store.set("adm3-perfil", JSON.stringify(p));
+  if (r.error) { if (ADM_DADOS.ehRede(r.error) && (perfilOffline || perfilSalvo())) { p = perfilOffline || perfilSalvo(); S.fila = { ...(S.fila || {}), offline: true }; } else throw r.error; }
+  else if (p && !p.inativo) {
+    store.set("adm3-perfil", JSON.stringify(p));
+    if (senhaLogin) { guardarContaOffline(senhaLogin.email, senhaLogin.senha, p); senhaLogin = null; }
+    else { const u = (await sb.auth.getSession()).data.session; const em = u && u.user && u.user.email && u.user.email.toLowerCase(); const c = em && contas()[em]; if (c) { c.perfil = p; const t = contas(); t[em] = c; store.set("adm3-contas", JSON.stringify(t)); } }
+  }
+  else if (p && p.inativo) { const u = (await sb.auth.getSession()).data.session; if (u && u.user) esquecerConta((u.user.email || "").toLowerCase()); }
   if (!p || p.inativo) {
     await sb.auth.signOut();
     authMode = "login";
@@ -1239,12 +1292,25 @@ function boasVindas() {
   () => { store.set("adm3-bemvindo-" + ME.id, "1"); closeModal(); checarAviso(); });
   const nb = $("#bvNotif"); if (nb) nb.onclick = async () => { await pedirNotificacao(); nb.remove(); };
 }
-async function sair() {
+function sair() {
   setMenu(false);
+  if (DEMO) { location.reload(); return; }
   const pend = db ? db.estado().pendentes : 0;
-  if (pend && !confirm(`Ainda tem ${pend} alteração(ões) sem enviar (você está sem internet). Se sair agora, elas serão perdidas. Sair mesmo assim?`)) return;
-  if (!DEMO) { ADM_DADOS.limparLocal(ME.id); try { localStorage.removeItem("adm3-perfil"); } catch {} await sb.auth.signOut().catch(() => {}); }
-  location.reload();
+  modal(`
+    <h3>Sair da conta</h3>
+    ${pend ? `<p class="warn-text" style="margin:0">Ainda tem <b>${pend}</b> alteração(ões) esperando internet. Se você só sair, elas continuam guardadas e são enviadas no próximo login neste aparelho. Se apagar os dados, elas se perdem.</p>` : ""}
+    <p class="hint" style="margin:0">Os dados ficam guardados neste aparelho para você conseguir entrar sem internet. Em celular que não é seu, marque a opção abaixo.</p>
+    <label class="selall"><input type="checkbox" id="f-apagar"> Apagar os dados guardados neste aparelho</label>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Sair</button></div></div>`,
+  async () => {
+    const apagar = $("#f-apagar").checked;
+    if (apagar && pend && !confirm(`As ${pend} alteração(ões) não enviadas serão perdidas. Continuar?`)) return;
+    const u = (await sb.auth.getSession().catch(() => ({ data: {} }))).data.session;
+    if (apagar) { ADM_DADOS.limparLocal(ME.id); esquecerConta(((u && u.user && u.user.email) || store.get("adm-email") || "").toLowerCase()); }
+    try { localStorage.removeItem("adm3-perfil"); } catch {}
+    await Promise.resolve(sb.auth.signOut()).catch(() => {});
+    location.reload();
+  });
 }
 
 let canal = null, lastSeenAt = 0;
@@ -1902,9 +1968,9 @@ function hideSplash() {
 
 /* ---------- Dados ---------- */
 render();
-addEventListener("online", () => { if (db) db.recarregar().catch(() => {}).finally(renderNav); renderNav(); });
+addEventListener("online", () => { if (loginOffline) { concluirLoginOffline(); return; } if (db) db.recarregar().catch(() => {}).finally(renderNav); renderNav(); });
 addEventListener("offline", () => { const ja = S.fila && S.fila.offline; S.fila = { ...(S.fila || {}), offline: true }; renderNav(); if (!ja && ME.acesso && !DEMO || !ja && DEMO && db) toast("Sem internet. Pode continuar usando: as alterações ficam guardadas e são enviadas quando a conexão voltar."); });
-setInterval(() => { if (db && db.estado().pendentes && navigator.onLine !== false) db.sincronizar(); }, 30000);
+setInterval(() => { if (loginOffline) concluirLoginOffline(); else if (db && db.estado().pendentes && navigator.onLine !== false) db.sincronizar(); }, 30000);
 // assina as coleções depois do login (o banco só entrega o que a pessoa pode ver)
 function conectarDados() {
   const chave = DEMO ? "demo" : ME.id;
