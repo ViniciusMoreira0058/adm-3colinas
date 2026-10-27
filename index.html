@@ -286,6 +286,16 @@ tbody tr:hover td { background: var(--accent-soft); }
 .main { padding-top: 0; }
 .mtop { display: flex; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); align-items: center; justify-content: space-between; gap: 12px; padding-block: 10px; border-bottom: 1px solid var(--line); margin: 0 auto 20px; max-width: 1180px; }
 .mtop .brand-mark { width: 34px; height: 34px; }
+/* Computador: tela inteira, menu fixo do lado (recolhe pelo botão ☰ ou pelo X) */
+@media (min-width: 1024px) {
+  .side { width: 264px; }
+  .app:not(.side-off) .side { transform: none; visibility: visible; box-shadow: none; }
+  .app:not(.side-off) .main { margin-left: 264px; }
+  .scrim { display: none !important; }
+  .wrap, .mtop { max-width: none; }
+  .main { padding-left: 28px; padding-right: 28px; }
+}
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) { .main { transition: margin-left .22s ease; } }
 @media (max-width: 520px) {
   .form { grid-template-columns: 1fr; }
   .funnel-row { grid-template-columns: 110px 1fr 54px; }
@@ -504,7 +514,7 @@ a.btn { text-decoration: none; }
         <img class="side-logo" src="assets/logo.png" alt="Track 3 Colinas · Franca SP">
         <div><h1>ADM 3Colinas</h1><small id="sideTop">TOP 1922</small></div>
       </div>
-      <button class="icon-btn" type="button" id="menuClose" aria-label="Fechar menu"><svg aria-hidden="true"><use href="#i-x"/></svg></button>
+      <button class="icon-btn" type="button" id="menuClose" aria-label="Fechar menu" title="Recolher menu"><svg aria-hidden="true"><use href="#i-x"/></svg></button>
     </div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">

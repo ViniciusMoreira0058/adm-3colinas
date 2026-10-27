@@ -180,8 +180,15 @@ function setMenu(open) {
   $("#menuBtn").setAttribute("aria-expanded", String(open));
   if (open) { const cur = $("#nav [aria-current]"); (cur || $("#menuClose")).focus(); }
 }
-$("#menuBtn").onclick = () => setMenu(true);
-$("#menuClose").onclick = () => { setMenu(false); $("#menuBtn").focus(); };
+/* No computador o menu fica fixo do lado e pode ser recolhido (fica lembrado); no celular ele abre por cima. */
+const telaGrande = matchMedia("(min-width: 1024px)");
+function setRecolhido(off) {
+  $(".app").classList.toggle("side-off", off); store.set("adm3-side-off", off ? "1" : "");
+  if (telaGrande.matches) $("#menuBtn").setAttribute("aria-expanded", String(!off));
+}
+setRecolhido(store.get("adm3-side-off") === "1");
+$("#menuBtn").onclick = () => { if (telaGrande.matches) setRecolhido(!$(".app").classList.contains("side-off")); else setMenu(true); };
+$("#menuClose").onclick = () => { if (telaGrande.matches) { setRecolhido(true); $("#menuBtn").focus(); } else { setMenu(false); $("#menuBtn").focus(); } };
 $("#scrim").onclick = () => setMenu(false);
 $("#backBtn").onclick = () => {
   if ($("#modalRoot").innerHTML && !$(".login")) { closeModal(); return; }
