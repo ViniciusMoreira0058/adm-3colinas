@@ -624,48 +624,129 @@ function cronoPdfForm() {
     catch (e) { console.error(e); toast(erroAmigavel(e)); btn.disabled = false; btn.textContent = "Gerar PDF"; }
   });
 }
+// faixa do topo no visual do app: montanha laranja à direita sumindo no azul-marinho
+function faixaPdf() {
+  return new Promise(ok => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas"); c.width = 2400; c.height = 330;
+      const g = c.getContext("2d");
+      g.fillStyle = "#0b1119"; g.fillRect(0, 0, c.width, c.height);
+      const w = 1000, h = img.height * w / img.width;
+      g.drawImage(img, c.width - w, -h * 0.30, w, h);
+      const gr = g.createLinearGradient(c.width - w - 40, 0, c.width - w + 520, 0);
+      gr.addColorStop(0, "rgba(11,17,25,1)"); gr.addColorStop(1, "rgba(11,17,25,0)");
+      g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
+      const gb = g.createLinearGradient(0, c.height * 0.55, 0, c.height);
+      gb.addColorStop(0, "rgba(11,17,25,0)"); gb.addColorStop(1, "rgba(11,17,25,.85)");
+      g.fillStyle = gb; g.fillRect(0, 0, c.width, c.height);
+      ok(c.toDataURL("image/jpeg", 0.86));
+    };
+    img.onerror = () => ok(null);
+    img.src = "assets/bg.jpg";
+  });
+}
 async function gerarCronoPdf(qual) {
   const jsPDF = await carregarPdf();
   const plano = cronoPlano(), M = cronoMarcas();
   const dias = qual === "todos" ? plano : plano.filter(d => d.id === qual);
-  const logo = await imagemDataUrl("assets/logo.png");
+  const [logo, faixa] = await Promise.all([imagemDataUrl("assets/logo.png"), faixaPdf()]);
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  const W = doc.internal.pageSize.getWidth();
-  const COR = { predica: [243, 154, 30], refeicao: [63, 138, 46], destaque: [106, 166, 224], especial: [230, 210, 26], pausa: [190, 190, 190] };
-  const TXT = { predica: [255, 255, 255], refeicao: [255, 255, 255], destaque: [255, 255, 255], especial: [30, 30, 30], pausa: [255, 255, 255] };
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  // cores do app (tema claro para imprimir) e das categorias da planilha
+  const NAVY = [11, 17, 25], LARANJA = [255, 122, 26], TINTA = [30, 20, 11], CINZA = [123, 101, 83], LINHA = [241, 220, 199], CREME = [255, 248, 242];
+  const VERDE = [29, 138, 85], AMBAR = [168, 111, 0], VERM = [204, 51, 41];
+  const COR = { predica: [243, 154, 30], refeicao: [63, 138, 46], destaque: [106, 166, 224], especial: [214, 190, 0], pausa: [150, 150, 150] };
+  const mistura = (c, a) => c.map(v => Math.round(255 - (255 - v) * a));
   const top = topName(), gerado = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   const limpa = s => String(s || "").replace(/−/g, "-");
+  const local = (topDoc() || {}).local || "Franca - SP";
+  const cabecalho = (d, primeira, resumo) => {
+    const alt = primeira ? 38 : 16;
+    doc.setFillColor(...NAVY); doc.rect(0, 0, W, alt, "F");
+    if (faixa) {
+      // nas páginas de continuação mostra só o alto da mesma faixa (sem esticar a imagem)
+      doc.saveGraphicsState(); doc.rect(0, 0, W, alt, null); doc.clip(); doc.discardPath();
+      doc.addImage(faixa, "JPEG", 0, primeira ? 0 : -6, W, W * 330 / 2400, "faixa", "FAST");
+      doc.restoreGraphicsState();
+    }
+    doc.setFillColor(...LARANJA); doc.rect(0, alt, W, 1.2, "F");
+    if (primeira) {
+      if (logo) try { doc.addImage(logo, "PNG", 12, 6, 20.6, 26, "logo"); } catch (e) {}
+      doc.setTextColor(...LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
+      doc.text("ADM 3COLINAS  ·  LEGENDÁRIOS BASE 3 COLINAS", 38, 12, { charSpace: 0.6 });
+      doc.setTextColor(255, 255, 255); doc.setFontSize(24);
+      doc.text(`CRONOGRAMA ${d.nome}`, 38, 23);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(220, 210, 200);
+      doc.text(`${top} · ${local}`, 38, 30);
+      // resumo em "cartões" à direita
+      let x = W - 12;
+      [...resumo].reverse().forEach(([lbl, val, cor]) => {
+        doc.setFont("helvetica", "bold"); doc.setFontSize(13); const wv = doc.getTextWidth(val);
+        doc.setFontSize(6.5); const wl = doc.getTextWidth(lbl.toUpperCase()) + 0.6 * lbl.length * 0.35;
+        const w = Math.max(wv, wl) + 8; x -= w;
+        doc.setFillColor(...NAVY); doc.setDrawColor(255, 255, 255); doc.setLineWidth(0.25); doc.roundedRect(x, 9, w, 19, 2, 2, "FD");
+        doc.setTextColor(230, 220, 210); doc.text(lbl.toUpperCase(), x + 4, 15, { charSpace: 0.35 });
+        doc.setFontSize(13); doc.setTextColor(...(cor || [255, 255, 255])); doc.text(val, x + 4, 23.5);
+        x -= 3;
+      });
+    } else {
+      if (logo) try { doc.addImage(logo, "PNG", 10, 2.2, 9.1, 11.5, "logo"); } catch (e) {}
+      doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+      doc.text(`CRONOGRAMA ${d.nome}`, 23, 9.8);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(220, 210, 200);
+      doc.text(`${top} · continuação`, 23 + doc.getTextWidth(`CRONOGRAMA ${d.nome}`) * 11 / 8 + 4, 9.8);
+    }
+  };
   dias.forEach((d, n) => {
     if (n) doc.addPage();
-    doc.setFillColor(243, 154, 30); doc.rect(10, 8, W - 20, 9, "F");
-    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bolditalic"); doc.setFontSize(12);
-    doc.text(`CRONOGRAMA ${d.nome} · ${top.toUpperCase()} · 3 COLINAS`, W / 2, 14.2, { align: "center" });
-    if (logo) try { doc.addImage(logo, "PNG", W - 22, 8.5, 8, 8); } catch (e) {}
     const feitos = d.itens.filter(i => M[i.id] && M[i.id].fim).length;
-    doc.setTextColor(90, 90, 90); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-    doc.text(`${feitos} de ${d.itens.length} momentos concluídos · gerado em ${gerado} por ${ME.adm || "ADM"}`, 10, 22);
-    const linhas = d.itens.map(i => { const m = M[i.id] || {}; const at = m.ini && i.hora ? atrasoDe(i.hora, m.ini) : null;
-      return [i.hora || "", m.ini || "", m.fim || "", at == null ? "" : limpa(fmtDif(at)), i.atv || "", i.local || "", i.form || "", i.resp || "",
+    const ultimo = [...d.itens].reverse().find(i => M[i.id] && M[i.id].ini);
+    const at = ultimo && ultimo.hora ? atrasoDe(ultimo.hora, M[ultimo.id].ini) : null;
+    const resumo = [["Concluídos", `${feitos}/${d.itens.length}`], ["Atraso atual", at == null ? "-" : limpa(fmtDif(at)), at == null ? null : at > 10 ? [255, 140, 120] : at > 0 ? [255, 205, 120] : [140, 230, 180]]];
+    const paginaInicial = doc.getNumberOfPages();
+    cabecalho(d, true, resumo);
+    // legenda
+    let lx = 12; doc.setFontSize(7.5); doc.setFont("helvetica", "normal");
+    [["predica", "Prédica"], ["refeicao", "Refeição"], ["destaque", "Destaque"], ["especial", "Especial"]].forEach(([k, l]) => {
+      doc.setFillColor(...COR[k]); doc.roundedRect(lx, 43.2, 3, 3, 0.6, 0.6, "F"); doc.setTextColor(...CINZA); doc.text(l, lx + 4.2, 45.6); lx += doc.getTextWidth(l) + 10;
+    });
+    doc.setTextColor(...CINZA); doc.text(`Gerado em ${gerado} por ${ME.adm || "ADM"}`, W - 12, 45.6, { align: "right" });
+    const linhas = d.itens.map(i => { const m = M[i.id] || {}; const a = m.ini && i.hora ? atrasoDe(i.hora, m.ini) : null;
+      return [i.hora || "", m.ini || "", m.fim || "", a == null ? "" : limpa(fmtDif(a)), i.atv || "", i.local || "", i.form || "", i.resp || "",
         [...new Set([m.iniPor, m.fimPor].filter(Boolean).map(x => x.split(" ")[0]))].join(", ")]; });
     doc.autoTable({
-      startY: 25, margin: { left: 10, right: 10 },
-      head: [["PREVISTO", "INÍCIO REAL", "FIM REAL", "ATRASO", "ATIVIDADE", "LOCAL", "FORMAÇÃO", "RESPONSÁVEL", "MARCADO POR"]],
-      body: linhas, theme: "grid",
-      styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.4, textColor: [25, 25, 25], lineColor: [60, 60, 60], lineWidth: 0.15, valign: "middle" },
-      headStyles: { fillColor: [106, 166, 224], textColor: [255, 255, 255], fontStyle: "bolditalic", fontSize: 7.5 },
-      columnStyles: { 0: { cellWidth: 17, fontStyle: "bolditalic", halign: "center" }, 1: { cellWidth: 19, halign: "center", fontStyle: "bold" }, 2: { cellWidth: 17, halign: "center", fontStyle: "bold" },
-        3: { cellWidth: 17, halign: "center" }, 4: { cellWidth: 78 }, 5: { cellWidth: 28 }, 6: { cellWidth: 30 }, 7: { cellWidth: 45 }, 8: { cellWidth: "auto" } },
+      startY: 49, margin: { left: 12, right: 12, top: 22, bottom: 14 },
+      head: [["PREVISTO", "INÍCIO", "FIM", "ATRASO", "ATIVIDADE", "LOCAL", "FORMAÇÃO", "RESPONSÁVEL", "MARCADO POR"]],
+      body: linhas, theme: "plain",
+      styles: { font: "helvetica", fontSize: 7.6, cellPadding: { top: 1.9, bottom: 1.9, left: 2, right: 2 }, textColor: TINTA, valign: "middle", lineColor: LINHA, lineWidth: { bottom: 0.2 } },
+      headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7, cellPadding: { top: 2.6, bottom: 2.6, left: 2, right: 2 }, lineWidth: 0 },
+      alternateRowStyles: { fillColor: CREME },
+      columnStyles: { 0: { cellWidth: 17, fontStyle: "bold", halign: "center", fontSize: 8.6 }, 1: { cellWidth: 16, halign: "center", fontStyle: "bold" }, 2: { cellWidth: 16, halign: "center", fontStyle: "bold" },
+        3: { cellWidth: 17, halign: "center", fontStyle: "bold" }, 4: { cellWidth: 82, fontStyle: "bold" }, 5: { cellWidth: 27 }, 6: { cellWidth: 29 }, 7: { cellWidth: 45 }, 8: { cellWidth: "auto", textColor: CINZA } },
       didParseCell: c => {
-        if (c.section !== "body") return;
+        if (c.section === "head") { if (c.column.index >= 1 && c.column.index <= 3) c.cell.styles.fillColor = [40, 24, 10]; if (c.column.index <= 3) c.cell.styles.halign = "center"; return; }
         const i = d.itens[c.row.index], t = i && i.tipo;
-        if (t && COR[t]) { c.cell.styles.fillColor = COR[t]; c.cell.styles.textColor = TXT[t]; c.cell.styles.fontStyle = c.column.index === 0 ? "bolditalic" : "bold"; }
-        if (c.column.index === 3 && c.cell.raw && !(t && COR[t])) { const v = c.cell.raw; if (/^\+/.test(v)) { const mins = /h/.test(v) ? 99 : parseInt(v.slice(1)); c.cell.styles.textColor = mins > 10 ? [200, 30, 30] : [170, 110, 0]; c.cell.styles.fontStyle = "bold"; } else c.cell.styles.textColor = [20, 130, 70]; }
-        if ((c.column.index === 1 || c.column.index === 2) && c.cell.raw && !(t && COR[t])) c.cell.styles.fillColor = [232, 246, 238];
+        if (t && COR[t]) c.cell.styles.fillColor = mistura(COR[t], 0.2);
+        if (c.column.index === 0 && t && COR[t]) c.cell.styles.textColor = t === "especial" ? TINTA : COR[t].map(v => Math.round(v * 0.75));
+        if ((c.column.index === 1 || c.column.index === 2) && c.cell.raw) c.cell.styles.textColor = VERDE;
+        if (c.column.index === 3 && c.cell.raw) { const v = c.cell.raw; const mins = /h/.test(v) ? 99 : parseInt(v.slice(1)) || 0; c.cell.styles.textColor = /^\+/.test(v) ? (mins > 10 ? VERM : AMBAR) : VERDE; }
       },
+      didDrawCell: c => {
+        // traço colorido à esquerda das linhas de prédica, refeição etc.
+        if (c.section === "body" && c.column.index === 0) { const t = (d.itens[c.row.index] || {}).tipo; if (t && COR[t]) { doc.setFillColor(...COR[t]); doc.rect(c.cell.x, c.cell.y, 1.4, c.cell.height, "F"); } }
+      },
+      didDrawPage: () => { if (doc.getNumberOfPages() > paginaInicial) cabecalho(d, false); },
     });
   });
   const pg = doc.getNumberOfPages();
-  for (let i = 1; i <= pg; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(140, 140, 140); doc.text(`ADM 3Colinas · página ${i} de ${pg}`, W - 10, doc.internal.pageSize.getHeight() - 6, { align: "right" }); }
+  for (let i = 1; i <= pg; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...LARANJA); doc.setLineWidth(0.5); doc.line(12, H - 9.5, W - 12, H - 9.5);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...TINTA); doc.text("ADM 3COLINAS", 12, H - 5.5);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(...CINZA); doc.text(`Legendários Base 3 Colinas · ${top}`, 12 + doc.getTextWidth("ADM 3COLINAS") + 3, H - 5.5);
+    doc.text(`Página ${i} de ${pg}`, W - 12, H - 5.5, { align: "right" });
+  }
   const nome = `cronograma-${(qual === "todos" ? "completo" : dias[0].nome).toLowerCase()}-${top.toLowerCase().replace(/\s+/g, "")}.pdf`;
   const blob = doc.output("blob");
   const arq = typeof File === "function" ? new File([blob], nome, { type: "application/pdf" }) : null;
