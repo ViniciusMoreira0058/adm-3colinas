@@ -112,19 +112,19 @@ const api = {
   },
   async update(col, id, data) {
     if (!db) { const d = S[col].find(x => x.id === id); Object.assign(d, data); render(); return; }
-    const antes = DEMO && (S[col] || []).find(x => x.id === id);
+    const antes = DEMO && Array.isArray(S[col]) && S[col].find(x => x.id === id);
     await db.collection(col).doc(id).update(data);
     if (antes) { const { id: _, ...a } = antes; logLocal(col, id, a, { ...a, ...data }); }
   },
   async remove(col, id) {
     if (!db) { S[col] = S[col].filter(x => x.id !== id); render(); return; }
-    const antes = DEMO && (S[col] || []).find(x => x.id === id);
+    const antes = DEMO && Array.isArray(S[col]) && S[col].find(x => x.id === id);
     await db.collection(col).doc(id).delete();
     if (antes) { const { id: _, ...a } = antes; logLocal(col, id, a, null); }
   },
   async set(col, id, data) {
     if (!db) { S[col] = S[col].filter(x => x.id !== id); S[col].push({ id, ...data }); render(); return; }
-    const antes = DEMO && (S[col] || []).find(x => x.id === id);
+    const antes = DEMO && Array.isArray(S[col]) && S[col].find(x => x.id === id);
     await db.collection(col).doc(id).set(data);
     if (DEMO) { const a = antes ? (({ id: _, ...r }) => r)(antes) : null; logLocal(col, id, a, data); }
   },
@@ -350,6 +350,7 @@ function filterPeople() {
         case "grupo": return !p.noGrupo;
         case "40": return is40(p);
         case "ok": return p.atestado === "confirmado" && p.termo === "assinado";
+        case "novos": return !!S.aviso && p.importId === S.aviso.id;
         default: return true;
       }
     })
@@ -367,7 +368,7 @@ function admOptions() {
   return [...new Set([...ADMS, ...S.P.map(p => p.adm).filter(Boolean)])].sort((x, y) => norm(x).localeCompare(norm(y)));
 }
 
-const tagsInscricao = p => (cancelado(p) ? ' <span class="chip bad">Compra cancelada</span>' : p.inscricao === "pendente" ? ' <span class="chip wait">Pagamento pendente</span>' : "")
+const tagsInscricao = p => (S.aviso && p.importId === S.aviso.id ? ' <span class="chip ok">Novo</span>' : "") + (cancelado(p) ? ' <span class="chip bad">Compra cancelada</span>' : p.inscricao === "pendente" ? ' <span class="chip wait">Pagamento pendente</span>' : "")
   + (saudeAlerta(p) ? ' <span class="tag saude" title="Tem condição médica, medicamento ou restrição alimentar">Saúde</span>' : "");
 function vPessoas(tipo) {
   const lg = tipo === "legendario";
@@ -377,6 +378,7 @@ function vPessoas(tipo) {
   const fil = lg
     ? [["todos", "Todos"], ["atestado", "Sem atestado"], ["termo", "Sem termo"], ["ok", "Tudo OK"]]
     : [["todos", "Todos"], ["atestado", "Sem atestado"], ["termo", "Sem termo"], ["grupo", "Fora do grupo"], ["40", "+40"], ["ok", "Tudo OK"]];
+  if (S.aviso && S.P.some(p => p.importId === S.aviso.id && (lg ? p.tipo === "legendario" : p.tipo !== "legendario"))) fil.push(["novos", "Novos da última planilha"]);
   const tick = (p, k, i, t) => `<button type="button" class="tick ${p[k] ? "on" : ""}" data-tog="${k}" data-id="${p.id}" title="${t}" aria-label="${t}: ${p[k] ? "sim" : "não"}" aria-pressed="${!!p[k]}">${ico(i)}</button>`;
   const ticks = p => lg ? "" : `<div class="ticks">${tick(p, "msgGrupo", "chat", "Mensagem do grupo enviada")}${tick(p, "noGrupo", "group", "Entrou no grupo")}${tick(p, "nfc", "nfc", "NFC registrado")}</div>`;
   const cyc = (list, k, p) => chip(list, p[k], `data-cyc="${k}" data-id="${p.id}" title="Clique para avançar o status"`);
@@ -734,7 +736,8 @@ function render() {
   const td = topDoc();
   const other = tid !== atualId() && v !== "tops"
     ? `<div class="banner"><span>Você está vendo o <b>${esc(topName())}</b>${td && td.status === "finalizado" ? " (finalizado)" : ""}. O que mudar aqui fica no histórico dele.</span><button class="btn" type="button" data-top-open="${esc(atualId())}">Voltar para o ${esc(topName(atualId()))}</button></div>` : "";
-  const html = other + (v === "painel" ? vPainel()
+  const faixa = avisoVisivel() ? `<div class="banner aviso"><span>${ico("bell")} <b>Planilha atualizada</b> por ${esc(S.aviso.por || "um ADM")}: ${S.aviso.novosP + S.aviso.novosL} novo(s) (${S.aviso.novosP} part. · ${S.aviso.novosL} LGND).</span><button class="btn" type="button" data-aviso="abrir">Ver resumo</button></div>` : "";
+  const html = faixa + other + (v === "painel" ? vPainel()
     : v === "tops" ? vTops()
     : v === "usuarios" ? vUsuarios()
     : v === "historico" ? vHistorico()
@@ -1160,6 +1163,14 @@ document.addEventListener("click", e => {
   const d = t.dataset;
   if (d.go) { go(d.go); return; }
   if (d.pf) { S.pf[d.pf] = d.v; render(); return; }
+  if (d.aviso) {
+    if (d.aviso === "abrir") { avisoModal(); return; }
+    marcarAvisoVisto(); closeModal();
+    if (d.aviso === "pend") { go("pendencias"); S.pf.quem = "todos"; render(); }
+    else if (d.aviso === "novos") { const lgs = S.pessoas.filter(p => p.importId === S.aviso.id); go(lgs.length && lgs.every(p => p.tipo === "legendario") ? "legendarios" : "participantes"); S.f.status = "novos"; render(); }
+    else render();
+    return;
+  }
   if (d.pendAct === "msg") { msgForm(); return; }
   if (d.pendAct === "copiar") { copiarPendencias(); return; }
   if (d.pendAct === "seq") { if (podeEditar()) cobrarSequencia(); return; }
@@ -1551,7 +1562,7 @@ function importForm(tipoAtual) {
     const completar = $("#impCompletar") && $("#impCompletar").checked;
     const marcarCanc = $("#impCanc") && $("#impCanc").checked;
     closeModal();
-    await importarRelatorio(novos, completar ? R.ja : [], marcarCanc ? R.canc.filter(c => c.p && !cancelado(c.p)) : []);
+    await importarRelatorio(novos, completar ? R.ja : [], marcarCanc ? R.canc.filter(c => c.p && !cancelado(c.p)) : [], R.arquivo);
   });
   let R = null;
   $("#f-arq").addEventListener("change", async e => {
@@ -1561,7 +1572,7 @@ function importForm(tipoAtual) {
       const X = await carregarXlsx();
       const wb = X.read(await f.arrayBuffer(), { type: "array" });
       const linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" });
-      R = analisarImport(lerRelatorio(linhas));
+      R = analisarImport(lerRelatorio(linhas)); R.arquivo = f.name;
       prev.innerHTML = previewImport(R);
       $("#impBtn").disabled = !R.novos.length && !R.ja.length && !R.canc.some(c => c.p);
       $("#impBtn").textContent = R.novos.length ? `Importar ${R.novos.length} novo(s)` : "Aplicar";
@@ -1596,15 +1607,17 @@ function previewImport(R) {
     <ul class="imp-list">${cancApp.map(c => `<li>${esc(c.p.nome)} <span class="hint">${tl(c.n)}</span></li>`).join("")}</ul></details>
     <label class="selall"><input type="checkbox" id="impCanc" checked> Marcar essas pessoas como <b>compra cancelada</b> no app (não apaga ninguém)</label>` : ""}`;
 }
-async function importarRelatorio(novos, completar, cancelar) {
+async function importarRelatorio(novos, completar, cancelar, arquivo) {
   if (!novos.length && !completar.length && !cancelar.length) { toast("Nada para importar."); return; }
   toast("Importando…");
+  const importId = "imp" + Date.now().toString(36);
+  let completados = 0, erro = false;
   await new Promise(ok => withAdm(stamp => save(async () => {
     const fila = [
       ...novos.map(n => () => api.add("pessoas", { nome: n.nome, email: n.email, telefone: n.telefone, cidade: n.cidade, idade: n.idade, tipo: n.tipo,
         mais40: (n.idade || 0) >= 40, atestado: "pendente", termo: "pendente", dataAtestado: "", obs: "", ficha: n.ficha, inscricao: n.inscricao,
         ...(n.tipo === "legendario" ? { equipe: "" } : { nfc: false, msgGrupo: false, noGrupo: false, familia: null }),
-        ...stamp, exemplo: false, origem: "relatorio", criadoEm: new Date().toISOString() })),
+        ...stamp, exemplo: false, origem: "relatorio", importId, criadoEm: new Date().toISOString() })),
       ...completar.map(({ n, p }) => () => {
         const d = {};
         ["email", "telefone", "cidade", "idade"].forEach(k => { if (vazio(p[k]) && !vazio(n[k])) d[k] = n[k]; });
@@ -1612,12 +1625,62 @@ async function importarRelatorio(novos, completar, cancelar) {
         const ficha = { ...n.ficha, ...(p.ficha || {}) };
         if (JSON.stringify(ficha) !== JSON.stringify(p.ficha || {})) d.ficha = ficha;
         if (n.inscricao === "pendente" && !p.inscricao) d.inscricao = "pendente";
-        return Object.keys(d).length ? api.update("pessoas", p.id, d) : null;
+        if (Object.keys(d).length) { completados++; return api.update("pessoas", p.id, d); }
+        return null;
       }),
       ...cancelar.map(({ p }) => () => api.update("pessoas", p.id, { inscricao: "cancelada" })),
     ];
-    for (let i = 0; i < fila.length; i += 8) await Promise.all(fila.slice(i, i + 8).map(f => f()));
+    try { for (let i = 0; i < fila.length; i += 8) await Promise.all(fila.slice(i, i + 8).map(f => f())); }
+    catch (e) { erro = true; throw e; }
   }, [novos.length && `${novos.length} adicionado(s)`, completar.length && "dados completados", cancelar.length && `${cancelar.length} marcado(s) como cancelado`].filter(Boolean).join(" · ")).then(ok)));
+  if (erro) return;
+  render();
+  // aviso para a equipe: os outros ADMs veem o resumo na tela assim que a importação termina
+  const lg = n => n.tipo === "legendario";
+  const aviso = { id: importId, em: new Date().toISOString(), por: ME.adm || "", porId: ME.id || "", arquivo: arquivo || "", top: curTopId(),
+    novosP: novos.filter(n => !lg(n)).length, novosL: novos.filter(lg).length,
+    mais40: novos.filter(n => (n.idade || 0) >= 40).length, pagPend: novos.filter(n => n.inscricao === "pendente").length,
+    saude: novos.filter(n => saudeAlerta(n)).length, completados, cancelados: cancelar.length,
+    totalP: S.P.filter(p => !lg(p) && !cancelado(p)).length, totalL: S.P.filter(p => lg(p) && !cancelado(p)).length };
+  if (!DEMO) store.set("adm3-aviso-visto", importId);   // quem importou já sabe o resultado
+  try { await api.set("config", "aviso", aviso); } catch (e) { console.error(e); }
+}
+
+/* ---------- Aviso de planilha nova para a equipe ---------- */
+const avisoVisivel = () => { const a = S.aviso; return !!(a && ME.acesso && a.top === curTopId() && store.get("adm3-aviso-visto") !== a.id
+  && (DEMO || a.porId !== ME.id) && ["participantes", "legendarios"].some(v => canSee({ id: v }))); };
+function checarAviso() {
+  if (!avisoVisivel()) return;
+  if ($("#modalRoot").innerHTML) return;   // tem outra janela aberta: fica a faixa no alto da tela
+  avisoModal();
+}
+function marcarAvisoVisto() { if (S.aviso) store.set("adm3-aviso-visto", S.aviso.id); }
+function avisoModal() {
+  const a = S.aviso; if (!a) return;
+  const novos = S.pessoas.filter(p => p.importId === a.id).sort((x, y) => norm(x.nome).localeCompare(norm(y.nome)));
+  const n = a.novosP + a.novosL;
+  const itens = [
+    a.mais40 && `<b>${a.mais40}</b> com 40 anos ou mais`,
+    a.pagPend && `<b>${a.pagPend}</b> com pagamento pendente`,
+    a.saude && `<b>${a.saude}</b> com condição médica, medicamento ou restrição alimentar`,
+    a.completados && `Dados completados de <b>${a.completados}</b> pessoa(s) que já estavam no app`,
+    a.cancelados && `<b>${a.cancelados}</b> marcado(s) como compra cancelada`,
+    n && `Os novos chegam <b>sem atestado e sem termo</b>: já aparecem em Pendências`,
+  ].filter(Boolean);
+  modal(`
+    ${DEMO && a.porId === ME.id ? `<div class="banner"><span>Demonstração: é assim que os outros ADMs veem quando você importa uma planilha.</span></div>` : ""}
+    <h3>Planilha atualizada</h3>
+    <p class="hint" style="margin:0"><b>${esc(a.por || "Um ADM")}</b> importou ${a.arquivo ? `<b>${esc(a.arquivo)}</b>` : "o relatório de inscrições"} · ${esc(quando(a.em))}</p>
+    <div class="imp-kpis">
+      <div class="ok"><b class="num">${a.novosP}</b><span>novo(s) participante(s)</span></div>
+      <div class="ok"><b class="num">${a.novosL}</b><span>novo(s) legendário(s)</span></div>
+      <div><b class="num">${a.totalP}</b><span>participantes no TOP</span></div>
+      <div><b class="num">${a.totalL}</b><span>legendários no TOP</span></div>
+    </div>
+    ${itens.length ? `<ul class="aviso-list">${itens.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
+    ${novos.length ? `<details ${novos.length <= 8 ? "open" : ""}><summary><b>Quem entrou (${novos.length})</b></summary><ul class="imp-list">${novos.map(p => `<li>${esc(p.nome)} <span class="hint">${p.tipo === "legendario" ? "Legendário" : "Participante"}${p.cidade ? " · " + esc(p.cidade) : ""}</span></li>`).join("")}</ul></details>` : ""}
+    <div class="modal-foot"><div><button class="btn ghost" type="button" data-aviso="ok">Entendi</button></div>
+      <div class="actions">${n ? `<button class="btn" type="button" data-aviso="pend">Ver pendências</button><button class="btn primary" type="button" data-aviso="novos">Ver os novos</button>` : ""}</div></div>`, () => {});
 }
 function fichaHtml(p) {
   const f = p.ficha; if (!f || !Object.keys(f).length) return "";
@@ -1661,6 +1724,7 @@ function conectarDados() {
   }, e => { console.error(e); toast("Não foi possível carregar os dados. " + erroAmigavel(e)); hideSplash(); });
   ["pessoas", "tarefas", "estoque", "pista", "tops"].forEach(sub);
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
+  db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });
   render();
   if (DEMO) return;
   markSeen(true);
