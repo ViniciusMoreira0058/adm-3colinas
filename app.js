@@ -580,7 +580,7 @@ function vCronograma() {
   const quem = i => { const m = M[i.id] || {}; const q = [m.iniPor, m.fimPor].filter(Boolean); return q.length ? `<small class="hint">Marcado por ${esc([...new Set(q)].map(n => n.split(" ")[0]).join(", "))}</small>` : ""; };
   return `
   <div class="head"><div><h2>Cronograma</h2><p>${esc(topName())} · toque em <b>Iniciar</b> quando o momento começar e em <b>Terminar</b> quando acabar. O horário fica marcado para toda a equipe e funciona sem internet.</p></div>
-    ${ed ? `<div class="actions"><button class="btn" type="button" data-crono-item="novo">${ico("plus")} Novo momento</button></div>` : ""}</div>
+    <div class="actions"><button class="btn" type="button" data-act="crono-pdf">${ico("upload")} Exportar PDF</button>${ed ? `<button class="btn" type="button" data-crono-item="novo">${ico("plus")} Novo momento</button>` : ""}</div></div>
   <div class="kpis">
     <div class="kpi"><span class="lbl">${esc(D.nome || "")} concluído</span><span class="val num">${nFeito}<small style="font-size:18px;color:var(--muted)"> / ${D.itens.length}</small></span><div class="bar good"><i style="width:${pct(nFeito, D.itens.length)}%"></i></div></div>
     <div class="kpi"><span class="lbl">Acontecendo agora</span><span class="val" style="font-size:17px;line-height:1.25">${andando.length ? esc(andando[andando.length - 1].atv) : "—"}</span>${andando.length ? `<span class="sub">desde ${esc(M[andando[andando.length - 1].id].ini)}${andando.length > 1 ? ` · +${andando.length - 1} em andamento` : ""}</span>` : ""}</div>
@@ -600,6 +600,82 @@ function vCronograma() {
         ${ed ? `<button class="linkbtn" type="button" data-crono-item="${i.id}" aria-label="Editar ${esc(i.atv)}">${ico("edit")}</button>` : ""}</div>
       <div class="row"><span class="lbl">Início</span>${inicio(i)}<span class="lbl" style="margin-left:8px">Fim</span>${fim(i)}</div>
     </article>`).join("")}</div>`;
+}
+/* Exportar o cronograma em PDF (um dia ou todos), com o horário previsto e ao lado o horário real marcado */
+let pdfLib = null;
+const carregarScript = src => new Promise((ok, erro) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => erro(new Error("Não foi possível gerar o PDF. Confira a internet e tente de novo.")); document.head.appendChild(s); });
+function carregarPdf() {
+  if (window.jspdf && window.jspdf.jsPDF.API.autoTable) return Promise.resolve(window.jspdf.jsPDF);
+  return pdfLib || (pdfLib = carregarScript("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js")
+    .then(() => carregarScript("https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"))
+    .then(() => window.jspdf.jsPDF).catch(e => { pdfLib = null; throw e; }));
+}
+const imagemDataUrl = url => fetch(url).then(r => r.blob()).then(b => new Promise(ok => { const f = new FileReader(); f.onload = () => ok(f.result); f.readAsDataURL(b); })).catch(() => null);
+function cronoPdfForm() {
+  const plano = cronoPlano(), dia = cronoDiaAtual(plano);
+  modal(`
+    <h3>Exportar cronograma em PDF</h3>
+    <div class="field"><label for="f-pdia">O que exportar</label><select id="f-pdia">${plano.map(d => `<option value="${d.id}" ${d.id === dia ? "selected" : ""}>Só o ${esc(d.nome)}</option>`).join("")}<option value="todos">Todos os dias juntos</option></select></div>
+    <p class="hint" style="margin:0">O PDF traz o horário previsto e, ao lado, o horário real de início e fim, o atraso e quem marcou. Dá para mandar pelo WhatsApp ou e-mail.</p>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="pdfBtn">${ico("upload")} Gerar PDF</button></div></div>`,
+  async () => {
+    const qual = $("#f-pdia").value, btn = $("#pdfBtn"); btn.disabled = true; btn.textContent = "Gerando…";
+    try { await gerarCronoPdf(qual); closeModal(); }
+    catch (e) { console.error(e); toast(erroAmigavel(e)); btn.disabled = false; btn.textContent = "Gerar PDF"; }
+  });
+}
+async function gerarCronoPdf(qual) {
+  const jsPDF = await carregarPdf();
+  const plano = cronoPlano(), M = cronoMarcas();
+  const dias = qual === "todos" ? plano : plano.filter(d => d.id === qual);
+  const logo = await imagemDataUrl("assets/logo.png");
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const W = doc.internal.pageSize.getWidth();
+  const COR = { predica: [243, 154, 30], refeicao: [63, 138, 46], destaque: [106, 166, 224], especial: [230, 210, 26], pausa: [190, 190, 190] };
+  const TXT = { predica: [255, 255, 255], refeicao: [255, 255, 255], destaque: [255, 255, 255], especial: [30, 30, 30], pausa: [255, 255, 255] };
+  const top = topName(), gerado = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const limpa = s => String(s || "").replace(/−/g, "-");
+  dias.forEach((d, n) => {
+    if (n) doc.addPage();
+    doc.setFillColor(243, 154, 30); doc.rect(10, 8, W - 20, 9, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bolditalic"); doc.setFontSize(12);
+    doc.text(`CRONOGRAMA ${d.nome} · ${top.toUpperCase()} · 3 COLINAS`, W / 2, 14.2, { align: "center" });
+    if (logo) try { doc.addImage(logo, "PNG", W - 22, 8.5, 8, 8); } catch (e) {}
+    const feitos = d.itens.filter(i => M[i.id] && M[i.id].fim).length;
+    doc.setTextColor(90, 90, 90); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+    doc.text(`${feitos} de ${d.itens.length} momentos concluídos · gerado em ${gerado} por ${ME.adm || "ADM"}`, 10, 22);
+    const linhas = d.itens.map(i => { const m = M[i.id] || {}; const at = m.ini && i.hora ? atrasoDe(i.hora, m.ini) : null;
+      return [i.hora || "", m.ini || "", m.fim || "", at == null ? "" : limpa(fmtDif(at)), i.atv || "", i.local || "", i.form || "", i.resp || "",
+        [...new Set([m.iniPor, m.fimPor].filter(Boolean).map(x => x.split(" ")[0]))].join(", ")]; });
+    doc.autoTable({
+      startY: 25, margin: { left: 10, right: 10 },
+      head: [["PREVISTO", "INÍCIO REAL", "FIM REAL", "ATRASO", "ATIVIDADE", "LOCAL", "FORMAÇÃO", "RESPONSÁVEL", "MARCADO POR"]],
+      body: linhas, theme: "grid",
+      styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.4, textColor: [25, 25, 25], lineColor: [60, 60, 60], lineWidth: 0.15, valign: "middle" },
+      headStyles: { fillColor: [106, 166, 224], textColor: [255, 255, 255], fontStyle: "bolditalic", fontSize: 7.5 },
+      columnStyles: { 0: { cellWidth: 17, fontStyle: "bolditalic", halign: "center" }, 1: { cellWidth: 19, halign: "center", fontStyle: "bold" }, 2: { cellWidth: 17, halign: "center", fontStyle: "bold" },
+        3: { cellWidth: 17, halign: "center" }, 4: { cellWidth: 78 }, 5: { cellWidth: 28 }, 6: { cellWidth: 30 }, 7: { cellWidth: 45 }, 8: { cellWidth: "auto" } },
+      didParseCell: c => {
+        if (c.section !== "body") return;
+        const i = d.itens[c.row.index], t = i && i.tipo;
+        if (t && COR[t]) { c.cell.styles.fillColor = COR[t]; c.cell.styles.textColor = TXT[t]; c.cell.styles.fontStyle = c.column.index === 0 ? "bolditalic" : "bold"; }
+        if (c.column.index === 3 && c.cell.raw && !(t && COR[t])) { const v = c.cell.raw; if (/^\+/.test(v)) { const mins = /h/.test(v) ? 99 : parseInt(v.slice(1)); c.cell.styles.textColor = mins > 10 ? [200, 30, 30] : [170, 110, 0]; c.cell.styles.fontStyle = "bold"; } else c.cell.styles.textColor = [20, 130, 70]; }
+        if ((c.column.index === 1 || c.column.index === 2) && c.cell.raw && !(t && COR[t])) c.cell.styles.fillColor = [232, 246, 238];
+      },
+    });
+  });
+  const pg = doc.getNumberOfPages();
+  for (let i = 1; i <= pg; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(140, 140, 140); doc.text(`ADM 3Colinas · página ${i} de ${pg}`, W - 10, doc.internal.pageSize.getHeight() - 6, { align: "right" }); }
+  const nome = `cronograma-${(qual === "todos" ? "completo" : dias[0].nome).toLowerCase()}-${top.toLowerCase().replace(/\s+/g, "")}.pdf`;
+  const blob = doc.output("blob");
+  const arq = typeof File === "function" ? new File([blob], nome, { type: "application/pdf" }) : null;
+  // no celular abre o "compartilhar" (WhatsApp, e-mail…); no computador baixa o arquivo
+  if (arq && navigator.canShare && navigator.canShare({ files: [arq] }) && matchMedia("(pointer: coarse)").matches) {
+    try { await navigator.share({ files: [arq], title: `Cronograma ${top}` }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  toast("PDF gerado: " + nome);
 }
 function cronoHoraForm(id) {
   const i = cronoPlano().flatMap(d => d.itens).find(x => x.id === id); if (!i) return;
@@ -1483,6 +1559,7 @@ document.addEventListener("click", e => {
   if (d.histAct === "atualizar") { S.histOk = false; render(); return; }
   if (d.act === "sair") { sair(); return; }
   if (d.act === "rede") { redeInfo(); return; }
+  if (d.act === "crono-pdf") { cronoPdfForm(); return; }
   if (t.id === "notifBtn") { pedirNotificacao(); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
