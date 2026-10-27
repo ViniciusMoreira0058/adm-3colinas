@@ -242,6 +242,16 @@ button.chip:hover { border-color: currentColor; }
 .csg-lista { display: flex; flex-direction: column; }
 .csg-row { width: 100%; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 0; }
 .csg-row:hover { background: var(--accent-soft); }
+.csg-lado { display: flex; flex-direction: column; gap: 6px; }
+.csg-lado .lab { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.csg-lado .search { flex: none; }
+.csg-pick input[type=radio] { flex: none; width: auto; margin: 0; }
+.csg-pick { display: flex; flex-direction: column; max-height: 190px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.csg-pick label { display: flex; gap: 8px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; overflow-wrap: anywhere; font-weight: 500; }
+.csg-pick label[hidden] { display: none; }
+.csg-pick label:has(input:checked) { background: var(--accent-soft); }
+.csg-pick label span { flex: 1; }
+.csg-pick .vazio { padding: 10px 12px; margin: 0; }
 .csg-sus { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow: auto; }
 .csg-par { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .csg-par label { display: flex; gap: 8px; align-items: center; cursor: pointer; overflow-wrap: anywhere; }

@@ -860,7 +860,7 @@ function csgContagem(de, ate) {
     if (norm(n) !== k) p.vari.add(n); else p.nome = n;
     if (!hoje.has(k)) { hoje.add(k); p.n++; p.ult = d.dia; p.diasL.push(d.dia); }   // os dois nomes no mesmo dia contam uma vez
     P.set(k, p); }); });
-  const pessoas = [...P.values()].sort((a, b) => b.n - a.n || a.nome.localeCompare(b.nome, "pt-BR"));
+  const pessoas = [...P.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));   // sempre em ordem alfabética
   return { dias, pessoas, totalPres: dias.reduce((a, d) => a + d.nomes.length, 0) };
 }
 function vConsagracao() {
@@ -958,17 +958,33 @@ function csgRepForm() {
 // unir na mão: escolhe o nome que fica e o(s) que entram nele
 function csgUnirForm(pre) {
   const { pessoas } = csgContagem();
-  const opts = pessoas.map(p => `<option value="${esc(p.nome)}">${esc(p.nome)} · ${p.n}×</option>`).join("");
+  // cada lado é uma lista com lupa: digita parte do nome (ou do e-mail) e toca na pessoa
+  const lado = (id, titulo) => `<div class="csg-lado"><label class="lab" for="${id}q">${titulo}</label>
+      <label class="search">${ico("search")}<input id="${id}q" type="search" placeholder="Pesquisar nome" autocomplete="off"></label>
+      <div class="csg-pick" id="${id}">${pessoas.map(p => `<label data-n="${esc(norm(p.nome))}"><input type="radio" name="${id}" value="${esc(p.nome)}" ${pre && p.nome === pre && id === "uf" ? "checked" : ""}> <span>${esc(p.nome)}</span> <small class="hint num">${p.n}×</small></label>`).join("")}
+        <p class="hint vazio" hidden>Nenhum nome encontrado.</p></div></div>`;
   modal(`
     <h3>Unir nomes</h3>
     <p class="hint" style="margin:0">Use quando a mesma pessoa aparece com nomes diferentes (por exemplo, o Gmail dela e o e-mail da empresa). As presenças passam a contar juntas e dá para separar de novo depois.</p>
-    <div class="field"><label for="f-uf">Nome que fica</label><select id="f-uf">${opts}</select></div>
-    <div class="field"><label for="f-us">Juntar com</label><select id="f-us"><option value="">Escolha…</option>${opts}</select></div>
+    ${lado("uf", "Nome que fica")}
+    ${lado("us", "Juntar com")}
+    <p class="hint" id="csgUnirResumo" style="margin:0"></p>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Unir</button></div></div>`,
-  () => { const fica = $("#f-uf").value, sai = $("#f-us").value;
-    if (!sai || norm(sai) === norm(fica)) { toast("Escolha dois nomes diferentes."); return; }
+  () => { const v = n => (($(`#mform [name=${n}]:checked`) || {}).value || ""), fica = v("uf"), sai = v("us");
+    if (!fica || !sai || norm(sai) === norm(fica)) { toast("Escolha dois nomes diferentes."); return; }
     closeModal(); csgUnir(fica, sai); });
-  if (pre) $("#f-uf").value = pre;
+  const f = $("#mform");
+  ["uf", "us"].forEach(id => {
+    const q = $("#" + id + "q"), box = $("#" + id);
+    q.addEventListener("input", () => { const t = norm(q.value); let n = 0;
+      box.querySelectorAll("label[data-n]").forEach(l => { const ok = !t || l.dataset.n.includes(t); l.hidden = !ok; if (ok) n++; });
+      box.querySelector(".vazio").hidden = !!n; });
+  });
+  const resumo = () => { const v = n => ((f.querySelector(`[name=${n}]:checked`) || {}).value || "");
+    $("#csgUnirResumo").innerHTML = v("uf") && v("us") ? `<b>${esc(v("us"))}</b> vai contar como <b>${esc(v("uf"))}</b>.` : ""; };
+  f.addEventListener("change", resumo);
+  const sel = f.querySelector("[name=uf]:checked"); if (sel) sel.closest("label").scrollIntoView({ block: "nearest" });
+  $(pre ? "#usq" : "#ufq").focus();
 }
 // ficha da pessoa: dias em que veio, outros nomes dela, unir e separar
 function csgPessoaForm(k) {
@@ -1012,7 +1028,7 @@ function csgColarForm(dia) {
 }
 function csgDiaForm(dia) {
   const d = (S.cfgDocs || {})["consag-" + dia]; if (!d) return;
-  const ed = podeEditar(); let nomes = [...(d.nomes || [])];
+  const ed = podeEditar(); let nomes = [...(d.nomes || [])].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
   const corpo = () => `
     <h3>Consagração · ${fmtDia(dia, true)} <small class="hint">Dia ${difDias(csgCfg().inicio, dia) + 1}</small></h3>
     <p class="hint" style="margin:0">${nomes.length} pessoa(s) · lista colada por ${esc((d.por || {}).nome || "ADM")}${ed ? ". Toque no ✕ para tirar um nome." : ""}</p>
