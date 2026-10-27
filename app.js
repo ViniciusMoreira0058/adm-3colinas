@@ -145,7 +145,7 @@ async function save(fn, okMsg) {
 /* ---------- Navegação ---------- */
 const VIEWS = [
   { id: "painel", l: "Dashboard", i: "home" },
-  { id: "participantes", l: "Participantes", i: "users" },
+  { id: "participantes", l: "Senderistas", i: "users" },
   { id: "legendarios", l: "Legendários", i: "shield" },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "familias", l: "Famílias", i: "fam" },
@@ -237,8 +237,7 @@ function renderNav() {
 /* ---------- Métricas ---------- */
 function stats() {
   const all = S.P.filter(p => p.tipo !== "legendario");
-  const seen = new Map(); let dup = 0;
-  all.forEach(p => { const k = digits(p.telefone) || norm(p.nome); if (seen.has(k)) dup++; else seen.set(k, 1); });
+  const dup = all.filter(p => repetidos().has(p.id)).length;
   const n = all.length;
   const lg = S.P.filter(p => p.tipo === "legendario");
   const t = S.T; const done = t.filter(x => x.status === "pronto").length;
@@ -273,7 +272,7 @@ function painelInscricao() {
   const sim = k => S.P.filter(p => !cancelado(p) && p.ficha && p.ficha[k] && !/^n[aã]o\b/i.test(p.ficha[k]));
   const canc = S.P.filter(cancelado).length, pend = S.P.filter(p => p.inscricao === "pendente").length;
   return `
-    <section class="panel"><h3>Camisas dos participantes <small>${ps.length} com tamanho informado</small></h3>
+    <section class="panel"><h3>Camisas dos senderistas <small>${ps.length} com tamanho informado</small></h3>
       <div class="list">${tam.map(([t, n]) => `<div class="li"><span class="grow">${esc(t)}</span><b class="num">${n}</b></div>`).join("") || `<div class="empty">Sem tamanhos.</div>`}</div>
     </section>
     <section class="panel"><h3>Saúde e inscrição <small>do relatório</small></h3>
@@ -307,12 +306,12 @@ function vPainel() {
       <span class="eyebrow">ADM 3Colinas · Legendários</span>
       <h2>${esc(topName())}</h2>
       <p>${esc([(topDoc() || {}).local || "Franca - SP", (topDoc() || {}).inicio ? fmtDate(topDoc().inicio) + ((topDoc() || {}).fim ? " a " + fmtDate(topDoc().fim) : "") : ""].filter(Boolean).join(" · "))} · tudo atualiza na hora em que alguém da equipe mexe.</p>
-      <div class="actions"><button class="btn primary" type="button" data-act="novo">${ico("plus")} Novo participante</button><button class="btn glass" type="button" data-go="tops">${ico("flag")} Todos os Tops</button></div>
+      <div class="actions"><button class="btn primary" type="button" data-act="novo">${ico("plus")} Novo senderista</button><button class="btn glass" type="button" data-go="tops">${ico("flag")} Todos os Tops</button></div>
     </div>
   </section>
   ${S.online === false ? `<div class="banner"><span>Você está no modo local: o que for cadastrado aqui some ao fechar. Abra pelo link do app logado no Claude para salvar com a equipe.</span></div>` : ""}
   <div class="kpis">
-    <button class="kpi" type="button" data-go="participantes"><span class="lbl">Participantes</span><span class="val num">${s.n}</span><span class="sub">${s.dup ? `${s.dup} possível(is) repetido(s)` : "sem repetidos"} · ${s.mais40.length} com +40</span></button>
+    <button class="kpi" type="button" data-go="participantes"><span class="lbl">Senderistas</span><span class="val num">${s.n}</span><span class="sub">${s.dup ? `${s.dup} possível(is) repetido(s)` : "sem repetidos"} · ${s.mais40.length} com +40</span></button>
     <div class="kpi"><span class="lbl">Atestados confirmados</span><span class="val num">${s.atestado}<small style="font-size:18px;color:var(--muted)"> / ${s.n}</small></span><div class="bar good"><i style="width:${pct(s.atestado, s.n)}%"></i></div></div>
     <div class="kpi"><span class="lbl">Termos assinados</span><span class="val num">${s.termo}<small style="font-size:18px;color:var(--muted)"> / ${s.n}</small></span><div class="bar good"><i style="width:${pct(s.termo, s.n)}%"></i></div></div>
     <div class="kpi"><span class="lbl">No grupo</span><span class="val num">${s.grupo}</span><span class="sub">${s.n - s.grupo > 0 ? `faltam ${s.n - s.grupo} entrar` : "todos no grupo"}</span></div>
@@ -322,7 +321,7 @@ function vPainel() {
     <button class="kpi" type="button" data-go="legendarios"><span class="lbl">Legendários</span><span class="val num">${s.lg.length}</span><span class="sub">${s.lgAtest} atestados · ${s.lgAssinado} termos</span></button>
   </div>
   <div class="grid2">
-    <section class="panel"><h3>Documentos e grupo <small>de ${s.n} participantes</small></h3>
+    <section class="panel"><h3>Documentos e grupo <small>de ${s.n} senderistas</small></h3>
       <div class="funnel">${fun.map(([l, v]) => `<div class="funnel-row"><span>${l}</span><div class="bar ${v === s.n && s.n ? "good" : ""}"><i style="width:${pct(v, s.n)}%"></i></div><b>${v} · ${pct(v, s.n)}%</b></div>`).join("")}</div>
     </section>
     <section class="panel"><h3>Pendências por ADM <small>atestado ou termo em aberto</small></h3>
@@ -352,6 +351,7 @@ function filterPeople() {
         case "40": return is40(p);
         case "ok": return p.atestado === "confirmado" && p.termo === "assinado";
         case "novos": return !!S.aviso && p.importId === S.aviso.id;
+        case "rep": return repetidos().has(p.id);
         default: return true;
       }
     })
@@ -375,7 +375,7 @@ const obsLinha = p => p.obs ? `<button type="button" class="obsline" data-obs="$
 function obsForm(p) {
   modal(`
     <h3>Observação</h3>
-    <p class="hint" style="margin:0"><b>${esc(p.nome)}</b> · ${p.tipo === "legendario" ? "Legendário" : "Participante"}${p.obsPor ? ` · última por ${esc(p.obsPor)}${p.obsEm ? " " + esc(quando(p.obsEm)) : ""}` : ""}</p>
+    <p class="hint" style="margin:0"><b>${esc(p.nome)}</b> · ${p.tipo === "legendario" ? "Legendário" : "Senderista"}${p.obsPor ? ` · última por ${esc(p.obsPor)}${p.obsEm ? " " + esc(quando(p.obsEm)) : ""}` : ""}</p>
     <div class="field"><label for="f-obsq">Anotação para a equipe ADM</label><textarea id="f-obsq" name="obs" style="min-height:140px" placeholder="Ex.: vai mandar o atestado na sexta · pediu para ficar na família do irmão · chega de carona">${esc(p.obs || "")}</textarea></div>
     <div class="modal-foot"><div>${p.obs ? `<button class="btn danger" type="button" id="obsLimpar">Apagar observação</button>` : ""}</div>
       <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
@@ -387,6 +387,41 @@ function obsForm(p) {
 }
 const tagsInscricao = p => (S.aviso && p.importId === S.aviso.id ? ' <span class="chip ok">Novo</span>' : "") + (cancelado(p) ? ' <span class="chip bad">Compra cancelada</span>' : p.inscricao === "pendente" ? ' <span class="chip wait">Pagamento pendente</span>' : "")
   + (saudeAlerta(p) ? ' <span class="tag saude" title="Tem condição médica, medicamento ou restrição alimentar">Saúde</span>' : "");
+/* Possíveis repetidos: mesmo nome, telefone ou e-mail dentro do TOP (inclusive entre senderistas e legendários). */
+let repCache = { P: null, m: null };
+function repetidos() {
+  if (repCache.P === S.P) return repCache.m;
+  const tel = p => { const d = digits(p.telefone); return d.length >= 10 ? d.slice(-10) : ""; };
+  const grupos = new Map();
+  const add = (k, p, por) => { if (!k) return; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push({ p, por }); };
+  S.P.forEach(p => { add("n" + norm(p.nome), p, "nome"); add(tel(p) && "t" + tel(p), p, "telefone"); add(p.email && "e" + p.email.toLowerCase().trim(), p, "e-mail"); });
+  const m = new Map();
+  grupos.forEach(g => {
+    if (g.length < 2) return;
+    g.forEach(({ p, por }) => g.forEach(({ p: o }) => {
+      if (o.id === p.id || (p.dupOk || []).includes(o.id) || (o.dupOk || []).includes(p.id)) return;
+      if (!m.has(p.id)) m.set(p.id, new Map());
+      const x = m.get(p.id); x.set(o.id, [...new Set([...(x.get(o.id) || []), por])]);
+    }));
+  });
+  repCache = { P: S.P, m };
+  return m;
+}
+const tipoNome = p => p.tipo === "legendario" ? "Legendário" : "Senderista";
+const tagRep = p => repetidos().has(p.id) ? ` <button type="button" class="chip bad" data-dup="${p.id}" title="Pode estar cadastrado duas vezes. Toque para ver">Repetido?</button>` : "";
+function dupForm(p) {
+  const x = repetidos().get(p.id); if (!x) return;
+  const outros = [...x].map(([id, por]) => ({ o: S.P.find(q => q.id === id), por })).filter(y => y.o);
+  modal(`
+    <h3>Possível repetido</h3>
+    <p class="hint" style="margin:0"><b>${esc(p.nome)}</b> (${tipoNome(p)}) tem o mesmo dado de:</p>
+    <ul class="imp-list">${outros.map(({ o, por }) => `<li><b>${esc(o.nome)}</b> <span class="hint">${tipoNome(o)} · mesmo ${por.join(" e ")} · ${esc([o.telefone, o.email].filter(Boolean).join(" · ") || "sem contato")}</span>
+      <button class="linkbtn" type="button" data-edit="${o.id}" aria-label="Editar ${esc(o.nome)}">${ico("edit")}</button></li>`).join("")}</ul>
+    <p class="hint" style="margin:0">Se for a mesma pessoa, apague um dos cadastros (abra pelo lápis). Se forem pessoas diferentes (por exemplo, pai e filho com o mesmo telefone), marque abaixo e o aviso some.</p>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button>${podeEditar() ? `<button class="btn primary" type="submit">Não é a mesma pessoa</button>` : ""}</div></div>`,
+  () => { closeModal(); const ids = outros.map(y => y.o.id);
+    withAdm(() => save(() => api.update("pessoas", p.id, { dupOk: [...new Set([...(p.dupOk || []), ...ids])] }), "Aviso de repetido removido")); });
+}
 function vPessoas(tipo) {
   const lg = tipo === "legendario";
   const rows = filterPeople();
@@ -396,6 +431,8 @@ function vPessoas(tipo) {
     ? [["todos", "Todos"], ["atestado", "Sem atestado"], ["termo", "Sem termo"], ["ok", "Tudo OK"]]
     : [["todos", "Todos"], ["atestado", "Sem atestado"], ["termo", "Sem termo"], ["grupo", "Fora do grupo"], ["40", "+40"], ["ok", "Tudo OK"]];
   if (S.aviso && S.P.some(p => p.importId === S.aviso.id && (lg ? p.tipo === "legendario" : p.tipo !== "legendario"))) fil.push(["novos", "Novos da última planilha"]);
+  const nRep = S.P.filter(p => (lg ? p.tipo === "legendario" : p.tipo !== "legendario") && repetidos().has(p.id)).length;
+  if (nRep || S.f.status === "rep") fil.push(["rep", `Repetidos (${nRep})`]);
   const tick = (p, k, i, t) => `<button type="button" class="tick ${p[k] ? "on" : ""}" data-tog="${k}" data-id="${p.id}" title="${t}" aria-label="${t}: ${p[k] ? "sim" : "não"}" aria-pressed="${!!p[k]}">${ico(i)}</button>`;
   const ticks = p => lg ? "" : `<div class="ticks">${tick(p, "msgGrupo", "chat", "Mensagem do grupo enviada")}${tick(p, "noGrupo", "group", "Entrou no grupo")}${tick(p, "nfc", "nfc", "NFC registrado")}</div>`;
   const cyc = (list, k, p) => chip(list, p[k], `data-cyc="${k}" data-id="${p.id}" title="Clique para avançar o status"`);
@@ -405,16 +442,17 @@ function vPessoas(tipo) {
   S.sel.ids.forEach(id => { if (!visiveis.has(id)) S.sel.ids.delete(id); });
   const nSel = S.sel.ids.size, todos = rows.length > 0 && nSel === rows.length;
   const caixa = p => sel ? `<input type="checkbox" class="selbox" data-sel="${p.id}" ${S.sel.ids.has(p.id) ? "checked" : ""} aria-label="Selecionar ${esc(p.nome)}">` : "";
-  const nomeTipo = lg ? "legendários" : "participantes";
+  const nomeTipo = lg ? "legendários" : "senderistas";
   const atest = p => `${cyc(ATESTADO, "atestado", p)}${p.dataAtestado && p.atestado !== "confirmado" ? `<div class="hint" style="font-size:12px;margin-top:3px">${esc(p.dataAtestado)}</div>` : ""}`;
   return `
-  <div class="head"><div><h2>${lg ? "Legendários" : "Participantes"}</h2><p>${lg ? "Servos do TOP: equipe, atestado e termo LGND." : "Cadastro, atestado, termo, grupo e NFC de cada participante."} Toque no status para avançar. Quem mexer por último vira o ADM responsável.</p></div>
+  <div class="head"><div><h2>${lg ? "Legendários" : "Senderistas"}</h2><p>${lg ? "Servos do TOP: equipe, atestado e termo LGND." : "Cadastro, atestado, termo, grupo e NFC de cada senderista."} Toque no status para avançar. Quem mexer por último vira o ADM responsável.</p></div>
     <div class="actions">
       ${S.isOwner && total ? `<button class="btn ${sel ? "primary" : ""}" type="button" data-act="selecionar" aria-pressed="${sel}">${ico("check")} ${sel ? "Concluir seleção" : "Selecionar"}</button>` : ""}
       <button class="btn" type="button" data-act="importar">${ico("upload")} Importar relatório</button>
       <button class="btn" type="button" data-act="colar">${ico("paste")} Colar lista</button>
-      <button class="btn primary" type="button" data-act="novo">${ico("plus")} ${lg ? "Novo legendário" : "Novo participante"}</button>
+      <button class="btn primary" type="button" data-act="novo">${ico("plus")} ${lg ? "Novo legendário" : "Novo senderista"}</button>
     </div></div>
+  ${nRep && S.f.status !== "rep" ? `<div class="banner"><span><b>${nRep}</b> ${nRep > 1 ? "cadastros parecem repetidos" : "cadastro parece repetido"} (mesmo nome, telefone ou e-mail).</span><button class="btn" type="button" data-fil="rep">Ver repetidos</button></div>` : ""}
   ${exemplos ? `<div class="banner"><span>Os nomes marcados como <span class="tag acc">exemplo</span> são fictícios, só para a demonstração.</span><button class="btn" type="button" data-act="limpar-ex">Apagar exemplos</button></div>` : ""}
   <div class="toolbar">
     <label class="search">${ico("search")}<input id="q" type="search" placeholder="Buscar por nome, telefone, e-mail ou cidade" value="${esc(S.f.q)}" aria-label="Buscar"></label>
@@ -428,13 +466,13 @@ function vPessoas(tipo) {
       <button class="btn danger" type="button" data-act="apagar-sel" ${nSel ? "" : "disabled"}>Apagar selecionados</button>
       <button class="btn danger" type="button" data-act="apagar-todos">Apagar todos os ${nomeTipo}</button>
     </div></div>` : ""}
-  <div class="hint num">${rows.length} de ${total} ${lg ? "legendários" : "participantes"}</div>
+  <div class="hint num">${rows.length} de ${total} ${lg ? "legendários" : "senderistas"}</div>
   ${rows.length ? `
   <div class="table-wrap people"><table>
     <thead><tr>${sel ? `<th style="width:36px"><input type="checkbox" class="selbox" data-selall="1" ${todos ? "checked" : ""} aria-label="Selecionar todos"></th>` : ""}<th>Nome</th><th>WhatsApp</th>${lg ? "<th>Equipe</th>" : ""}<th>Atestado</th><th>Termo</th>${lg ? "" : "<th>Grupo · NFC</th><th>Família</th>"}<th>Responsável</th><th></th></tr></thead>
     <tbody>${rows.map(p => `<tr class="${S.sel.ids.has(p.id) ? "picked" : ""}">
       ${sel ? `<td>${caixa(p)}</td>` : ""}
-      <td><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div>${obsLinha(p)}</td>
+      <td><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}${tagRep(p)}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div>${obsLinha(p)}</td>
       <td class="num" style="white-space:nowrap"><div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">${waBtn(p)}<span class="hint" style="font-size:12px">${esc(p.telefone || "sem telefone")}</span></div></td>
       ${lg ? `<td>${esc(p.equipe || "—")}</td>` : ""}
       <td>${atest(p)}</td>
@@ -444,14 +482,14 @@ function vPessoas(tipo) {
       <td style="white-space:nowrap">${obsBtn(p)}<button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></td>
     </tr>`).join("")}</tbody></table></div>
   <div class="cards">${rows.map(p => `<article class="pcard ${S.sel.ids.has(p.id) ? "picked" : ""}">
-      <div class="top">${caixa(p)}<div class="pname" style="flex:1">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(p.equipe) : ""}</small></div>
+      <div class="top">${caixa(p)}<div class="pname" style="flex:1">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}${tagRep(p)}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(p.equipe) : ""}</small></div>
         <div style="display:flex;gap:2px">${obsBtn(p)}<button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></div></div>
       ${obsLinha(p)}
       <div class="row"><span class="lbl">Atestado</span>${cyc(ATESTADO, "atestado", p)}<span class="lbl">Termo</span>${cyc(TERMO, "termo", p)}</div>
       <div class="row" style="justify-content:space-between"><div class="row">${ticks(p)}${!lg && p.familia ? `<span class="tag">Família ${String(p.familia).padStart(2, "0")}</span>` : ""}</div>${waBtn(p)}</div>
       ${p.adm ? `<div class="hint" style="font-size:12px">Responsável: <b style="color:var(--fg)">${esc(p.adm)}</b>${p.admEm ? " · " + esc(quando(p.admEm)) : ""}</div>` : ""}
     </article>`).join("")}</div>`
-  : `<section class="panel"><div class="empty">${total ? "Nenhum resultado para esse filtro." : `Nenhum ${lg ? "legendário" : "participante"} cadastrado ainda. Use <b>${lg ? "Novo legendário" : "Novo participante"}</b> ou <b>Colar lista</b> para trazer os nomes da planilha.`}</div></section>`}`;
+  : `<section class="panel"><div class="empty">${total ? "Nenhum resultado para esse filtro." : `Nenhum ${lg ? "legendário" : "senderista"} cadastrado ainda. Use <b>${lg ? "Novo legendário" : "Novo senderista"}</b> ou <b>Colar lista</b> para trazer os nomes da planilha.`}</div></section>`}`;
 }
 
 function vFamilias() {
@@ -459,9 +497,9 @@ function vFamilias() {
   const sem = parts.filter(p => !p.familia);
   const fams = Array.from({ length: 12 }, (_, i) => i + 1);
   return `
-  <div class="head"><div><h2>Famílias</h2><p>Distribuição dos participantes nas 12 famílias. Defina a família no cadastro de cada um.</p></div></div>
+  <div class="head"><div><h2>Famílias</h2><p>Distribuição dos senderistas nas 12 famílias. Defina a família no cadastro de cada um.</p></div></div>
   <div class="kpis">
-    <div class="kpi"><span class="lbl">Distribuídos</span><span class="val num">${parts.length - sem.length}</span><span class="sub">de ${parts.length} participantes</span></div>
+    <div class="kpi"><span class="lbl">Distribuídos</span><span class="val num">${parts.length - sem.length}</span><span class="sub">de ${parts.length} senderistas</span></div>
     <div class="kpi ${sem.length ? "alert" : ""}"><span class="lbl">Sem família</span><span class="val num">${sem.length}</span><span class="sub">média ideal ${parts.length ? (parts.length / 12).toFixed(1).replace(".", ",") : 0} por família</span></div>
   </div>
   ${sem.length ? `<section class="panel"><h3>Sem família <small>${sem.length}</small></h3><div class="list">${sem.map(p => `<div class="li"><span class="grow">${esc(p.nome)} ${is40(p) ? '<span class="tag">+40</span>' : ""}</span><select class="sel" data-fam="${p.id}" aria-label="Família de ${esc(p.nome)}"><option value="">Escolher…</option>${fams.map(f => `<option value="${f}">Família ${String(f).padStart(2, "0")}</option>`).join("")}</select></div>`).join("")}</div></section>` : ""}
@@ -718,9 +756,9 @@ function vTops() {
   const ativo = list.find(t => t.status === "ativo");
   const sel = curTopId();
   return `
-  <div class="head"><div><h2>Tops</h2><p>Histórico de todos os TOPs da base 3 Colinas. Ao finalizar um TOP, ele fica registrado aqui com participantes, documentos e checklist.</p></div>
+  <div class="head"><div><h2>Tops</h2><p>Histórico de todos os TOPs da base 3 Colinas. Ao finalizar um TOP, ele fica registrado aqui com senderistas, documentos e checklist.</p></div>
     <div class="actions">${podeTops() ? `<button class="btn primary" type="button" data-act="novo-top">${ico("plus")} Iniciar novo TOP</button>` : ""}</div></div>
-  ${ativo ? "" : `<div class="banner"><span>Nenhum TOP em andamento. Inicie o próximo para começar a cadastrar participantes.</span></div>`}
+  ${ativo ? "" : `<div class="banner"><span>Nenhum TOP em andamento. Inicie o próximo para começar a cadastrar senderistas.</span></div>`}
   <div class="tops">${list.map(t => { const s = topStats(t.id); const fin = t.status === "finalizado"; const kits = t.kitsMRE || 0; return `
     <article class="topcard ${t.id === sel ? "sel" : ""}">
       <div class="topcard-cover"><div>
@@ -729,7 +767,7 @@ function vTops() {
         <p>${esc([t.local, t.inicio ? fmtDate(t.inicio) + (t.fim ? " a " + fmtDate(t.fim) : "") : "", fin && t.finalizadoEm ? "finalizado em " + fmtDate(t.finalizadoEm) : ""].filter(Boolean).join(" · ") || "Sem datas definidas")}</p>
       </div>${t.id === sel ? `<span class="tag acc">Aberto agora</span>` : ""}</div>
       <div class="topstats">
-        <div><b class="num">${s.n}</b><span>Participantes</span></div>
+        <div><b class="num">${s.n}</b><span>Senderistas</span></div>
         <div><b class="num">${s.at}</b><span>Atestados</span></div>
         <div><b class="num">${s.te}</b><span>Termos</span></div>
         <div><b class="num">${s.lg}</b><span>Legendários</span></div>
@@ -787,7 +825,7 @@ function personForm(p, tipo) {
   const lg = (p ? p.tipo : tipo) === "legendario";
   p = p || { tipo, atestado: "pendente", termo: "pendente" };
   modal(`
-    <h3>${p.id ? "Editar" : "Novo"} ${lg ? "legendário" : "participante"}</h3>
+    <h3>${p.id ? "Editar" : "Novo"} ${lg ? "legendário" : "senderista"}</h3>
     <div class="form">
       <div class="field full"><label for="f-nome">Nome completo</label><input id="f-nome" name="nome" required value="${esc(p.nome)}" autocomplete="off"></div>
       <div class="field"><label for="f-telefone">Telefone / WhatsApp</label><input id="f-telefone" name="telefone" inputmode="tel" value="${esc(p.telefone)}" placeholder="+55 16 99999-0000"></div>
@@ -829,9 +867,10 @@ function personForm(p, tipo) {
       familia: fd.get("familia") ? Number(fd.get("familia")) : null, nfc: fd.get("nfc") === "on",
       msgGrupo: fd.get("msgGrupo") === "on", noGrupo: fd.get("noGrupo") === "on",
     });
-    const dup = S.P.find(x => x.id !== p.id && x.tipo === (lg ? "legendario" : "participante") && ((digits(data.telefone) && digits(x.telefone) === digits(data.telefone)) || norm(x.nome) === norm(nome)));
+    const t10 = v => { const d = digits(v); return d.length >= 10 ? d.slice(-10) : ""; };
+    const dup = S.P.find(x => x.id !== p.id && !(p.dupOk || []).includes(x.id) && ((t10(data.telefone) && t10(x.telefone) === t10(data.telefone)) || norm(x.nome) === norm(nome) || (data.email && (x.email || "").toLowerCase() === data.email.toLowerCase())));
     const w = $("#dupWarn");
-    if (dup && w.dataset.ok !== "1") { w.hidden = false; w.dataset.ok = "1"; w.textContent = `Já existe "${dup.nome}" com esse nome ou telefone. Clique em Salvar de novo para cadastrar mesmo assim.`; return; }
+    if (dup && w.dataset.ok !== "1") { w.hidden = false; w.dataset.ok = "1"; w.textContent = `Já existe "${dup.nome}" (${tipoNome(dup)}) com esse nome, telefone ou e-mail. Clique em Salvar de novo para salvar mesmo assim.`; return; }
     closeModal();
     if ((data.obs || "") !== (p.obs || "")) Object.assign(data, { obsPor: data.obs ? ME.adm || "" : "", obsEm: data.obs ? new Date().toISOString() : "" });
     if (p.id) touch(p.id, data, "Cadastro atualizado");
@@ -850,10 +889,10 @@ function apagarEmMassa(todos) {
   const lg = tipo === "legendario";
   const alvo = todos ? S.P.filter(p => lg ? p.tipo === "legendario" : p.tipo !== "legendario") : S.P.filter(p => S.sel.ids.has(p.id));
   if (!alvo.length) { toast("Nada selecionado."); return; }
-  const nome = lg ? (alvo.length > 1 ? "legendários" : "legendário") : (alvo.length > 1 ? "participantes" : "participante");
+  const nome = lg ? (alvo.length > 1 ? "legendários" : "legendário") : (alvo.length > 1 ? "senderistas" : "senderista");
   modal(`
     <h3>Apagar ${alvo.length} ${nome}?</h3>
-    <p class="hint" style="margin:0">${todos ? `Isso apaga <b>todos os ${lg ? "legendários" : "participantes"}</b> do ${esc(topName())}` : `Isso apaga os <b>${alvo.length} selecionados</b>`}, para todos da equipe. <b>Não dá para desfazer.</b></p>
+    <p class="hint" style="margin:0">${todos ? `Isso apaga <b>todos os ${lg ? "legendários" : "senderistas"}</b> do ${esc(topName())}` : `Isso apaga os <b>${alvo.length} selecionados</b>`}, para todos da equipe. <b>Não dá para desfazer.</b></p>
     <ul class="hint" style="margin:0;max-height:140px;overflow:auto;padding-left:18px">${alvo.slice(0, 12).map(p => `<li>${esc(p.nome)}</li>`).join("")}${alvo.length > 12 ? `<li>e mais ${alvo.length - 12}…</li>` : ""}</ul>
     <div class="field"><label for="f-conf">Para confirmar, digite <b>APAGAR</b></label><input id="f-conf" name="conf" autocomplete="off" autocapitalize="characters"></div>
     <div class="warn-text" id="confWarn" hidden></div>
@@ -892,7 +931,7 @@ function pasteForm(tipo) {
           ...n, ...stamp, tipo, atestado: "pendente", termo: "pendente", ...(lg ? {} : { nfc: false, msgGrupo: false, noGrupo: false, familia: null }), exemplo: false, criadoEm: new Date().toISOString(),
         })));
       }
-    }, `${novos.length} ${lg ? "legendários" : "participantes"} importados`);
+    }, `${novos.length} ${lg ? "legendários" : "senderistas"} importados`);
   }
   const ta = $("#f-lista");
   ta.addEventListener("input", () => {
@@ -983,7 +1022,7 @@ function topForm(t) {
       ${novo ? `<div class="field full"><div class="checks"><label><input type="checkbox" id="f-tcopy" name="copiar" checked> Copiar as tarefas do checklist do ${esc(topName(atualId()))}, zeradas</label></div></div>`
         : `<div class="field"><label for="f-tstatus">Situação</label>${sel("status", [{ v: "ativo", l: "Em andamento" }, { v: "finalizado", l: "Finalizado" }], t.status)}</div>`}
     </div>
-    ${novo && ativo ? `<p class="hint" style="margin:0">O ${esc(ativo.nome)} será finalizado e guardado na aba Tops. Participantes, legendários e checklist do novo TOP começam do zero; estoque e pista continuam os mesmos.</p>` : ""}
+    ${novo && ativo ? `<p class="hint" style="margin:0">O ${esc(ativo.nome)} será finalizado e guardado na aba Tops. Senderistas, legendários e checklist do novo TOP começam do zero; estoque e pista continuam os mesmos.</p>` : ""}
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${novo ? "Iniciar TOP" : "Salvar"}</button></div></div>`,
   async (fd) => {
     const nome = String(fd.get("nome") || "").trim(); if (!nome) { $("#f-tnome").focus(); return; }
@@ -1064,7 +1103,7 @@ function loginForm(aviso, erro) {
         <span class="${erro ? "err" : "note"}" id="loginErr" ${aviso ? "" : "hidden"}>${esc(aviso || "")}</span>
         <button class="btn primary" type="submit">${{ login: "Entrar", signup: "Criar minha senha", reset: "Enviar link", newpass: "Salvar senha nova" }[m]}</button>
       </form>
-      ${DEMO ? `<span class="note">Modo demonstração: nada é salvo. Os participantes e a equipe são fictícios.</span>`
+      ${DEMO ? `<span class="note">Modo demonstração: nada é salvo. Os senderistas e a equipe são fictícios.</span>`
         : m === "login" ? `<div class="login-links"><button class="link" type="button" data-auth="signup">Primeiro acesso? Criar minha senha</button><button class="link" type="button" data-auth="reset">Esqueci minha senha</button></div>`
         : m !== "newpass" ? `<button class="link" type="button" data-auth="login">Voltar para o login</button>` : ""}
     </div>
@@ -1155,8 +1194,8 @@ function boasVindas() {
     : ME.acesso.nivel === "leitura" ? "Somente leitura: vê as abas liberadas, sem alterar" : "Pode ver e alterar as abas liberadas";
   const abas = VIEWS.filter(canSee).map(v => v.l);
   const dicas = [
-    ["home", "Dashboard", "o resumo do TOP: participantes, documentos, checklist e estoque."],
-    canSee({ id: "participantes" }) && ["users", "Participantes", "toque no status do atestado ou do termo para avançar. Quem mexer por último vira o ADM responsável."],
+    ["home", "Dashboard", "o resumo do TOP: senderistas, documentos, checklist e estoque."],
+    canSee({ id: "participantes" }) && ["users", "Senderistas", "toque no status do atestado ou do termo para avançar. Quem mexer por último vira o ADM responsável."],
     canSee({ id: "pendencias", need: ["participantes", "legendarios"] }) && ["bell", "Pendências", "veja quem falta atestado, termo ou grupo e cobre pelo WhatsApp com a mensagem pronta."],
     ["route", "Tudo em tempo real", "o que alguém da equipe muda aparece na hora para todos. No celular, puxe a tela para baixo para atualizar."],
   ].filter(Boolean);
@@ -1266,6 +1305,7 @@ document.addEventListener("click", e => {
   }
   if (d.edit) { personForm(S.P.find(p => p.id === d.edit)); return; }
   if (d.obs) { obsForm(S.P.find(p => p.id === d.obs)); return; }
+  if (d.dup) { dupForm(S.P.find(p => p.id === d.dup)); return; }
   if (d.editTask) { taskForm(S.T.find(x => x.id === d.editTask)); return; }
   if (d.editItem) { itemForm(S.estoque.find(x => x.id === d.editItem)); return; }
   if (d.cyc) {
@@ -1315,7 +1355,7 @@ document.addEventListener("keydown", e => {
 });
 
 /* ---------- Pendências: quem ainda deve atestado, termo ou entrar no grupo, com cobrança pelo WhatsApp ---------- */
-const PEND = { atestado: "atestado médico", termo: "assinatura do termo", grupo: "entrar no grupo de participantes" };
+const PEND = { atestado: "atestado médico", termo: "assinatura do termo", grupo: "entrar no grupo de senderistas" };
 const MSG_COBRANCA = "Olá {nome}, tudo bem? Aqui é {adm}, da equipe ADM do {top} Legendários 3 Colinas. Para garantir sua participação, ainda falta: {pendencias}. Consegue resolver o quanto antes? Qualquer dúvida estou à disposição.";
 const msgCobranca = () => store.get("adm3-msg-cobranca") || MSG_COBRANCA;
 const cancelado = p => p.inscricao === "cancelada";
@@ -1361,13 +1401,13 @@ function vPendencias() {
     </div></div>
   ${dias != null ? `<div class="banner"><span>${dias > 0 ? `Faltam <b>${dias} dia${dias > 1 ? "s" : ""}</b> para o ${esc(topName())}.` : dias === 0 ? `O ${esc(topName())} começa hoje.` : `O ${esc(topName())} já começou.`} ${rows.length} pessoa(s) com pendência neste filtro.</span></div>` : ""}
   <div class="kpis">
-    <button class="kpi ${conta("atestado") ? "alert" : ""}" type="button" data-pf="oque" data-v="atestado"><span class="lbl">Sem atestado</span><span class="val num">${conta("atestado")}</span><span class="sub">participantes e legendários</span></button>
-    <button class="kpi ${conta("termo") ? "alert" : ""}" type="button" data-pf="oque" data-v="termo"><span class="lbl">Sem termo</span><span class="val num">${conta("termo")}</span><span class="sub">participantes e legendários</span></button>
-    <button class="kpi" type="button" data-pf="oque" data-v="grupo"><span class="lbl">Fora do grupo</span><span class="val num">${conta("grupo")}</span><span class="sub">participantes</span></button>
+    <button class="kpi ${conta("atestado") ? "alert" : ""}" type="button" data-pf="oque" data-v="atestado"><span class="lbl">Sem atestado</span><span class="val num">${conta("atestado")}</span><span class="sub">senderistas e legendários</span></button>
+    <button class="kpi ${conta("termo") ? "alert" : ""}" type="button" data-pf="oque" data-v="termo"><span class="lbl">Sem termo</span><span class="val num">${conta("termo")}</span><span class="sub">senderistas e legendários</span></button>
+    <button class="kpi" type="button" data-pf="oque" data-v="grupo"><span class="lbl">Fora do grupo</span><span class="val num">${conta("grupo")}</span><span class="sub">senderistas</span></button>
     <div class="kpi"><span class="lbl">Tudo em dia</span><span class="val num">${vivos.filter(p => !pendDe(p).length).length}</span><span class="sub">de ${vivos.length} pessoas</span></div>
   </div>
   <div class="toolbar">
-    <div class="seg" role="group" aria-label="Quem">${seg("quem", "participante", "Participantes")}${seg("quem", "legendario", "Legendários")}${seg("quem", "todos", "Todos")}</div>
+    <div class="seg" role="group" aria-label="Quem">${seg("quem", "participante", "Senderistas")}${seg("quem", "legendario", "Legendários")}${seg("quem", "todos", "Todos")}</div>
     <select class="sel" id="pfAdm" aria-label="ADM responsável"><option value="">Todos os ADMs</option>${admOptions().map(a => `<option ${S.pf.adm === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>
   </div>
   <div class="seg" role="group" aria-label="Pendência">${seg("oque", "qualquer", "Qualquer pendência")}${seg("oque", "atestado", "Atestado")}${seg("oque", "termo", "Termo")}${seg("oque", "grupo", "Grupo")}</div>
@@ -1436,7 +1476,7 @@ const CAMPOS = { nome: "Nome", telefone: "Telefone", email: "E-mail", atestado: 
   inicio: "Início", fim: "Fim", finalizadoEm: "Finalizado em", resp: "Responsável", dia: "Dia" };
 const IGNORAR = ["adm", "admId", "admEm", "atualizado", "obsPor", "obsEm"];
 function abaDoRegistro(col, d) {
-  if (col === "pessoas") return d && d.tipo === "legendario" ? "Legendários" : "Participantes";
+  if (col === "pessoas") return d && d.tipo === "legendario" ? "Legendários" : "Senderistas";
   return { tarefas: "Checklist", estoque: "Estoque", pista: "Pista", tops: "Tops", config: "Configurações" }[col] || col;
 }
 function fmtValor(k, v) {
@@ -1590,24 +1630,25 @@ function analisarImport(lidos) {
   // quem cancelou e comprou de novo (às vezes com o nome escrito diferente) vale pela compra ativa
   const ativos = new Set(lidos.filter(n => n.inscricao !== "cancelada").flatMap(n => [chave(n), digits(n.telefone).length >= 10 && n.tipo + "|t" + digits(n.telefone), n.email && n.tipo + "|e" + n.email].filter(Boolean)));
   const ativo = n => ativos.has(chave(n)) || ativos.has(n.tipo + "|t" + digits(n.telefone)) || (n.email && ativos.has(n.tipo + "|e" + n.email));
-  const vistos = new Set(), novos = [], ja = [], canc = [];
+  const vistos = new Set(), novos = [], ja = [], canc = [], repPlan = [];
   lidos.forEach(n => {
     if (n.inscricao === "cancelada") {
       if (ativo(n) || vistos.has("c" + chave(n))) return;
       vistos.add("c" + chave(n));
       const a = acharNoApp(n); canc.push({ n, p: a && a.p }); return;
     }
-    if (vistos.has(chave(n))) return; vistos.add(chave(n));
+    if (vistos.has(chave(n))) { repPlan.push(n); return; } vistos.add(chave(n));
     const a = acharNoApp(n);
     if (a) ja.push({ n, p: a.p, por: a.por }); else novos.push(n);
   });
   const ign = lidos.ignorados || [];
-  return { novos, ja, canc, ign, total: lidos.length + ign.length };
+  novos.forEach(n => { const o = acharNoApp({ ...n, tipo: n.tipo === "legendario" ? "participante" : "legendario" }); if (o) n.outroTipo = o.p; });
+  return { novos, ja, canc, ign, repPlan, total: lidos.length + ign.length };
 }
 function importForm(tipoAtual) {
   modal(`
     <h3>Importar relatório de inscrições</h3>
-    <p class="hint" style="margin:0">Envie a planilha de inscritos da plataforma (.xlsx ou .csv). O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Só entra como participante quem está como Senderista (e como legendário quem está como Legendário). Inscrições canceladas são ignoradas. O CPF não é importado.</p>
+    <p class="hint" style="margin:0">Envie a planilha de inscritos da plataforma (.xlsx ou .csv). O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Só entram os que estão como Senderista ou Legendário. Inscrições canceladas são ignoradas. O CPF não é importado.</p>
     <div class="field"><label for="f-arq">Planilha</label><input id="f-arq" type="file" accept=".xlsx,.xls,.csv"></div>
     <div id="impPrev" class="imp-prev"></div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="impBtn" disabled>Importar</button></div></div>`,
@@ -1641,17 +1682,20 @@ function importForm(tipoAtual) {
   });
 }
 function previewImport(R) {
-  const tl = n => n.tipo === "legendario" ? "Legendário" : "Participante";
+  const tl = n => n.tipo === "legendario" ? "Legendário" : "Senderista";
   const nP = R.novos.filter(n => n.tipo !== "legendario").length, nL = R.novos.length - nP;
   const cancApp = R.canc.filter(c => c.p);
-  const tag = n => [n.inscricao === "pendente" ? '<span class="chip wait">Pagamento pendente</span>' : "", n.idade >= 40 ? '<span class="tag">+40</span>' : "", n.ficha.camisa ? `<span class="tag">Camisa ${esc(n.ficha.camisa)}</span>` : ""].join(" ");
+  const tag = n => [n.outroTipo ? `<span class="chip bad">Já está como ${tipoNome(n.outroTipo)}</span>` : "", n.inscricao === "pendente" ? '<span class="chip wait">Pagamento pendente</span>' : "", n.idade >= 40 ? '<span class="tag">+40</span>' : "", n.ficha.camisa ? `<span class="tag">Camisa ${esc(n.ficha.camisa)}</span>` : ""].join(" ");
   return `
   <div class="imp-kpis">
     <div><b class="num">${R.total}</b><span>linhas lidas</span></div>
-    <div class="ok"><b class="num">${R.novos.length}</b><span>novos (${nP} part. · ${nL} LGND)</span></div>
+    <div class="ok"><b class="num">${R.novos.length}</b><span>novos (${nP} send. · ${nL} LGND)</span></div>
     <div><b class="num">${R.ja.length}</b><span>já estão no app</span></div>
     <div class="bad"><b class="num">${R.canc.length}</b><span>compra cancelada</span></div>
   </div>
+  ${R.repPlan.length ? `<details><summary class="bad-text">Repetidos na própria planilha (${R.repPlan.length}): entram uma vez só</summary>
+    <ul class="imp-list">${R.repPlan.map(n => `<li>${esc(n.nome)} <span class="hint">${tl(n)}</span></li>`).join("")}</ul></details>` : ""}
+  ${R.novos.some(n => n.outroTipo) ? `<div class="banner"><span>Atenção: ${R.novos.filter(n => n.outroTipo).length} novo(s) já estão no app no outro tipo (marcados abaixo). Confira antes de importar.</span></div>` : ""}
   ${R.ign.length ? `<details><summary class="bad-text">Fora da regra (${R.ign.length}): não são Senderista nem Legendário, não entram</summary>
     <ul class="imp-list">${R.ign.map(x => `<li>${esc(x.nome)} <span class="hint">está como ${esc(x.como)}</span></li>`).join("")}</ul></details>` : ""}
   ${R.novos.length ? `<details open><summary><b>Novos para adicionar (${R.novos.length})</b></summary>
@@ -1719,7 +1763,7 @@ function notificarAviso(a) {
   store.set("adm3-aviso-notif", a.id);
   try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch {}
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const corpo = `${a.novosP} novo(s) participante(s) e ${a.novosL} legendário(s)${a.pagPend ? ` · ${a.pagPend} com pagamento pendente` : ""}. Importado por ${a.por || "um ADM"}.`;
+  const corpo = `${a.novosP} novo(s) senderista(s) e ${a.novosL} legendário(s)${a.pagPend ? ` · ${a.pagPend} com pagamento pendente` : ""}. Importado por ${a.por || "um ADM"}.`;
   const op = { body: corpo, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag: "adm3-" + a.id };
   (navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(r => r.showNotification("Planilha atualizada · ADM 3Colinas", op))
     : Promise.reject()).catch(() => { try { new Notification("Planilha atualizada · ADM 3Colinas", op); } catch {} });
@@ -1787,13 +1831,13 @@ function avisoModal() {
     <h3>Planilha atualizada</h3>
     <p class="hint" style="margin:0"><b>${esc(a.por || "Um ADM")}</b> importou ${a.arquivo ? `<b>${esc(a.arquivo)}</b>` : "o relatório de inscrições"} · ${esc(quando(a.em))}</p>
     <div class="imp-kpis">
-      <div class="ok"><b class="num">${a.novosP}</b><span>novo(s) participante(s)</span></div>
+      <div class="ok"><b class="num">${a.novosP}</b><span>novo(s) senderista(s)</span></div>
       <div class="ok"><b class="num">${a.novosL}</b><span>novo(s) legendário(s)</span></div>
-      <div><b class="num">${a.totalP}</b><span>participantes no TOP</span></div>
+      <div><b class="num">${a.totalP}</b><span>senderistas no TOP</span></div>
       <div><b class="num">${a.totalL}</b><span>legendários no TOP</span></div>
     </div>
     ${itens.length ? `<ul class="aviso-list">${itens.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
-    ${novos.length ? `<details ${novos.length <= 8 ? "open" : ""}><summary><b>Quem entrou (${novos.length})</b></summary><ul class="imp-list">${novos.map(p => `<li>${esc(p.nome)} <span class="hint">${p.tipo === "legendario" ? "Legendário" : "Participante"}${p.cidade ? " · " + esc(p.cidade) : ""}</span></li>`).join("")}</ul></details>` : ""}
+    ${novos.length ? `<details ${novos.length <= 8 ? "open" : ""}><summary><b>Quem entrou (${novos.length})</b></summary><ul class="imp-list">${novos.map(p => `<li>${esc(p.nome)} <span class="hint">${p.tipo === "legendario" ? "Legendário" : "Senderista"}${p.cidade ? " · " + esc(p.cidade) : ""}</span></li>`).join("")}</ul></details>` : ""}
     <div class="modal-foot"><div><button class="btn ghost" type="button" data-aviso="ok">Entendi</button></div>
       <div class="actions">${n ? `<button class="btn" type="button" data-aviso="pend">Ver pendências</button><button class="btn primary" type="button" data-aviso="novos">Ver os novos</button>` : ""}</div></div>`, () => {});
 }

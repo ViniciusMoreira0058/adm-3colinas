@@ -1,10 +1,10 @@
 # ADM 3Colinas
 
-App da equipe ADM do **Legendários · Base 3 Colinas (Franca - SP)** para gerenciar cada TOP: participantes e legendários (atestado, termo, grupo e família), checklist, estoque e kits MRE, km da pista, histórico de TOPs e cadastro da equipe com acesso por aba.
+App da equipe ADM do **Legendários · Base 3 Colinas (Franca - SP)** para gerenciar cada TOP: senderistas e legendários (atestado, termo, grupo e família), checklist, estoque e kits MRE, km da pista, histórico de TOPs e cadastro da equipe com acesso por aba.
 
 É um site estático, sem etapa de build: `index.html` + `app.js` + `dados.js`. Usa o Supabase para login, banco de dados e tempo real, e é publicado na Vercel. Instala no celular como app (PWA).
 
-Abrindo `index.html` sem preencher o Supabase (ou com `?demo=1` no endereço), o app roda em **modo demonstração**, com participantes e equipe fictícios só na memória.
+Abrindo `index.html` sem preencher o Supabase (ou com `?demo=1` no endereço), o app roda em **modo demonstração**, com senderistas e equipe fictícios só na memória.
 
 ## Acesso
 
@@ -26,9 +26,9 @@ As permissões são conferidas no banco (RLS), não só na tela. Bloquear algué
 4. **Supabase → Authentication → URL Configuration**: em **Redirect URLs** adicione o endereço da Vercel (ex.: `https://adm-3colinas.vercel.app`). Se o projeto for só deste app, coloque o mesmo endereço também em **Site URL**. Se estiver usando o projeto do Bold, **não mude o Site URL**, só adicione o Redirect URL.
 5. **Primeiro acesso do dono**: abra o app, toque em **Primeiro acesso? Criar minha senha**, use o e-mail do passo 1 e confirme pelo link que chega no e-mail.
 6. **Equipe**: na aba **Usuários**, cadastre cada pessoa com o e-mail dela e escolha o nível e as abas. Toque em **Enviar no WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
-7. **Participantes**: em **Participantes** e **Legendários**, use **Colar da planilha** para trazer os nomes da planilha. (Os dados pessoais não ficam no GitHub, só no banco.)
+7. **Senderistas**: em **Senderistas** e **Legendários**, use **Colar da planilha** para trazer os nomes da planilha. (Os dados pessoais não ficam no GitHub, só no banco.)
 8. **Histórico de alterações** (só o dono vê): se o banco foi criado antes dele existir, rode também `supabase/historico.sql` no SQL Editor. Ele registra quem criou, alterou ou apagou cada coisa e permite restaurar o que foi apagado.
-9. **Relatório de inscrições**: em Participantes ou Legendários, toque em **Importar relatório** e envie a planilha de inscritos da plataforma (.xlsx). O app só adiciona quem ainda não está, ignora compras canceladas e não importa o CPF. Tem um exemplo fictício em `exemplo/relatorio-exemplo.xlsx` para testar no modo demonstração (`?demo=1`).
+9. **Relatório de inscrições**: em Senderistas ou Legendários, toque em **Importar relatório** e envie a planilha de inscritos da plataforma (.xlsx). O app só adiciona quem ainda não está, ignora compras canceladas e não importa o CPF. Tem um exemplo fictício em `exemplo/relatorio-exemplo.xlsx` para testar no modo demonstração (`?demo=1`).
 10. **No celular**: abra o endereço da Vercel e toque em **Adicionar à tela inicial** (iPhone: botão Compartilhar; Android: menu ⋮ → Instalar app).
 
 ## Arquivos
