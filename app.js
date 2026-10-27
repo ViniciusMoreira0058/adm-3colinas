@@ -1144,20 +1144,20 @@ async function gerarCsgPdf(modo, de, ate, wa) {
   };
   cabecalho(true);
   doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor(...CINZA);
-  doc.text(doDia ? "Presenças = quantas vezes a pessoa participou até este dia" : `Presenças no período · ${fmtNum(totalPres)} no total`, 12, 73);
+  doc.text(doDia ? `Quem participou no dia · ${linhas.length} pessoa(s)` : `Presenças no período · ${fmtNum(totalPres)} no total`, 12, 73);
   doc.text(`Gerado em ${gerado} por ${adm}`, W - 12, 73, { align: "right" });
   const base = doDia ? nDia(de) : Math.max(1, dias.length);
   doc.autoTable({
     startY: 76, margin: { left: 12, right: 12, top: 22, bottom: 14 }, theme: "plain",
-    head: [["#", "NOME", "PRESENÇAS", doDia ? "PRIMEIRA VEZ" : "FREQUÊNCIA", doDia ? "" : "ÚLTIMA VEZ"]],
-    body: linhas.map((p, i) => [String(i + 1), p.nome, String(p.n), doDia ? fmtDia(p.prim) : pct(p.n, base) + "%", doDia ? "" : fmtDia(p.ult)]),
+    head: doDia ? [["#", "NOME"]] : [["#", "NOME", "PRESENÇAS", "FREQUÊNCIA", "ÚLTIMA VEZ"]],
+    body: linhas.map((p, i) => doDia ? [String(i + 1), p.nome] : [String(i + 1), p.nome, String(p.n), pct(p.n, base) + "%", fmtDia(p.ult)]),
     styles: { font: "helvetica", fontSize: 9, cellPadding: { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 }, textColor: TINTA, valign: "middle", lineColor: LINHA, lineWidth: { bottom: 0.2 } },
     headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7.5, cellPadding: { top: 2.8, bottom: 2.8, left: 2.5, right: 2.5 }, lineWidth: 0 },
     alternateRowStyles: { fillColor: CREME },
-    columnStyles: { 0: { cellWidth: 12, halign: "center", textColor: CINZA }, 1: { cellWidth: "auto", fontStyle: "bold" }, 2: { cellWidth: 26, halign: "center", fontStyle: "bold" }, 3: { cellWidth: 30, halign: "center" }, 4: { cellWidth: doDia ? 1 : 26, halign: "center", textColor: CINZA } },
+    columnStyles: { 0: { cellWidth: 12, halign: "center", textColor: CINZA }, 1: { cellWidth: "auto", fontStyle: "bold" }, 2: { cellWidth: 26, halign: "center", fontStyle: "bold" }, 3: { cellWidth: 30, halign: "center" }, 4: { cellWidth: 26, halign: "center", textColor: CINZA } },
     didParseCell: c => {
       if (c.section === "head") { if (c.column.index === 2) c.cell.styles.fillColor = [40, 24, 10]; if (c.column.index !== 1) c.cell.styles.halign = "center"; return; }
-      if (c.column.index === 2) c.cell.styles.textColor = LARANJA.map(v => Math.round(v * 0.82));
+      if (c.column.index === 2 && !doDia) c.cell.styles.textColor = LARANJA.map(v => Math.round(v * 0.82));
       if (c.column.index === 3 && !doDia) { const v = parseInt(c.cell.raw) || 0; c.cell.styles.textColor = v >= 75 ? VERDE : v >= 40 ? [168, 111, 0] : CINZA; }
     },
     didDrawPage: () => { if (doc.getNumberOfPages() > 1 && doc.internal.getCurrentPageInfo().pageNumber > 1) cabecalho(false); },
