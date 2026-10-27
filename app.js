@@ -1405,7 +1405,9 @@ function logLocal(col, id, antes, depois) {
 async function carregarHist() {
   if (DEMO || !S.isOwner) return;
   const r = await sb.from("adm_historico").select("*").order("em", { ascending: false }).limit(1000);
-  S.histErro = r.error ? (/adm_historico|does not exist|schema cache/i.test(r.error.message || "") ? "sem-tabela" : erroAmigavel(r.error)) : "";
+  const e = r.error;
+  S.histErro = e ? (e.code === "PGRST205" || e.code === "42P01" || /does not exist|schema cache/i.test(e.message || "") ? "sem-tabela" : erroAmigavel(e)) : "";
+  S.histDetalhe = e ? [e.code, e.message].filter(Boolean).join(": ") : "";
   if (!r.error) S.hist = r.data;
   S.histOk = true; if (S.view === "historico") render();
 }
@@ -1413,7 +1415,9 @@ function vHistorico() {
   if (!DEMO && !S.histOk) { carregarHist(); return `<div class="head"><div><h2>Histórico</h2><p>Carregando…</p></div></div>`; }
   if (S.histErro === "sem-tabela") return `
     <div class="head"><div><h2>Histórico</h2></div></div>
-    <section class="panel"><div class="empty">Falta criar o histórico no banco. No Supabase, abra <b>SQL Editor → New query</b>, cole o arquivo <b>supabase/historico.sql</b> e clique em <b>Run</b>. A partir daí, toda alteração fica registrada aqui.</div></section>`;
+    <section class="panel"><div class="empty">Falta criar o histórico no banco. No Supabase, abra <b>SQL Editor → New query</b>, cole o arquivo <b>supabase/historico.sql</b> e clique em <b>Run</b>. Depois toque em <b>Tentar de novo</b>.
+      <div style="margin-top:12px"><button class="btn primary" type="button" data-hist-act="atualizar">Tentar de novo</button></div>
+      ${S.histDetalhe ? `<p class="hint" style="margin-top:10px;font-size:12px">Detalhe: ${esc(S.histDetalhe)}</p>` : ""}</div></section>`;
   const h = S.hf, nq = norm(h.q);
   const quem = [...new Set(S.hist.map(x => x.quem))].sort();
   const linha = x => ({ ...x, aba: abaDoRegistro(x.col, x.dados || { tipo: x.tipo || ((S.pessoas.find(p => p.id === x.doc_id) || {}).tipo) }) });
