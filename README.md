@@ -49,3 +49,7 @@ As permissões são conferidas no banco (RLS), não só na tela. Bloquear algué
 - Só entra quem foi cadastrado em Usuários: um e-mail desconhecido cria a conta mas não vê nada.
 - A conta do dono não pode ser bloqueada nem excluída. Trocar o e-mail de alguém desfaz o vínculo com o login antigo.
 - A chave do Supabase no `app.js` é a pública (anon). A proteção dos dados está no RLS.
+
+## Sem internet (modo offline)
+
+Depois de entrar uma vez com internet, o app abre e funciona sem conexão (útil no TOP e na trilha). Os dados ficam guardados no aparelho e as alterações vão para uma fila que é enviada sozinha quando a internet volta. O selo **Offline · N para enviar** mostra o que ainda falta enviar. Se duas pessoas mudarem o mesmo campo, vale a última alteração que chegar ao servidor. Importar relatório, Usuários e Histórico precisam de internet. Não saia da conta enquanto houver alterações para enviar.

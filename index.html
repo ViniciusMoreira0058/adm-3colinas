@@ -83,6 +83,14 @@ button { cursor: pointer; }
 .sync i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .sync.on i { background: var(--good); }
 .sync.off i { background: var(--warn); }
+.netpill { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 60; display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 999px; border: 1px solid var(--warn); background: var(--surface); color: var(--fg); font: inherit; font-size: 13px; font-weight: 600;
+  box-shadow: 0 6px 24px rgba(0,0,0,.35); cursor: pointer; }
+.netpill i { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.netpill.enviando { border-color: var(--good); }
+.netpill.enviando i { background: var(--good); animation: netpulse 1s ease-in-out infinite; }
+@keyframes netpulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .netpill.enviando i { animation: none; } }
 
 .main { min-width: 0; padding-block: 22px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }

@@ -231,7 +231,30 @@ function renderNav() {
   meB.innerHTML = `${ico("key")} Sair${ME.adm ? " (" + esc(ME.adm.split(" ")[0]) + ")" : ""}`;
   const sync = $("#sync");
   sync.className = "sync " + (S.online === true ? "on" : S.online === false ? "off" : "");
-  sync.lastElementChild.textContent = S.online === "demo" ? "Demonstração (não salva)" : S.online === true ? "Sincronizado com a equipe" : S.online === false ? "Sem conexão: tentando de novo" : "Conectando…";
+  const F = S.fila || {}, semNet = F.offline || navigator.onLine === false;
+  sync.lastElementChild.textContent = F.pendentes ? `${semNet ? "Sem internet" : "Enviando"} · ${F.pendentes} alteração(ões) para enviar`
+    : semNet ? "Sem internet: usando os dados guardados" : S.online === "demo" ? "Demonstração (não salva)" : S.online === true ? "Sincronizado com a equipe" : S.online === false ? "Sem conexão: tentando de novo" : "Conectando…";
+  if (semNet || F.pendentes) sync.className = "sync off";
+  pintarRede();
+}
+/* Selo de modo offline: aparece em qualquer tela enquanto estiver sem internet ou com alterações para enviar */
+function pintarRede() {
+  const F = S.fila || {}, semNet = (F.offline || navigator.onLine === false) && !!ME.acesso;
+  let el = $("#netPill");
+  if (!semNet && !F.pendentes) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement("button"); el.id = "netPill"; el.type = "button"; el.className = "netpill"; el.dataset.act = "rede"; document.body.appendChild(el); }
+  el.classList.toggle("enviando", !semNet);
+  el.innerHTML = `<i></i><span>${semNet ? "Offline" : "Enviando…"}${F.pendentes ? ` · <b class="num">${F.pendentes}</b> para enviar` : ""}</span>`;
+}
+function redeInfo() {
+  const F = S.fila || {}, semNet = F.offline || navigator.onLine === false;
+  modal(`
+    <h3>${semNet ? "Você está sem internet" : "Enviando alterações"}</h3>
+    <p class="hint" style="margin:0">O app continua funcionando com os dados guardados neste aparelho${S.cacheEm ? ` (atualizados ${esc(quando(S.cacheEm))})` : ""}. Tudo o que você alterar fica guardado aqui e é enviado sozinho para a equipe quando a internet voltar.</p>
+    <div class="imp-kpis"><div><b class="num">${F.pendentes || 0}</b><span>alteração(ões) esperando envio</span></div></div>
+    <p class="hint" style="margin:0">Não saia da conta nem limpe os dados do navegador antes de enviar. Se duas pessoas mudarem o mesmo campo, vale a última que chegar. O que a equipe mudou enquanto você estava offline aparece quando a internet voltar.</p>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button><button class="btn primary" type="submit">Tentar enviar agora</button></div></div>`,
+  () => { closeModal(); if (db) db.recarregar().catch(() => {}).finally(renderNav); });
 }
 
 /* ---------- Métricas ---------- */
@@ -309,7 +332,7 @@ function vPainel() {
       <div class="actions"><button class="btn primary" type="button" data-act="novo">${ico("plus")} Novo senderista</button><button class="btn glass" type="button" data-go="tops">${ico("flag")} Todos os Tops</button></div>
     </div>
   </section>
-  ${S.online === false ? `<div class="banner"><span>Você está no modo local: o que for cadastrado aqui some ao fechar. Abra pelo link do app logado no Claude para salvar com a equipe.</span></div>` : ""}
+
   <div class="kpis">
     <button class="kpi" type="button" data-go="participantes"><span class="lbl">Senderistas</span><span class="val num">${s.n}</span><span class="sub">${s.dup ? `${s.dup} possível(is) repetido(s)` : "sem repetidos"} · ${s.mais40.length} com +40</span></button>
     <div class="kpi"><span class="lbl">Atestados confirmados</span><span class="val num">${s.atestado}<small style="font-size:18px;color:var(--muted)"> / ${s.n}</small></span><div class="bar good"><i style="width:${pct(s.atestado, s.n)}%"></i></div></div>
@@ -1159,11 +1182,16 @@ function aplicarPerfil(p) {
   document.body.classList.toggle("ro", ME.acesso.nivel === "leitura" && !ME.dono);
 }
 let sessaoOk = false;
+const perfilSalvo = () => { try { return JSON.parse(localStorage.getItem("adm3-perfil") || "null"); } catch { return null; } };
 async function iniciarSessao() {
   if (sessaoOk) return;
-  const r = await sb.rpc("adm_vincular");
-  if (r.error) throw r.error;
-  const p = r.data;
+  let r;
+  try { if (navigator.onLine === false && perfilSalvo()) throw new TypeError("Failed to fetch"); r = await ADM_DADOS.comPrazo(Promise.resolve(sb.rpc("adm_vincular")), 12000); }
+  catch (e) { r = { error: e }; }
+  let p = r.data;
+  // sem internet: entra com o último perfil guardado neste aparelho e os dados guardados
+  if (r.error) { if (ADM_DADOS.ehRede(r.error) && perfilSalvo()) { p = perfilSalvo(); S.fila = { ...(S.fila || {}), offline: true }; } else throw r.error; }
+  else if (p && !p.inativo) store.set("adm3-perfil", JSON.stringify(p));
   if (!p || p.inativo) {
     await sb.auth.signOut();
     authMode = "login";
@@ -1175,7 +1203,7 @@ async function iniciarSessao() {
   aplicarPerfil(p);
   // primeiro acesso = ainda não tem "último acesso" registrado (conferido antes de marcar a presença)
   let primeiro = false;
-  try { const v = await sb.from("adm_membros").select("visto_em").eq("id", p.id).maybeSingle(); primeiro = !v.error && v.data && !v.data.visto_em; } catch {}
+  if (!r.error) try { const v = await sb.from("adm_membros").select("visto_em").eq("id", p.id).maybeSingle(); primeiro = !v.error && v.data && !v.data.visto_em; } catch {}
   if ($(".login")) closeModal();
   conectarDados();
   if (primeiro && store.get("adm3-bemvindo-" + p.id) !== "1") boasVindas(); else toast(`Bem-vindo, ${ME.adm.split(" ")[0]}`);
@@ -1213,7 +1241,9 @@ function boasVindas() {
 }
 async function sair() {
   setMenu(false);
-  if (!DEMO) await sb.auth.signOut();
+  const pend = db ? db.estado().pendentes : 0;
+  if (pend && !confirm(`Ainda tem ${pend} alteração(ões) sem enviar (você está sem internet). Se sair agora, elas serão perdidas. Sair mesmo assim?`)) return;
+  if (!DEMO) { ADM_DADOS.limparLocal(ME.id); try { localStorage.removeItem("adm3-perfil"); } catch {} await sb.auth.signOut().catch(() => {}); }
   location.reload();
 }
 
@@ -1306,6 +1336,7 @@ document.addEventListener("click", e => {
   if (d.edit) { personForm(S.P.find(p => p.id === d.edit)); return; }
   if (d.obs) { obsForm(S.P.find(p => p.id === d.obs)); return; }
   if (d.dup) { dupForm(S.P.find(p => p.id === d.dup)); return; }
+  if (d.act === "rede") { redeInfo(); return; }
   if (d.editTask) { taskForm(S.T.find(x => x.id === d.editTask)); return; }
   if (d.editItem) { itemForm(S.estoque.find(x => x.id === d.editItem)); return; }
   if (d.cyc) {
@@ -1871,10 +1902,21 @@ function hideSplash() {
 
 /* ---------- Dados ---------- */
 render();
+addEventListener("online", () => { if (db) db.recarregar().catch(() => {}).finally(renderNav); renderNav(); });
+addEventListener("offline", () => { const ja = S.fila && S.fila.offline; S.fila = { ...(S.fila || {}), offline: true }; renderNav(); if (!ja && ME.acesso && !DEMO || !ja && DEMO && db) toast("Sem internet. Pode continuar usando: as alterações ficam guardadas e são enviadas quando a conexão voltar."); });
+setInterval(() => { if (db && db.estado().pendentes && navigator.onLine !== false) db.sincronizar(); }, 30000);
 // assina as coleções depois do login (o banco só entrega o que a pessoa pode ver)
 function conectarDados() {
+  const chave = DEMO ? "demo" : ME.id;
+  if (DEMO) ADM_DADOS.limparLocal("demo");   // a demonstração sempre começa do zero
   db = ADM_DADOS.criarBanco(DEMO ? ADM_DADOS.fonteMemoria(ADM_DEMO.docs)
-    : ADM_DADOS.fonteSupabase(sb, st => { S.online = st === "SUBSCRIBED" ? true : st === "CHANNEL_ERROR" || st === "TIMED_OUT" ? false : S.online; renderNav(); }));
+    : ADM_DADOS.fonteSupabase(sb, st => { S.online = st === "SUBSCRIBED" ? true : st === "CHANNEL_ERROR" || st === "TIMED_OUT" ? false : S.online; if (st === "SUBSCRIBED") db.sincronizar(); renderNav(); }), {
+    chave,
+    onFila: f => { const antes = S.fila || {}; S.fila = f; S.cacheEm = (JSON.parse(store.get("adm3-cache-" + chave) || "{}") || {}).em || S.cacheEm;
+      if (f.offline && !antes.offline && sessaoOk) toast("Sem internet. Pode continuar usando: as alterações ficam guardadas e são enviadas quando a conexão voltar.");
+      renderNav(); },
+    onEnviado: n => toast(`Internet de volta: ${n} alteração(ões) enviada(s) para a equipe.`),
+  });
   if (DEMO) S.online = "demo";
   const sub = col => db.collection(col).onSnapshot(snap => {
     S[col] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1925,8 +1967,12 @@ if (DEMO) {
   let temSessao = false;
   try { temSessao = Object.keys(localStorage).some(k => /^sb-.+-auth-token$/.test(k)); } catch (e) {}
   if (temSessao && authMode !== "newpass") showSplash(); else loginForm();
-  sb.auth.getSession().then(async ({ data }) => {
+  // sem internet nem tenta renovar a sessão (demora): entra direto com o que está guardado no aparelho
+  if (navigator.onLine === false && temSessao && perfilSalvo() && authMode !== "newpass") iniciarSessao().catch(e => loginForm(erroAmigavel(e), true));
+  else sb.auth.getSession().then(async ({ data }) => {
     if (data.session && authMode !== "newpass") { try { await iniciarSessao(); } catch (e) { loginForm(erroAmigavel(e), true); } }
+    // sem internet a sessão não consegue ser renovada: entra com o que está guardado no aparelho
+    else if (!data.session && temSessao && perfilSalvo() && navigator.onLine === false && !sessaoOk) { try { await iniciarSessao(); } catch (e) { loginForm(erroAmigavel(e), true); } }
     if (!sessaoOk) hideSplash();
   }).catch(() => hideSplash());
 }
