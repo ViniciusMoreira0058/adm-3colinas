@@ -152,6 +152,7 @@ const VIEWS = [
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
   { id: "consagracao", l: "Consagração", i: "group" },
+  { id: "pins", l: "Pins", i: "check", demo: true },   // em teste: só na demonstração
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
@@ -165,10 +166,11 @@ const NIVEIS = [
   { v: "edita", l: "Edita as abas escolhidas", d: "Vê e altera só as abas marcadas abaixo." },
   { v: "leitura", l: "Somente leitura", d: "Vê as abas marcadas abaixo, sem poder alterar nada." },
 ];
-const ABAS = () => VIEWS.filter(v => !v.owner && !v.need && v.id !== "painel");
+const ABAS = () => VIEWS.filter(v => !v.owner && !v.need && v.id !== "painel" && (!v.demo || DEMO));
 const precisaLogin = () => !ME.acesso;
 const canSee = v => {
   if (!ME.acesso) return v.id === "painel";
+  if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
   if (S.isOwner) return true;
   if (v.owner) return false;
   if (v.id === "painel" || ME.acesso.nivel === "total") return true;
@@ -1174,6 +1176,131 @@ async function gerarCsgPdf(modo, de, ate, wa) {
   const nome = `Lista consagracao ${doDia ? dd(de) : dd(de) + " a " + dd(ate)}.pdf`;
   await entregarPdf(doc.output("blob"), nome, `Lista Consagração ${doDia ? fmtDia(de, true) : fmtDia(de, true) + " a " + fmtDia(ate, true)}`, wa);
 }
+/* ---------- Pins (pins dos bonés: entregues ou pendentes) ----------
+   Cada pessoa fica em config/pin-<id> { nome, telefone, email, conclusao, lote, status: entregue|pendente, entregueEm, entreguePor }.
+   Os dados vêm da planilha "alunos do lote" da plataforma (.csv) e o ADM marca a entrega no app. Por enquanto só na demonstração. */
+const PIN_RE = /^pin-/;
+const pinsTodos = () => Object.entries(S.cfgDocs || {}).filter(([k]) => PIN_RE.test(k)).map(([k, d]) => ({ id: k, ...d }))
+  .sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+const MSG_PIN = "Olá {nome}, tudo bem? Aqui é {adm}, da equipe ADM Legendários 3 Colinas. O pin do seu boné (lote {lote}) já está com a gente para entregar. Me avisa quando e onde fica melhor para você retirar?";
+const msgPin = () => store.get("adm3-msg-pin") || MSG_PIN;
+const textoPin = p => msgPin().replace(/\{nome\}/g, String(p.nome || "").trim().split(/\s+/)[0] || "").replace(/\{adm\}/g, (ME.adm || "a equipe").split(" ")[0]).replace(/\{lote\}/g, p.lote || "-");
+const dataBr = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ""); return m ? `${m[3]}/${m[2]}/${m[1]}` : ""; };
+const dataIso = br => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(br || "").trim()); return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : ""; };
+function pinChave(nome, tel, email) {
+  const base = email ? "e" + norm(email) : digits(tel).length >= 10 ? "t" + digits(tel).slice(-10) : "n" + norm(nome);
+  let h = 5381; for (const c of base) h = (h * 33 ^ c.charCodeAt(0)) >>> 0;
+  return "pin-" + h.toString(36);
+}
+function vPins() {
+  const F = S.pinf || (S.pinf = { st: "pendente", lote: "", q: "" });
+  const todos = pinsTodos(), ed = podeEditar();
+  const ent = todos.filter(p => p.status === "entregue"), pend = todos.filter(p => p.status !== "entregue");
+  const lotes = [...new Set(todos.map(p => p.lote || "sem lote"))].sort((a, b) => todos.filter(p => (p.lote || "sem lote") === b).length - todos.filter(p => (p.lote || "sem lote") === a).length);
+  const q = norm(F.q);
+  const rows = todos.filter(p => F.st === "todos" || (F.st === "entregue") === (p.status === "entregue"))
+    .filter(p => !F.lote || (p.lote || "sem lote") === F.lote)
+    .filter(p => !q || norm(p.nome).includes(q) || digits(p.telefone).includes(digits(F.q) || "§") || norm(p.email).includes(q));
+  const seg = (v, l, n) => `<button type="button" data-pin-st="${v}" aria-pressed="${F.st === v}">${l} <span class="num" style="opacity:.75">${n}</span></button>`;
+  return `
+  <div class="head"><div><h2>Pins</h2><p>Pins dos bonés de quem concluiu a pista: quem já recebeu e quem ainda está pendente. Toque em <b>Entregar</b> quando a pessoa receber.${DEMO ? " <b>Aba em teste: por enquanto só aparece na demonstração.</b>" : ""}</p></div>
+    <div class="actions">${ed ? `<button class="btn" type="button" data-act="pin-msg">${ico("chat")} Editar mensagem</button><button class="btn primary" type="button" data-act="pin-importar">${ico("upload")} Importar planilha</button>` : ""}</div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Entregues</span><span class="val num">${ent.length}<small style="font-size:18px;color:var(--muted)"> / ${todos.length}</small></span><div class="bar good"><i style="width:${pct(ent.length, todos.length)}%"></i></div></div>
+    <div class="kpi ${pend.length ? "alert" : ""}"><span class="lbl">Pendentes</span><span class="val num">${pend.length}</span><span class="sub">${pend.filter(p => !waNumber(p.telefone)).length} sem telefone</span></div>
+    <div class="kpi"><span class="lbl">Lotes</span><span class="val num">${lotes.length}</span><span class="sub">${todos.length} pessoa(s)</span></div>
+    <div class="kpi"><span class="lbl">Entregues hoje</span><span class="val num">${ent.filter(p => p.entregueEm === hojeISO()).length}</span><span class="sub">${ent.filter(p => p.entregueEm === hojeISO()).map(p => (p.entreguePor || "").split(" ")[0]).filter((v, i, x) => v && x.indexOf(v) === i).join(", ") || "—"}</span></div>
+  </div>
+  ${lotes.length > 1 ? `<section class="panel"><h3>Por lote <small>toque para filtrar</small></h3><div class="csg-dias">${lotes.map(l => { const t = todos.filter(p => (p.lote || "sem lote") === l), e = t.filter(p => p.status === "entregue").length;
+    return `<button type="button" class="csg-dia ${F.lote && F.lote !== l ? "fora" : ""}" data-pin-lote="${esc(l)}"><b>Lote ${esc(l)}</b><span class="num">${e}/${t.length} entregues</span><span class="bar good" style="margin:4px 0 0"><i style="width:${pct(e, t.length)}%"></i></span></button>`; }).join("")}</div></section>` : ""}
+  <section class="panel">
+    <div class="csg-filtro">
+      <div class="seg" role="group" aria-label="Status">${seg("pendente", "Pendentes", pend.length)}${seg("entregue", "Entregues", ent.length)}${seg("todos", "Todos", todos.length)}</div>
+      ${F.lote ? `<button class="btn sm" type="button" data-pin-lote="">Lote ${esc(F.lote)} ✕</button>` : ""}
+      <div class="search" style="flex:1;min-width:180px">${ico("search")}<input id="pinQ" type="search" placeholder="Buscar nome, telefone ou e-mail" value="${esc(F.q)}" aria-label="Buscar"></div>
+    </div>
+    ${rows.length ? `<div class="list pend">${rows.map(p => { const ok = p.status === "entregue"; return `<div class="li pendrow">
+      <div class="grow"><b>${esc(p.nome)}</b> <span class="chip ${ok ? "ok" : "wait"}">${ok ? "Entregue" : "Pendente"}</span>
+        <small class="hint" style="display:block">Lote ${esc(p.lote || "-")}${p.conclusao ? ` · concluiu em ${esc(dataBr(p.conclusao))}` : ""}${ok ? ` · entregue ${p.entregueEm ? "em " + esc(dataBr(p.entregueEm)) : ""}${p.entreguePor ? " por " + esc(p.entreguePor) : ""}` : ""}</small>
+        <small class="hint" style="display:block">${esc([p.telefone, p.email].filter(Boolean).join(" · "))}</small></div>
+      <div class="actions">${ed ? (ok ? `<button class="btn sm ghost" type="button" data-pin-desfaz="${esc(p.id)}">Desfazer</button>` : `<button class="btn sm primary" type="button" data-pin-ok="${esc(p.id)}">${ico("check")} Entregar</button>`) : ""}
+        ${!ok && waNumber(p.telefone) ? `<a class="wa" href="https://wa.me/${waNumber(p.telefone)}?text=${encodeURIComponent(textoPin(p))}" target="_blank" rel="noopener">${ico("wa")} Avisar</a>` : ""}</div>
+    </div>`; }).join("")}</div>` : `<div class="empty">${todos.length ? "Ninguém neste filtro." : "Nenhum pin ainda. Toque em <b>Importar planilha</b> e escolha o arquivo baixado da plataforma."}</div>`}
+  </section>`;
+}
+function pinEntregar(id, desfazer) {
+  const p = (S.cfgDocs || {})[id]; if (!p) return;
+  const dados = desfazer ? { status: "pendente", entregueEm: "", entreguePor: "" } : { status: "entregue", entregueEm: hojeISO(), entreguePor: ME.adm || "ADM" };
+  save(() => api.update("config", id, dados), desfazer ? `${p.nome.split(" ")[0]}: voltou para pendente` : `Pin entregue para ${p.nome.split(" ")[0]}`);
+}
+function pinMsgForm() {
+  modal(`
+    <h3>Mensagem do pin</h3>
+    <p class="hint" style="margin:0">Use <b>{nome}</b>, <b>{adm}</b> e <b>{lote}</b>: o app troca pelo primeiro nome da pessoa, o seu nome e o lote. Fica salva neste aparelho.</p>
+    <div class="field"><label for="f-msg">Mensagem</label><textarea id="f-msg" name="msg" style="min-height:150px">${esc(msgPin())}</textarea></div>
+    <div class="modal-foot"><div><button class="btn ghost" type="button" id="msgPadrao">Voltar ao padrão</button></div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { store.set("adm3-msg-pin", String(fd.get("msg") || "").trim() || MSG_PIN); closeModal(); toast("Mensagem salva"); render(); });
+  $("#msgPadrao").onclick = () => { $("#f-msg").value = MSG_PIN; };
+}
+// lê o .csv "alunos do lote" da plataforma (separado por ponto e vírgula, com aspas)
+function lerCsv(txt) {
+  txt = txt.replace(/^﻿/, "");
+  const sep = (txt.split(/\r?\n/)[0].match(/;/g) || []).length >= (txt.split(/\r?\n/)[0].match(/,/g) || []).length ? ";" : ",";
+  const linhas = []; let campo = "", linha = [], aspas = false;
+  for (let i = 0; i < txt.length; i++) {
+    const c = txt[i];
+    if (aspas) { if (c === '"') { if (txt[i + 1] === '"') { campo += '"'; i++; } else aspas = false; } else campo += c; continue; }
+    if (c === '"') aspas = true;
+    else if (c === sep) { linha.push(campo); campo = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && txt[i + 1] === "\n") i++; linha.push(campo); linhas.push(linha); linha = []; campo = ""; }
+    else campo += c;
+  }
+  if (campo || linha.length) { linha.push(campo); linhas.push(linha); }
+  return linhas.filter(l => l.some(x => String(x).trim()));
+}
+function lerPlanilhaPins(linhas) {
+  const cab = (linhas[0] || []).map(norm), col = (...nomes) => cab.findIndex(h => nomes.some(n => h === n || h.startsWith(n)));
+  const I = { nome: col("nome"), tel: col("telefone", "celular"), email: col("email", "e-mail"), conc: col("conclusao"), lote: col("lote"), st: col("status"), data: col("data entrega"), colab: col("colaborador") };
+  if (I.nome < 0 || I.st < 0) throw new Error("Não achei as colunas Nome e Status. Use o arquivo \"alunos do lote\" baixado da plataforma.");
+  const g = (r, i) => i >= 0 ? String(r[i] || "").trim() : "";
+  const vistos = new Map();
+  linhas.slice(1).forEach(r => {
+    const nome = capNome(g(r, I.nome).replace(/\s+/g, " ")); if (!nome) return;
+    const tel = g(r, I.tel), email = g(r, I.email).toLowerCase(), id = pinChave(nome, tel, email);
+    vistos.set(id, { id, nome, telefone: tel, email, conclusao: dataIso(g(r, I.conc)), lote: g(r, I.lote), status: /entreg/i.test(g(r, I.st)) ? "entregue" : "pendente",
+      entregueEm: dataIso(g(r, I.data)), entreguePor: capNome(g(r, I.colab)) });
+  });
+  return [...vistos.values()];
+}
+function pinImportarForm() {
+  modal(`
+    <h3>Importar planilha de pins</h3>
+    <p class="hint" style="margin:0">Escolha o arquivo <b>alunos do lote</b> (.csv) baixado da plataforma. Quem é novo entra na lista; quem já está é atualizado. Se alguém já foi marcado como entregue no app, continua entregue.</p>
+    <div class="field"><label for="f-pincsv">Arquivo</label><input type="file" id="f-pincsv" accept=".csv,text/csv"></div>
+    <div id="pinPrev" class="hint">Nenhum arquivo escolhido.</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="pinImpBtn" disabled>Importar</button></div></div>`,
+  () => {
+    if (!R || !R.length) return;
+    const atuais = Object.fromEntries(pinsTodos().map(p => [p.id, p]));
+    const ops = R.map(n => { const a = atuais[n.id];
+      if (!a) return () => api.set("config", n.id, { ...n, id: undefined, importadoEm: new Date().toISOString() });
+      const d = {}; ["telefone", "email", "conclusao", "lote"].forEach(k => { if (n[k] && n[k] !== a[k]) d[k] = n[k]; });
+      if (a.status !== "entregue" && n.status === "entregue") Object.assign(d, { status: "entregue", entregueEm: n.entregueEm, entreguePor: n.entreguePor });
+      return Object.keys(d).length ? () => api.update("config", n.id, d) : null; }).filter(Boolean);
+    closeModal();
+    save(async () => { for (const op of ops) await op(); }, `Planilha importada: ${R.filter(n => !atuais[n.id]).length} novo(s), ${ops.length - R.filter(n => !atuais[n.id]).length} atualizado(s)`);
+  });
+  let R = null;
+  $("#f-pincsv").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      R = lerPlanilhaPins(lerCsv(await f.text()));
+      const atuais = new Set(pinsTodos().map(p => p.id)), novos = R.filter(n => !atuais.has(n.id)).length, ent = R.filter(n => n.status === "entregue").length;
+      $("#pinPrev").innerHTML = `<b>${R.length}</b> pessoa(s) na planilha · ${ent} entregue(s), ${R.length - ent} pendente(s) · <b>${novos}</b> nova(s) no app`;
+      $("#pinImpBtn").disabled = !R.length;
+    } catch (err) { R = null; $("#pinPrev").innerHTML = `<span class="warn-text">${esc(err.message || err)}</span>`; $("#pinImpBtn").disabled = true; }
+  });
+}
 /* Dividir os ADMs em equipes (só o dono): cada equipe tem nome, ADM responsável e integrantes; coordenadores veem todas */
 function equipesForm() {
   const E = eqDoc();
@@ -1568,6 +1695,7 @@ function render() {
     : v === "checklist" ? vChecklist()
     : v === "cronograma" ? vCronograma()
     : v === "consagracao" ? vConsagracao()
+    : v === "pins" ? vPins()
     : v === "estoque" ? vEstoque()
     : vPista());
   const view = $("#view");
@@ -2078,7 +2206,7 @@ function toast(msg) {
 
 /* ---------- Eventos ---------- */
 const pending = new Map();
-const WRITE_KEYS = ["editDia", "act", "edit", "obs", "editTask", "editItem", "editTop", "topFin", "cyc", "tog", "task", "step", "kits", "editAdm", "cronoIni", "cronoFim", "cronoItem", "pagOk"];
+const WRITE_KEYS = ["editDia", "act", "edit", "obs", "editTask", "editItem", "editTop", "topFin", "cyc", "tog", "task", "step", "kits", "editAdm", "cronoIni", "cronoFim", "cronoItem", "pagOk", "pinOk", "pinDesfaz"];
 function debounceWrite(key, fn, ms = 500) { clearTimeout(pending.get(key)); pending.set(key, setTimeout(() => { pending.delete(key); fn(); }, ms)); }
 
 document.addEventListener("click", e => {
@@ -2111,6 +2239,8 @@ document.addEventListener("click", e => {
   if (d.act === "csg-pdf") { csgPdfForm(); return; }
   if (d.act === "csg-todo") { S.csg = { ...(S.csg || {}), de: "", ate: "" }; render(); return; }
   if (d.csgDia) { csgDiaForm(d.csgDia); return; }
+  if (d.pinSt) { S.pinf.st = d.pinSt; render(); return; }
+  if (d.pinLote != null) { S.pinf.lote = S.pinf.lote === d.pinLote ? "" : d.pinLote; render(); return; }
   if (d.csgPes) { csgPessoaForm(d.csgPes); return; }
   if (d.act === "csg-rep") { csgRepForm(); return; }
   if (t.id === "notifBtn") { pedirNotificacao(); return; }
@@ -2160,6 +2290,10 @@ document.addEventListener("click", e => {
   if (d.act === "csg-colar") { csgColarForm(); return; }
   if (d.act === "csg-cfg") { csgCfgForm(); return; }
   if (d.act === "csg-unir") { csgUnirForm(); return; }
+  if (d.act === "pin-importar") { pinImportarForm(); return; }
+  if (d.act === "pin-msg") { pinMsgForm(); return; }
+  if (d.pinOk) { pinEntregar(d.pinOk); return; }
+  if (d.pinDesfaz) { pinEntregar(d.pinDesfaz, true); return; }
   if (d.cronoDia) { S.cronoDia = d.cronoDia; store.set("crono-dia", d.cronoDia); render(); return; }
   if (d.cronoIni) { cronoMarcar(d.cronoIni, { ini: agoraHM(), iniPor: ME.adm, iniEm: new Date().toISOString() }, "Início marcado " + agoraHM()); return; }
   if (d.cronoFim) { cronoMarcar(d.cronoFim, { fim: agoraHM(), fimPor: ME.adm, fimEm: new Date().toISOString() }, "Fim marcado " + agoraHM()); return; }
@@ -2195,6 +2329,7 @@ document.addEventListener("click", e => {
 document.addEventListener("input", e => {
   if (e.target.id === "q") { S.f.q = e.target.value; render(); }
   if (e.target.id === "hq") { S.hf.q = e.target.value; render(); }
+  if (e.target.id === "pinQ") { S.pinf.q = e.target.value; render(); const q = $("#pinQ"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   if (e.target.id === "csgQ") { S.csg.q = e.target.value; render(); const q = $("#csgQ"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
 });
 document.addEventListener("change", e => {
@@ -2878,7 +3013,7 @@ function conectarDados() {
     S.cronoCriando = S.cronoCriando || new Set();
     if (ficha && navigator.onLine !== false && !db.estado().offline && !S.cfgDocs[ficha] && !S.cronoCriando.has(ficha)) {
       S.cronoCriando.add(ficha); db.doc("config/" + ficha).set({ _adm: eu() }).catch(() => {}).finally(() => S.cronoCriando.delete(ficha)); }
-    if (S.view === "cronograma" || S.view === "consagracao" || S.view === "painel") render();
+    if (["cronograma", "consagracao", "pins", "painel"].includes(S.view)) render();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });

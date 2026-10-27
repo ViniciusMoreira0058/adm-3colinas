@@ -1028,6 +1028,166 @@ window.ADM_DEMO = {
 },
 {
 "col": "config",
+"id": "pin-ex01",
+"data": {"nome": "André Luiz Moreira", "telefone": "+55 16 99000-8629", "email": "andr.moreira@exemplo.com", "conclusao": "2026-01-22", "lote": "10149", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex02",
+"data": {"nome": "Beatriz Carvalho", "telefone": "+55 16 99001-4025", "email": "beatriz.carvalho@exemplo.com", "conclusao": "2026-01-24", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-17", "entreguePor": "Thalisson"}
+},
+{
+"col": "config",
+"id": "pin-ex03",
+"data": {"nome": "Caio Henrique Dias", "telefone": "+55 16 99002-8316", "email": "caio.dias@exemplo.com", "conclusao": "2026-01-24", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-10", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex04",
+"data": {"nome": "Davi Rezende", "telefone": "+55 16 99003-1686", "email": "davi.rezende@exemplo.com", "conclusao": "2026-03-14", "lote": "18609", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex05",
+"data": {"nome": "Elaine Brito", "telefone": "+55 16 99004-3580", "email": "elaine.brito@exemplo.com", "conclusao": "2026-01-21", "lote": "10149", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex06",
+"data": {"nome": "Fábio Junqueira", "telefone": "+55 16 99005-1975", "email": "fbio.junqueira@exemplo.com", "conclusao": "2026-01-24", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-02", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex07",
+"data": {"nome": "Guilherme Prado", "telefone": "+55 16 99006-8601", "email": "guilherme.prado@exemplo.com", "conclusao": "2026-04-16", "lote": "1515", "status": "entregue", "entregueEm": "2026-05-04", "entreguePor": "Thalisson"}
+},
+{
+"col": "config",
+"id": "pin-ex08",
+"data": {"nome": "Helena Matos", "telefone": "+55 16 99007-5819", "email": "helena.matos@exemplo.com", "conclusao": "2026-01-19", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-11", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex09",
+"data": {"nome": "Igor Fonseca", "telefone": "+55 16 99008-7664", "email": "igor.fonseca@exemplo.com", "conclusao": "2026-01-21", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-15", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex10",
+"data": {"nome": "Juliana Peixoto", "telefone": "+55 16 99009-4762", "email": "juliana.peixoto@exemplo.com", "conclusao": "2026-08-18", "lote": "30914", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex11",
+"data": {"nome": "Kleber Soares", "telefone": "+55 16 99010-2768", "email": "kleber.soares@exemplo.com", "conclusao": "2026-01-18", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-07", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex12",
+"data": {"nome": "Larissa Queiroz", "telefone": "+55 16 99011-2094", "email": "larissa.queiroz@exemplo.com", "conclusao": "2026-08-19", "lote": "30914", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex13",
+"data": {"nome": "Mateus Figueira", "telefone": "+55 16 99012-4498", "email": "mateus.figueira@exemplo.com", "conclusao": "2026-04-18", "lote": "1515", "status": "entregue", "entregueEm": "2026-05-02", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex14",
+"data": {"nome": "Natália Borges", "telefone": "+55 16 99013-2196", "email": "natlia.borges@exemplo.com", "conclusao": "2026-01-23", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-18", "entreguePor": "Gustavo Arantes"}
+},
+{
+"col": "config",
+"id": "pin-ex15",
+"data": {"nome": "Orlando Siqueira", "telefone": "+55 16 99014-2427", "email": "orlando.siqueira@exemplo.com", "conclusao": "2026-03-13", "lote": "18609", "status": "entregue", "entregueEm": "2026-03-30", "entreguePor": "Thalisson"}
+},
+{
+"col": "config",
+"id": "pin-ex16",
+"data": {"nome": "Paulo Sérgio Nunes", "telefone": "+55 16 99015-2933", "email": "paulo.nunes@exemplo.com", "conclusao": "2026-03-11", "lote": "18609", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex17",
+"data": {"nome": "Rodrigo Valente", "telefone": "+55 16 99016-1981", "email": "rodrigo.valente@exemplo.com", "conclusao": "2026-03-13", "lote": "18609", "status": "entregue", "entregueEm": "2026-04-04", "entreguePor": "Thalisson"}
+},
+{
+"col": "config",
+"id": "pin-ex18",
+"data": {"nome": "Sabrina Leite", "telefone": "+55 16 99017-9337", "email": "sabrina.leite@exemplo.com", "conclusao": "2026-03-12", "lote": "18609", "status": "entregue", "entregueEm": "2026-03-26", "entreguePor": "Gustavo Arantes"}
+},
+{
+"col": "config",
+"id": "pin-ex19",
+"data": {"nome": "Thiago Bastos", "telefone": "+55 16 99018-7287", "email": "thiago.bastos@exemplo.com", "conclusao": "2026-08-19", "lote": "30914", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex20",
+"data": {"nome": "Ulisses Coelho", "telefone": "+55 16 99019-1007", "email": "ulisses.coelho@exemplo.com", "conclusao": "2026-03-11", "lote": "18609", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex21",
+"data": {"nome": "Vanessa Rios", "telefone": "+55 16 99020-1321", "email": "vanessa.rios@exemplo.com", "conclusao": "2026-03-14", "lote": "18609", "status": "entregue", "entregueEm": "2026-03-28", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex22",
+"data": {"nome": "William Cunha", "telefone": "+55 16 99021-2643", "email": "william.cunha@exemplo.com", "conclusao": "2026-01-24", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-02", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex23",
+"data": {"nome": "Yuri Damasceno", "telefone": "+55 16 99022-6389", "email": "yuri.damasceno@exemplo.com", "conclusao": "2026-03-10", "lote": "18609", "status": "entregue", "entregueEm": "2026-03-27", "entreguePor": "Thalisson"}
+},
+{
+"col": "config",
+"id": "pin-ex24",
+"data": {"nome": "Zeca Amaral", "telefone": "+55 16 99023-4981", "email": "zeca.amaral@exemplo.com", "conclusao": "2026-03-08", "lote": "18609", "status": "entregue", "entregueEm": "2026-03-16", "entreguePor": "Gustavo Arantes"}
+},
+{
+"col": "config",
+"id": "pin-ex25",
+"data": {"nome": "Alexandre Pacheco", "telefone": "+55 16 99024-8925", "email": "alexandre.pacheco@exemplo.com", "conclusao": "2026-03-12", "lote": "18609", "status": "entregue", "entregueEm": "2026-04-07", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex26",
+"data": {"nome": "Bruna Toledo", "telefone": "+55 16 99025-3525", "email": "bruna.toledo@exemplo.com", "conclusao": "2026-08-17", "lote": "30914", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex27",
+"data": {"nome": "Cristiano Moraes", "telefone": "+55 16 99026-5087", "email": "cristiano.moraes@exemplo.com", "conclusao": "2026-03-09", "lote": "18609", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex28",
+"data": {"nome": "Denise Arruda", "telefone": "+55 16 99027-4220", "email": "denise.arruda@exemplo.com", "conclusao": "2026-08-17", "lote": "30914", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex29",
+"data": {"nome": "Emerson Lacerda", "telefone": "+55 16 99028-2286", "email": "emerson.lacerda@exemplo.com", "conclusao": "2026-01-21", "lote": "10149", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex30",
+"data": {"nome": "Flávia Mendonça", "telefone": "+55 16 99029-9394", "email": "flvia.mendona@exemplo.com", "conclusao": "2026-01-18", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-03", "entreguePor": "Vinicius Moreira"}
+},
+{
+"col": "config",
+"id": "pin-ex31",
+"data": {"nome": "Gilberto Sales", "telefone": "+55 16 99030-5210", "email": "gilberto.sales@exemplo.com", "conclusao": "2026-08-19", "lote": "30914", "status": "pendente", "entregueEm": "", "entreguePor": ""}
+},
+{
+"col": "config",
+"id": "pin-ex32",
+"data": {"nome": "Heloísa Brandão", "telefone": "+55 16 99031-9520", "email": "helosa.brando@exemplo.com", "conclusao": "2026-01-22", "lote": "10149", "status": "entregue", "entregueEm": "2026-02-04", "entreguePor": "Gustavo Arantes"}
+},
+{
+"col": "config",
 "id": "equipes-top1922",
 "data": {"equipes": [{"id": "eq1", "nome": "Equipe Trilha", "adms": [{"id": "m-thal", "nome": "Thalisson"}, {"id": "m-rafa", "nome": "Rafael Lima"}]}, {"id": "eq2", "nome": "Equipe Base", "adms": [{"id": "m-bru", "nome": "Bruno Costa"}, {"id": "m-hen", "nome": "Henrique"}]}], "coord": [{"id": "m-die", "nome": "Diego Souza"}]}
 },
@@ -1290,6 +1450,7 @@ window.ADM_DEMO = {
 "familias",
 "cronograma",
 "consagracao",
+"pins",
 "checklist"
 ],
 "ativo": true,
