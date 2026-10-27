@@ -144,6 +144,12 @@ html, body { overscroll-behavior-y: contain; }
 .ptr-ico { display: inline-block; font-size: 18px; color: var(--accent); line-height: 1; }
 .ptr.girando .ptr-ico { animation: ptrgira .8s linear infinite; }
 @keyframes ptrgira { to { transform: rotate(360deg); } }
+.bv-top { display: flex; gap: 14px; align-items: center; }
+.bv-logo { width: 64px; height: auto; flex: none; filter: drop-shadow(0 6px 14px rgba(0,0,0,.35)); }
+.bv-acesso { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); }
+.bv-dicas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.bv-dicas li { display: flex; gap: 10px; align-items: flex-start; }
+.bv-dicas svg { width: 20px; height: 20px; flex: none; color: var(--accent); margin-top: 2px; }
 .selbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--bad); border-radius: 10px; background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .selbar .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .selall { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; cursor: pointer; }

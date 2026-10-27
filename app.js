@@ -1114,14 +1114,43 @@ async function iniciarSessao() {
   sessaoOk = true;
   showSplash();
   aplicarPerfil(p);
+  // primeiro acesso = ainda não tem "último acesso" registrado (conferido antes de marcar a presença)
+  let primeiro = false;
+  try { const v = await sb.from("adm_membros").select("visto_em").eq("id", p.id).maybeSingle(); primeiro = !v.error && v.data && !v.data.visto_em; } catch {}
   if ($(".login")) closeModal();
   conectarDados();
-  toast(`Bem-vindo, ${ME.adm.split(" ")[0]}`);
+  if (primeiro && store.get("adm3-bemvindo-" + p.id) !== "1") boasVindas(); else toast(`Bem-vindo, ${ME.adm.split(" ")[0]}`);
 }
 function entrarDemo(e) {
   aplicarPerfil(e); e.user_id = e.user_id || "demo"; e.visto_em = new Date().toISOString();
   S.peers = [{ membro: e.id, nome: e.nome, tela: S.view }];
   showSplash(); closeModal(); conectarDados(); toast(`Demonstração: entrou como ${e.nome.split(" ")[0]}`);
+  if (store.get("adm3-bemvindo-" + e.id) !== "1") boasVindas();   // na demonstração aparece na 1ª vez de cada pessoa neste aparelho
+}
+/* Boas-vindas no primeiro acesso: quem é, o que pode ver e as dicas principais */
+function boasVindas() {
+  if (!splashDone) { setTimeout(boasVindas, 300); return; }
+  const first = (ME.adm || "").split(" ")[0];
+  const nivel = ME.dono ? "Coordenador (dono do app): vê e altera tudo" : ME.acesso.nivel === "total" ? "Acesso total: vê e altera todas as abas"
+    : ME.acesso.nivel === "leitura" ? "Somente leitura: vê as abas liberadas, sem alterar" : "Pode ver e alterar as abas liberadas";
+  const abas = VIEWS.filter(canSee).map(v => v.l);
+  const dicas = [
+    ["home", "Dashboard", "o resumo do TOP: participantes, documentos, checklist e estoque."],
+    canSee({ id: "participantes" }) && ["users", "Participantes", "toque no status do atestado ou do termo para avançar. Quem mexer por último vira o ADM responsável."],
+    canSee({ id: "pendencias", need: ["participantes", "legendarios"] }) && ["bell", "Pendências", "veja quem falta atestado, termo ou grupo e cobre pelo WhatsApp com a mensagem pronta."],
+    ["route", "Tudo em tempo real", "o que alguém da equipe muda aparece na hora para todos. No celular, puxe a tela para baixo para atualizar."],
+  ].filter(Boolean);
+  const podeNotif = "Notification" in window && Notification.permission === "default";
+  modal(`
+    <div class="bv-top"><img src="assets/logo.png" alt="" class="bv-logo"><div><h3>Bem-vindo, ${esc(first)}!</h3>
+      <p class="hint" style="margin:4px 0 0">Você agora faz parte da equipe ADM do <b>${esc(topName())}</b> · Legendários Base 3 Colinas. Que bom ter você com a gente.</p></div></div>
+    <div class="bv-acesso"><span class="lab">Seu acesso</span><b>${esc(nivel)}</b><div class="pendtags">${abas.map(a => `<span class="tag">${esc(a)}</span>`).join("")}</div></div>
+    <ul class="bv-dicas">${dicas.map(([i, t, d]) => `<li>${ico(i)}<div><b>${t}</b>: ${d}</div></li>`).join("")}</ul>
+    <p class="hint" style="margin:0">Dica: instale o app na tela inicial do celular (Android: menu ⋮ → Instalar app · iPhone: Compartilhar → Adicionar à Tela de Início).</p>
+    <div class="modal-foot"><div>${podeNotif ? `<button class="btn" type="button" id="bvNotif">${ico("bell")} Ativar notificações</button>` : ""}</div>
+      <div class="actions"><button class="btn primary" type="submit">Começar</button></div></div>`,
+  () => { store.set("adm3-bemvindo-" + ME.id, "1"); closeModal(); checarAviso(); });
+  const nb = $("#bvNotif"); if (nb) nb.onclick = async () => { await pedirNotificacao(); nb.remove(); };
 }
 async function sair() {
   setMenu(false);
