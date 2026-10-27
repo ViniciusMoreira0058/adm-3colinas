@@ -87,6 +87,8 @@ const S = {
   loaded: { pessoas: false, tarefas: false, estoque: false, pista: false, tops: false },
   f: { q: "", tipo: "participante", status: "todos", adm: "" },
   sel: { on: false, tipo: "", ids: new Set() },   // seleção para apagar em massa (só o dono)
+  pf: { quem: "participante", oque: "qualquer", adm: "" },   // filtros de Pendências
+  hf: { q: "", quem: "", aba: "", acao: "" }, hist: [], histOk: false, histErro: "",   // Histórico (só o dono)
 };
 let db = null;
 let localSeq = 0;
@@ -106,19 +108,25 @@ const api = {
   async add(col, data) {
     if ((col === "pessoas" || col === "tarefas") && !data.top) data = { ...data, top: curTopId() };
     if (!db) { const doc = { id: "local" + (++localSeq), ...data }; S[col].push(doc); render(); return doc; }
-    return db.collection(col).add(data);
+    const r = await db.collection(col).add(data); logLocal(col, r.id, null, data); return r;
   },
   async update(col, id, data) {
     if (!db) { const d = S[col].find(x => x.id === id); Object.assign(d, data); render(); return; }
+    const antes = DEMO && (S[col] || []).find(x => x.id === id);
     await db.collection(col).doc(id).update(data);
+    if (antes) { const { id: _, ...a } = antes; logLocal(col, id, a, { ...a, ...data }); }
   },
   async remove(col, id) {
     if (!db) { S[col] = S[col].filter(x => x.id !== id); render(); return; }
+    const antes = DEMO && (S[col] || []).find(x => x.id === id);
     await db.collection(col).doc(id).delete();
+    if (antes) { const { id: _, ...a } = antes; logLocal(col, id, a, null); }
   },
   async set(col, id, data) {
     if (!db) { S[col] = S[col].filter(x => x.id !== id); S[col].push({ id, ...data }); render(); return; }
+    const antes = DEMO && (S[col] || []).find(x => x.id === id);
     await db.collection(col).doc(id).set(data);
+    if (DEMO) { const a = antes ? (({ id: _, ...r }) => r)(antes) : null; logLocal(col, id, a, data); }
   },
   async config(data) {
     if (!db) { Object.assign(S.config, data); render(); return; }
@@ -139,12 +147,14 @@ const VIEWS = [
   { id: "painel", l: "Painel", i: "home" },
   { id: "participantes", l: "Participantes", i: "users" },
   { id: "legendarios", l: "Legendários", i: "shield" },
+  { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
   { id: "tops", l: "Tops", i: "flag" },
   { id: "usuarios", l: "Usuários", i: "key", owner: true },
+  { id: "historico", l: "Histórico", i: "clock", owner: true },
 ];
 /* Acesso: o dono vê tudo; cada usuário vê as abas que o dono liberou no cadastro dele. */
 const NIVEIS = [
@@ -152,13 +162,14 @@ const NIVEIS = [
   { v: "edita", l: "Edita as abas escolhidas", d: "Vê e altera só as abas marcadas abaixo." },
   { v: "leitura", l: "Somente leitura", d: "Vê as abas marcadas abaixo, sem poder alterar nada." },
 ];
-const ABAS = () => VIEWS.filter(v => !v.owner && v.id !== "painel");
+const ABAS = () => VIEWS.filter(v => !v.owner && !v.need && v.id !== "painel");
 const precisaLogin = () => !ME.acesso;
 const canSee = v => {
   if (!ME.acesso) return v.id === "painel";
   if (S.isOwner) return true;
   if (v.owner) return false;
   if (v.id === "painel" || ME.acesso.nivel === "total") return true;
+  if (v.need) return v.need.some(a => (ME.acesso.abas || []).includes(a));   // aba que usa os dados de outras
   return (ME.acesso.abas || []).includes(v.id);
 };
 const podeEditar = () => S.isOwner || (!!ME.acesso && ME.acesso.nivel !== "leitura");
@@ -244,6 +255,29 @@ function stats() {
 }
 
 /* ---------- Telas ---------- */
+// resumo dos dados vindos do relatório de inscrições: camisas (fardas) e saúde
+function painelInscricao() {
+  const ps = S.P.filter(p => !cancelado(p) && p.ficha && p.tipo !== "legendario");
+  if (!ps.length) return "";
+  const ORD = ["P/S", "M", "G/L", "GG/XL", "2G/2XL", "3G/3XL", "4G/4XL"];
+  const cam = {}; ps.forEach(p => { const c = p.ficha.camisa; if (c) cam[c] = (cam[c] || 0) + 1; });
+  const tam = Object.entries(cam).sort((a, b) => ((ORD.indexOf(a[0]) + 1) || 99) - ((ORD.indexOf(b[0]) + 1) || 99));
+  const sim = k => S.P.filter(p => !cancelado(p) && p.ficha && p.ficha[k] && !/^n[aã]o\b/i.test(p.ficha[k]));
+  const canc = S.P.filter(cancelado).length, pend = S.P.filter(p => p.inscricao === "pendente").length;
+  return `
+    <section class="panel"><h3>Camisas dos participantes <small>${ps.length} com tamanho informado</small></h3>
+      <div class="list">${tam.map(([t, n]) => `<div class="li"><span class="grow">${esc(t)}</span><b class="num">${n}</b></div>`).join("") || `<div class="empty">Sem tamanhos.</div>`}</div>
+    </section>
+    <section class="panel"><h3>Saúde e inscrição <small>do relatório</small></h3>
+      <div class="list">
+        <div class="li"><span class="grow">Condição médica</span><b class="num">${sim("condicaoMedica").length}</b></div>
+        <div class="li"><span class="grow">Usa medicamento</span><b class="num">${sim("medicamento").length}</b></div>
+        <div class="li"><span class="grow">Restrição alimentar</span><b class="num">${sim("restricaoAlimentar").length}</b></div>
+        <div class="li"><span class="grow">Pagamento pendente</span><b class="num">${pend}</b></div>
+        <div class="li"><span class="grow">Compra cancelada</span><b class="num">${canc}</b></div>
+      </div>
+    </section>`;
+}
 function vPainel() {
   const s = stats();
   const kits = topKits(), meta = S.config.metaMRE || 110;
@@ -292,6 +326,7 @@ function vPainel() {
     <section class="panel"><h3>Em andamento <small>checklist</small></h3>
       <div class="list">${s.tAnd.length ? s.tAnd.map(t => `<div class="li"><span class="grow">${esc(t.titulo)}</span><span class="tag">${esc(t.responsavel || "sem resp.")}</span></div>`).join("") : `<div class="empty">Nenhuma tarefa em andamento.</div>`}</div>
     </section>
+    ${painelInscricao()}
   </div>`;
 }
 
@@ -325,6 +360,8 @@ function admOptions() {
   return [...new Set([...ADMS, ...S.P.map(p => p.adm).filter(Boolean)])].sort((x, y) => norm(x).localeCompare(norm(y)));
 }
 
+const tagsInscricao = p => (cancelado(p) ? ' <span class="chip bad">Compra cancelada</span>' : p.inscricao === "pendente" ? ' <span class="chip wait">Pagamento pendente</span>' : "")
+  + (saudeAlerta(p) ? ' <span class="tag saude" title="Tem condição médica, medicamento ou restrição alimentar">Saúde</span>' : "");
 function vPessoas(tipo) {
   const lg = tipo === "legendario";
   const rows = filterPeople();
@@ -348,6 +385,7 @@ function vPessoas(tipo) {
   <div class="head"><div><h2>${lg ? "Legendários" : "Participantes"}</h2><p>${lg ? "Servos do TOP: equipe, atestado e termo LGND." : "Cadastro, atestado, termo, grupo e NFC de cada participante."} Toque no status para avançar. Quem mexer por último vira o ADM responsável.</p></div>
     <div class="actions">
       ${S.isOwner && total ? `<button class="btn ${sel ? "primary" : ""}" type="button" data-act="selecionar" aria-pressed="${sel}">${ico("check")} ${sel ? "Concluir seleção" : "Selecionar"}</button>` : ""}
+      <button class="btn" type="button" data-act="importar">${ico("upload")} Importar relatório</button>
       <button class="btn" type="button" data-act="colar">${ico("paste")} Colar lista</button>
       <button class="btn primary" type="button" data-act="novo">${ico("plus")} ${lg ? "Novo legendário" : "Novo participante"}</button>
     </div></div>
@@ -370,7 +408,7 @@ function vPessoas(tipo) {
     <thead><tr>${sel ? `<th style="width:36px"><input type="checkbox" class="selbox" data-selall="1" ${todos ? "checked" : ""} aria-label="Selecionar todos"></th>` : ""}<th>Nome</th><th>WhatsApp</th>${lg ? "<th>Equipe</th>" : ""}<th>Atestado</th><th>Termo</th>${lg ? "" : "<th>Grupo · NFC</th><th>Família</th>"}<th>Responsável</th><th></th></tr></thead>
     <tbody>${rows.map(p => `<tr class="${S.sel.ids.has(p.id) ? "picked" : ""}">
       ${sel ? `<td>${caixa(p)}</td>` : ""}
-      <td><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div></td>
+      <td><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div></td>
       <td class="num" style="white-space:nowrap"><div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">${waBtn(p)}<span class="hint" style="font-size:12px">${esc(p.telefone || "sem telefone")}</span></div></td>
       ${lg ? `<td>${esc(p.equipe || "—")}</td>` : ""}
       <td>${atest(p)}</td>
@@ -380,7 +418,7 @@ function vPessoas(tipo) {
       <td><button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></td>
     </tr>`).join("")}</tbody></table></div>
   <div class="cards">${rows.map(p => `<article class="pcard ${S.sel.ids.has(p.id) ? "picked" : ""}">
-      <div class="top">${caixa(p)}<div class="pname" style="flex:1">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(p.equipe) : ""}</small></div>
+      <div class="top">${caixa(p)}<div class="pname" style="flex:1">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(p.equipe) : ""}</small></div>
         <button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></div>
       <div class="row"><span class="lbl">Atestado</span>${cyc(ATESTADO, "atestado", p)}<span class="lbl">Termo</span>${cyc(TERMO, "termo", p)}</div>
       <div class="row" style="justify-content:space-between"><div class="row">${ticks(p)}${!lg && p.familia ? `<span class="tag">Família ${String(p.familia).padStart(2, "0")}</span>` : ""}</div>${waBtn(p)}</div>
@@ -692,6 +730,8 @@ function render() {
   const html = other + (v === "painel" ? vPainel()
     : v === "tops" ? vTops()
     : v === "usuarios" ? vUsuarios()
+    : v === "historico" ? vHistorico()
+    : v === "pendencias" ? vPendencias()
     : v === "participantes" ? vPessoas("participante")
     : v === "legendarios" ? vPessoas("legendario")
     : v === "familias" ? vFamilias()
@@ -700,9 +740,9 @@ function render() {
     : vPista());
   const view = $("#view");
   const focusId = document.activeElement && document.activeElement.id;
-  const caret = focusId === "q" ? document.activeElement.selectionStart : null;
+  const caret = focusId === "q" || focusId === "hq" ? document.activeElement.selectionStart : null;
   view.innerHTML = html;
-  if (focusId === "q" && $("#q")) { const q = $("#q"); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
+  if ((focusId === "q" || focusId === "hq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
 }
 
 /* ---------- Formulários ---------- */
@@ -743,6 +783,7 @@ function personForm(p, tipo) {
         <label><input type="checkbox" id="f-nfc" name="nfc" ${p.nfc ? "checked" : ""}> NFC registrado</label>
       </div></div>`}
       <div class="field full"><label for="f-obs">Observações</label><textarea id="f-obs" name="obs">${esc(p.obs)}</textarea></div>
+      ${fichaHtml(p)}
     </div>
     <p class="hint" style="margin:0">${p.adm ? `Responsável atual: <b>${esc(p.adm)}</b>${p.admEm ? " (" + esc(quando(p.admEm)) + ")" : ""}. ` : ""}Ao salvar, você${ME.adm ? ` (${esc(ME.adm)})` : ""} passa a ser o ADM responsável.</p>
     <div class="warn-text" id="dupWarn" hidden></div>
@@ -1103,16 +1144,29 @@ const WRITE_KEYS = ["editDia", "act", "edit", "editTask", "editItem", "editTop",
 function debounceWrite(key, fn, ms = 500) { clearTimeout(pending.get(key)); pending.set(key, setTimeout(() => { pending.delete(key); fn(); }, ms)); }
 
 document.addEventListener("click", e => {
+  const cob = e.target.closest("a[data-cobrar]");
+  if (cob) { const p = S.P.find(x => x.id === cob.dataset.cobrar); if (p) registrarCobranca(p); return; }
   const t = e.target.closest("button, [data-close]");
   if (!t) return;
   if (t.matches("[data-close]") && e.target === t) { closeModal(); return; }
   if (t.matches("[data-close-btn]")) { closeModal(); return; }
   const d = t.dataset;
   if (d.go) { go(d.go); return; }
+  if (d.pf) { S.pf[d.pf] = d.v; render(); return; }
+  if (d.pendAct === "msg") { msgForm(); return; }
+  if (d.pendAct === "copiar") { copiarPendencias(); return; }
+  if (d.pendAct === "seq") { if (podeEditar()) cobrarSequencia(); return; }
+  if (d.histAct === "atualizar") { S.histOk = false; render(); return; }
   if (d.act === "sair") { sair(); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
   if (d.act === "novo") { personForm(null, S.view === "legendarios" ? "legendario" : "participante"); return; }
+  if (d.act === "importar") { importForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
+  if (d.restaurar && S.isOwner) {
+    const h = S.hist.find(x => String(x.id) === d.restaurar);
+    if (h && h.dados) save(() => api.set(h.col, h.doc_id, h.dados), `${h.nome || "Registro"} restaurado`);
+    return;
+  }
   if (d.act === "colar") { pasteForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.act === "nova-tarefa") { taskForm(); return; }
   if (d.act === "novo-item") { itemForm(); return; }
@@ -1171,11 +1225,15 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("input", e => {
   if (e.target.id === "q") { S.f.q = e.target.value; render(); }
+  if (e.target.id === "hq") { S.hf.q = e.target.value; render(); }
 });
 document.addEventListener("change", e => {
   if (e.target.dataset.sel && S.isOwner) { const id = e.target.dataset.sel; e.target.checked ? S.sel.ids.add(id) : S.sel.ids.delete(id); render(); return; }
   if (e.target.dataset.selall && S.isOwner) { S.sel.ids = new Set(e.target.checked ? filterPeople().map(p => p.id) : []); render(); return; }
   if (e.target.id === "admSel") { S.f.adm = e.target.value; render(); }
+  if (e.target.id === "pfAdm") { S.pf.adm = e.target.value; render(); }
+  const hk = { hQuem: "quem", hAba: "aba", hAcao: "acao" }[e.target.id];
+  if (hk) { S.hf[hk] = e.target.value; render(); }
   if (e.target.dataset.fam && !podeEditar()) { toast("Seu acesso é somente leitura."); render(); return; }
   if (e.target.dataset.fam) { const v = e.target.value; if (v) touch(e.target.dataset.fam, { familia: Number(v) }, `Família ${v.padStart(2, "0")} definida`); }
 });
@@ -1185,6 +1243,379 @@ document.addEventListener("keydown", e => {
   if ($("#modalRoot").innerHTML) closeModal();
   else if ($(".app").classList.contains("menu-open")) { setMenu(false); $("#menuBtn").focus(); }
 });
+
+/* ---------- Pendências: quem ainda deve atestado, termo ou entrar no grupo, com cobrança pelo WhatsApp ---------- */
+const PEND = { atestado: "atestado médico", termo: "assinatura do termo", grupo: "entrar no grupo de participantes" };
+const MSG_COBRANCA = "Olá {nome}, tudo bem? Aqui é {adm}, da equipe ADM do {top} Legendários 3 Colinas. Para garantir sua participação, ainda falta: {pendencias}. Consegue resolver o quanto antes? Qualquer dúvida estou à disposição.";
+const msgCobranca = () => store.get("adm3-msg-cobranca") || MSG_COBRANCA;
+const cancelado = p => p.inscricao === "cancelada";
+function pendDe(p) {
+  if (cancelado(p)) return [];
+  const r = [];
+  if (p.atestado !== "confirmado") r.push("atestado");
+  if (p.termo !== "assinado") r.push("termo");
+  if (p.tipo !== "legendario" && !p.noGrupo) r.push("grupo");
+  return r;
+}
+const listaE = a => a.length > 1 ? a.slice(0, -1).join(", ") + " e " + a[a.length - 1] : (a[0] || "");
+function textoCobranca(p, tpl = msgCobranca()) {
+  const first = String(p.nome || "").trim().split(/\s+/)[0] || "";
+  return tpl.replace(/\{nome\}/g, first).replace(/\{adm\}/g, (ME.adm || "a equipe").split(" ")[0])
+    .replace(/\{top\}/g, topName()).replace(/\{pendencias\}/g, listaE(pendDe(p).map(k => PEND[k])));
+}
+const waCobrar = (p, txt) => { const n = waNumber(p.telefone); return n ? `https://wa.me/${n}?text=${encodeURIComponent(txt || textoCobranca(p))}` : ""; };
+function pendLista() {
+  const { quem, oque, adm } = S.pf;
+  return S.P.filter(p => quem === "todos" || (quem === "legendario") === (p.tipo === "legendario"))
+    .filter(p => !adm || (p.adm || "") === adm)
+    .filter(p => { const k = pendDe(p); return oque === "qualquer" ? k.length : k.includes(oque); })
+    .sort((a, b) => (a.cobradoEm || "").localeCompare(b.cobradoEm || "") || norm(a.nome).localeCompare(norm(b.nome)));
+}
+function diasParaTop() {
+  const ini = (topDoc() || {}).inicio; if (!ini) return null;
+  const d = Math.ceil((new Date(ini + "T00:00:00") - new Date()) / 864e5);
+  return isNaN(d) ? null : d;
+}
+function vPendencias() {
+  const vivos = S.P.filter(p => !cancelado(p));
+  const conta = k => vivos.filter(p => pendDe(p).includes(k)).length;
+  const rows = pendLista(), dias = diasParaTop();
+  const seg = (k, v, l) => `<button type="button" data-pf="${k}" data-v="${v}" aria-pressed="${S.pf[k] === v}">${l}</button>`;
+  const tags = p => pendDe(p).map(k => `<span class="chip ${k === "grupo" ? "sent" : "wait"}">${k === "atestado" ? "Atestado" : k === "termo" ? "Termo" : "Grupo"}</span>`).join("");
+  return `
+  <div class="head"><div><h2>Pendências</h2><p>Quem ainda deve atestado, termo ou entrar no grupo. Toque em <b>Cobrar</b> para abrir o WhatsApp com a mensagem pronta. Quem foi cobrado há mais tempo aparece primeiro.</p></div>
+    <div class="actions">
+      <button class="btn" type="button" data-pend-act="msg">${ico("chat")} Editar mensagem</button>
+      <button class="btn" type="button" data-pend-act="copiar" ${rows.length ? "" : "disabled"}>${ico("paste")} Copiar lista</button>
+      ${podeEditar() ? `<button class="btn primary" type="button" data-pend-act="seq" ${rows.length ? "" : "disabled"}>${ico("wa")} Cobrar em sequência (${rows.length})</button>` : ""}
+    </div></div>
+  ${dias != null ? `<div class="banner"><span>${dias > 0 ? `Faltam <b>${dias} dia${dias > 1 ? "s" : ""}</b> para o ${esc(topName())}.` : dias === 0 ? `O ${esc(topName())} começa hoje.` : `O ${esc(topName())} já começou.`} ${rows.length} pessoa(s) com pendência neste filtro.</span></div>` : ""}
+  <div class="kpis">
+    <button class="kpi ${conta("atestado") ? "alert" : ""}" type="button" data-pf="oque" data-v="atestado"><span class="lbl">Sem atestado</span><span class="val num">${conta("atestado")}</span><span class="sub">participantes e legendários</span></button>
+    <button class="kpi ${conta("termo") ? "alert" : ""}" type="button" data-pf="oque" data-v="termo"><span class="lbl">Sem termo</span><span class="val num">${conta("termo")}</span><span class="sub">participantes e legendários</span></button>
+    <button class="kpi" type="button" data-pf="oque" data-v="grupo"><span class="lbl">Fora do grupo</span><span class="val num">${conta("grupo")}</span><span class="sub">participantes</span></button>
+    <div class="kpi"><span class="lbl">Tudo em dia</span><span class="val num">${vivos.filter(p => !pendDe(p).length).length}</span><span class="sub">de ${vivos.length} pessoas</span></div>
+  </div>
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Quem">${seg("quem", "participante", "Participantes")}${seg("quem", "legendario", "Legendários")}${seg("quem", "todos", "Todos")}</div>
+    <select class="sel" id="pfAdm" aria-label="ADM responsável"><option value="">Todos os ADMs</option>${admOptions().map(a => `<option ${S.pf.adm === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>
+  </div>
+  <div class="seg" role="group" aria-label="Pendência">${seg("oque", "qualquer", "Qualquer pendência")}${seg("oque", "atestado", "Atestado")}${seg("oque", "termo", "Termo")}${seg("oque", "grupo", "Grupo")}</div>
+  ${rows.length ? `<section class="panel"><div class="list pend">${rows.map(p => `<div class="li pendrow">
+      <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
+        <div class="pendtags">${tags(p)}${p.dataAtestado && p.atestado !== "confirmado" ? `<span class="hint">previsão: ${esc(p.dataAtestado)}</span>` : ""}</div>
+        <small class="hint">${esc(p.adm || "Sem ADM")}${p.cobradoEm ? ` · cobrado ${esc(quando(p.cobradoEm))}` : " · ainda não cobrado"}</small></div>
+      ${waNumber(p.telefone) ? `<a class="wa" href="${waCobrar(p)}" target="_blank" rel="noopener" data-cobrar="${p.id}">${ico("wa")} Cobrar</a>` : `<span class="wa off">${ico("wa")} Sem telefone</span>`}
+    </div>`).join("")}</div></section>`
+  : `<section class="panel"><div class="empty">Ninguém com essa pendência. Bom trabalho.</div></section>`}`;
+}
+// marca que foi cobrado e passa "pendente" para "mensagem enviada"
+function registrarCobranca(p) {
+  if (!podeEditar()) return;
+  const k = pendDe(p), data = { cobradoEm: new Date().toISOString() };
+  if (k.includes("atestado") && (p.atestado || "pendente") === "pendente") data.atestado = "enviada";
+  if (k.includes("termo") && (p.termo || "pendente") === "pendente") data.termo = "enviada";
+  if (k.includes("grupo") && !p.msgGrupo) data.msgGrupo = true;
+  touch(p.id, data);
+}
+function msgForm() {
+  modal(`
+    <h3>Mensagem de cobrança</h3>
+    <p class="hint" style="margin:0">Use <b>{nome}</b>, <b>{adm}</b>, <b>{top}</b> e <b>{pendencias}</b>: o app troca pelo primeiro nome da pessoa, o seu nome, o nome do TOP e o que falta. Fica salva neste aparelho.</p>
+    <div class="field"><label for="f-msg">Mensagem</label><textarea id="f-msg" name="msg" style="min-height:150px">${esc(msgCobranca())}</textarea></div>
+    <div class="modal-foot"><div><button class="btn ghost" type="button" id="msgPadrao">Voltar ao padrão</button></div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { store.set("adm3-msg-cobranca", String(fd.get("msg") || "").trim() || MSG_COBRANCA); closeModal(); toast("Mensagem salva"); render(); });
+  $("#msgPadrao").onclick = () => { $("#f-msg").value = MSG_COBRANCA; };
+}
+function cobrarSequencia() {
+  const fila = pendLista().filter(p => waNumber(p.telefone));
+  if (!fila.length) { toast("Ninguém com telefone nesse filtro."); return; }
+  let i = 0;
+  const passo = () => {
+    if (i >= fila.length) { closeModal(); toast(`Cobrança concluída: ${fila.length} pessoa(s)`); return; }
+    const p = S.P.find(x => x.id === fila[i].id) || fila[i];
+    modal(`
+      <h3>Cobrar ${i + 1} de ${fila.length}</h3>
+      <div class="bar"><i style="width:${pct(i, fila.length)}%"></i></div>
+      <div><b style="font-size:18px">${esc(p.nome)}</b><div class="pendtags">${pendDe(p).map(k => `<span class="chip wait">${PEND[k]}</span>`).join("")}</div>
+        <small class="hint">${esc(p.telefone || "")} · ${esc(p.adm || "Sem ADM")}${p.cobradoEm ? " · cobrado " + esc(quando(p.cobradoEm)) : ""}</small></div>
+      <div class="field"><label for="f-txt">Mensagem (pode ajustar antes de enviar)</label><textarea id="f-txt" style="min-height:130px">${esc(textoCobranca(p))}</textarea></div>
+      <div class="modal-foot"><div><button class="btn ghost" type="button" data-close-btn>Parar</button></div>
+        <div class="actions"><button class="btn" type="button" id="seqPular">Pular</button><a class="btn primary" id="seqWa" href="#" target="_blank" rel="noopener">${ico("wa")} Abrir WhatsApp</a></div></div>`, () => {});
+    const wa = $("#seqWa");
+    const atual = () => { wa.href = waCobrar(p, $("#f-txt").value); };
+    atual(); $("#f-txt").addEventListener("input", atual);
+    wa.addEventListener("click", () => { registrarCobranca(p); i++; setTimeout(passo, 400); });
+    $("#seqPular").onclick = () => { i++; passo(); };
+  };
+  passo();
+}
+async function copiarPendencias() {
+  const rows = pendLista();
+  const txt = `Pendências · ${topName()}\n\n` + rows.map(p => `• ${p.nome}: ${listaE(pendDe(p).map(k => k === "grupo" ? "grupo" : k))}${p.adm ? ` (${p.adm})` : ""}`).join("\n");
+  try { await navigator.clipboard.writeText(txt); toast(`Lista copiada (${rows.length})`); }
+  catch { modal(`<h3>Copiar lista</h3><textarea style="min-height:240px;width:100%" readonly>${esc(txt)}</textarea><div class="modal-foot"><span></span><button class="btn" type="button" data-close-btn>Fechar</button></div>`, () => {}); }
+}
+
+/* ---------- Histórico de alterações (só o dono). No Supabase vem da tabela adm_historico; na demonstração fica na memória. ---------- */
+const CAMPOS = { nome: "Nome", telefone: "Telefone", email: "E-mail", atestado: "Atestado", termo: "Termo", dataAtestado: "Previsão do atestado",
+  cidade: "Cidade", idade: "Idade", familia: "Família", nfc: "NFC", msgGrupo: "Mensagem do grupo", noGrupo: "Entrou no grupo", obs: "Observações",
+  equipe: "Equipe", status: "Status", qtd: "Quantidade", titulo: "Tarefa", responsavel: "Responsável", fornecedor: "Fornecedor", item: "Item",
+  local: "Local", trechos: "Trechos", kitsMRE: "Kits MRE", topAtual: "TOP atual", inscricao: "Inscrição", ficha: "Dados da inscrição",
+  tipo: "Tipo", top: "TOP", mais40: "+40", cobradoEm: "Cobrado em", fase: "Fase", ordem: "Ordem", metaMRE: "Meta MRE", alertaBaixo: "Alerta de estoque",
+  inicio: "Início", fim: "Fim", finalizadoEm: "Finalizado em", resp: "Responsável", dia: "Dia" };
+const IGNORAR = ["adm", "admId", "admEm", "atualizado"];
+function abaDoRegistro(col, d) {
+  if (col === "pessoas") return d && d.tipo === "legendario" ? "Legendários" : "Participantes";
+  return { tarefas: "Checklist", estoque: "Estoque", pista: "Pista", tops: "Tops", config: "Configurações" }[col] || col;
+}
+function fmtValor(k, v) {
+  if (v == null || v === "") return "vazio";
+  if (k === "atestado") return opt(ATESTADO, v).l;
+  if (k === "termo") return opt(TERMO, v).l;
+  if (k === "status" && TASK.some(o => o.v === v)) return opt(TASK, v).l;
+  if (k === "fase") return opt(FASES, v).l;
+  if (k === "familia") return "Família " + String(v).padStart(2, "0");
+  if (k === "cobradoEm" || k === "criadoEm") return quando(v);
+  if (k === "inscricao") return { cancelada: "Compra cancelada", pendente: "Pagamento pendente", ativa: "Ativa" }[v] || v;
+  if (typeof v === "boolean") return v ? "Sim" : "Não";
+  if (Array.isArray(v)) return `${v.length} item(ns)`;
+  if (typeof v === "object") return "atualizado";
+  return String(v).length > 60 ? String(v).slice(0, 57) + "…" : String(v);
+}
+function diffDados(a, b) {
+  const r = {};
+  new Set([...Object.keys(a || {}), ...Object.keys(b || {})]).forEach(k => {
+    if (IGNORAR.includes(k)) return;
+    const x = (a || {})[k], y = (b || {})[k];
+    if (JSON.stringify(x ?? null) !== JSON.stringify(y ?? null)) r[k] = [x ?? null, y ?? null];
+  });
+  return r;
+}
+function logLocal(col, id, antes, depois) {
+  if (!DEMO) return;
+  const acao = !antes ? "criou" : !depois ? "apagou" : "alterou";
+  const mud = acao === "alterou" ? diffDados(antes, depois) : null;
+  if (mud && !Object.keys(mud).length) return;
+  const d = depois || antes || {};
+  S.hist.unshift({ id: "h" + Date.now() + Math.random(), em: new Date().toISOString(), quem: ME.adm || "Demonstração", col, doc_id: id, acao,
+    nome: d.nome || d.titulo || d.item || d.dia || "", mudancas: mud, dados: acao === "apagou" ? antes : null, tipo: d.tipo });
+  if (S.view === "historico") render();
+}
+async function carregarHist() {
+  if (DEMO || !S.isOwner) return;
+  const r = await sb.from("adm_historico").select("*").order("em", { ascending: false }).limit(1000);
+  S.histErro = r.error ? (/adm_historico|does not exist|schema cache/i.test(r.error.message || "") ? "sem-tabela" : erroAmigavel(r.error)) : "";
+  if (!r.error) S.hist = r.data;
+  S.histOk = true; if (S.view === "historico") render();
+}
+function vHistorico() {
+  if (!DEMO && !S.histOk) { carregarHist(); return `<div class="head"><div><h2>Histórico</h2><p>Carregando…</p></div></div>`; }
+  if (S.histErro === "sem-tabela") return `
+    <div class="head"><div><h2>Histórico</h2></div></div>
+    <section class="panel"><div class="empty">Falta criar o histórico no banco. No Supabase, abra <b>SQL Editor → New query</b>, cole o arquivo <b>supabase/historico.sql</b> e clique em <b>Run</b>. A partir daí, toda alteração fica registrada aqui.</div></section>`;
+  const h = S.hf, nq = norm(h.q);
+  const quem = [...new Set(S.hist.map(x => x.quem))].sort();
+  const linha = x => ({ ...x, aba: abaDoRegistro(x.col, x.dados || { tipo: x.tipo || ((S.pessoas.find(p => p.id === x.doc_id) || {}).tipo) }) });
+  const rows = S.hist.map(linha).filter(x => (!h.quem || x.quem === h.quem) && (!h.aba || x.aba === h.aba) && (!h.acao || x.acao === h.acao)
+    && (!nq || norm(x.nome).includes(nq) || norm(x.quem).includes(nq)));
+  const abas = [...new Set(S.hist.map(linha).map(x => x.aba))].sort();
+  const verbo = { criou: "criou", alterou: "alterou", apagou: "apagou" };
+  let dia = "";
+  const itens = rows.slice(0, 400).map(x => {
+    const d = new Date(x.em), dd = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" });
+    const cab = dd !== dia ? `<div class="hdia">${esc(dd)}</div>` : ""; dia = dd;
+    const mud = x.mudancas ? Object.entries(x.mudancas).map(([k, [a, b]]) => `<li><span>${esc(CAMPOS[k] || k)}:</span> ${esc(fmtValor(k, a))} → <b>${esc(fmtValor(k, b))}</b></li>`).join("") : "";
+    return `${cab}<div class="hrow ${x.acao}">
+      <span class="htime num">${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+      <div class="grow"><div><b>${esc(x.quem)}</b> ${verbo[x.acao]} <span class="tag">${esc(x.aba)}</span> ${esc(x.nome || x.doc_id)}</div>
+        ${mud ? `<ul class="hmud">${mud}</ul>` : ""}</div>
+      ${x.acao === "apagou" && x.dados ? `<button class="btn" type="button" data-restaurar="${esc(String(x.id))}">Restaurar</button>` : ""}
+    </div>`;
+  }).join("");
+  return `
+  <div class="head"><div><h2>Histórico de alterações</h2><p>Quem criou, alterou ou apagou cada coisa no app, e o que mudou. Só você vê esta aba. O que foi apagado pode ser restaurado.</p></div>
+    <div class="actions">${DEMO ? "" : `<button class="btn" type="button" data-hist-act="atualizar">Atualizar</button>`}</div></div>
+  ${S.histErro ? `<div class="banner"><span>Não foi possível carregar o histórico. ${esc(S.histErro)}</span></div>` : ""}
+  <div class="toolbar">
+    <label class="search">${ico("search")}<input id="hq" type="search" placeholder="Buscar por nome ou ADM" value="${esc(h.q)}" aria-label="Buscar no histórico"></label>
+    <select class="sel" id="hQuem" aria-label="Quem"><option value="">Todos os ADMs</option>${quem.map(q => `<option ${h.quem === q ? "selected" : ""}>${esc(q)}</option>`).join("")}</select>
+    <select class="sel" id="hAba" aria-label="Aba"><option value="">Todas as abas</option>${abas.map(q => `<option ${h.aba === q ? "selected" : ""}>${esc(q)}</option>`).join("")}</select>
+    <select class="sel" id="hAcao" aria-label="Ação"><option value="">Tudo</option>${["criou", "alterou", "apagou"].map(q => `<option value="${q}" ${h.acao === q ? "selected" : ""}>${q === "criou" ? "Criados" : q === "alterou" ? "Alterados" : "Apagados"}</option>`).join("")}</select>
+  </div>
+  <div class="hint num">${rows.length} alteração(ões)${rows.length > 400 ? " · mostrando as 400 mais recentes" : ""}</div>
+  ${rows.length ? `<section class="panel hist">${itens}</section>` : `<section class="panel"><div class="empty">${S.hist.length ? "Nada com esse filtro." : "Nenhuma alteração registrada ainda. Tudo o que a equipe mudar a partir de agora aparece aqui."}</div></section>`}`;
+}
+
+/* ---------- Importar o relatório de inscrições (xlsx/csv da plataforma) sem repetir quem já está ---------- */
+let xlsxLib = null;
+function carregarXlsx() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return xlsxLib || (xlsxLib = new Promise((ok, erro) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    s.onload = () => ok(window.XLSX); s.onerror = () => { xlsxLib = null; erro(new Error("Não foi possível abrir o leitor de planilhas. Confira a internet.")); };
+    document.head.appendChild(s);
+  }));
+}
+const limpaNome = n => { n = String(n || "").replace(/\s+/g, " ").trim(); return n === n.toUpperCase() || n === n.toLowerCase() ? n.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()).replace(/ (Da|De|Do|Das|Dos|E) /g, m => m.toLowerCase()) : n; };
+const UF = { "sao paulo": "SP", "minas gerais": "MG", "rio de janeiro": "RJ", "parana": "PR", "goias": "GO", "mato grosso do sul": "MS", "mato grosso": "MT", "santa catarina": "SC", "rio grande do sul": "RS", "bahia": "BA", "distrito federal": "DF", "espirito santo": "ES" };
+const vazio = v => v == null || String(v).trim() === "" ;
+function lerRelatorio(linhas) {
+  const head = (linhas[0] || []).map(norm);
+  const col = (...nomes) => { for (const n of nomes) { const i = head.indexOf(norm(n)); if (i >= 0) return i; } return -1; };
+  const iNome = col("Nome", "Nomes", "Nome completo");
+  if (iNome < 0) throw new Error("Não achei a coluna Nome na primeira linha da planilha.");
+  const sts = head.map((h, i) => h === "status" ? i : -1).filter(i => i >= 0);
+  const I = { email: col("Email", "E-mail"), tel: col("Telefone", "WhatsApp", "Celular"), ddi: col("DDI"), idade: col("Idade"), cidade: col("Cidade que reside", "Cidade"),
+    uf: col("Estado que reside", "Estado"), tipo: col("Top para quem"), ingresso: col("Ingresso"), nasc: col("Data Nascimento"), camisa: col("Tamanho camisa"),
+    peso: col("Peso"), altura: col("Altura"), cond: col("Condicionamento físico"), medica: col("Condição médica"), remedio: col("Faz uso de medicamento"),
+    alim: col("Tem restrição alimentar"), igreja: col("Igreja que Frequenta"), prof: col("Profissão"), insta: col("Qual seu Instagram"),
+    cNome: col("Nome para contato"), cTel: col("Whatsapp para contato"), eNome: col("Nome esposa ou mãe"), eTel: col("Telefone da esposa ou mãe"),
+    parente: col("Parente"), sede: col("Sede que faz parte"), numLg: col("Número Legendário"), serviu: col("Você já serviu antes"),
+    areasJa: col("Quais áreas já serviu"), areas: col("Quais áreas pretende servir"), hab: col("Habilidades"), temVeic: col("Tem veículo"),
+    veic: col("Descrição do veículo"), temEq: col("Tem equipamento ou recurso próprio"), eq: col("Descrição equipamento/recurso"), codigo: col("Código"), cad: col("Data cadastro") };
+  const g = (r, i) => i >= 0 && !vazio(r[i]) ? String(r[i]).replace(/\s+/g, " ").trim() : "";
+  const out = [];
+  linhas.slice(1).forEach(r => {
+    const nome = limpaNome(r[iNome]); if (!nome) return;
+    const st = sts.map(i => norm(r[i])).join(" ");
+    const tipoTxt = norm(g(r, I.tipo) || g(r, I.ingresso));
+    const tipo = /legendario/.test(tipoTxt) ? "legendario" : "participante";
+    let tel = g(r, I.tel); if (tel && !/^\+/.test(tel) && digits(tel).length <= 11 && g(r, I.ddi)) tel = "+" + g(r, I.ddi) + " " + tel;
+    const lg = tipo === "legendario";
+    const ficha = {
+      nascimento: g(r, I.nasc), camisa: g(r, I.camisa), peso: g(r, I.peso) && g(r, I.peso) + " kg", altura: g(r, I.altura) && g(r, I.altura) + " cm",
+      condicionamento: g(r, I.cond), condicaoMedica: g(r, I.medica), medicamento: g(r, I.remedio), restricaoAlimentar: g(r, I.alim),
+      igreja: g(r, I.igreja), profissao: g(r, I.prof), instagram: g(r, I.insta), parente: g(r, I.parente),
+      contato: lg ? [g(r, I.eNome), g(r, I.eTel)].filter(Boolean).join(" · ") : [g(r, I.cNome), g(r, I.cTel)].filter(Boolean).join(" · "),
+      sede: g(r, I.sede), numeroLegendario: g(r, I.numLg), jaServiu: g(r, I.serviu), areasServiu: g(r, I.areasJa), areasPretende: g(r, I.areas), habilidades: g(r, I.hab),
+      veiculo: norm(g(r, I.temVeic)) === "sim" ? g(r, I.veic) || "Sim" : "", equipamento: norm(g(r, I.temEq)) === "sim" ? g(r, I.eq) || "Sim" : "",
+      ingresso: g(r, I.ingresso), codigo: g(r, I.codigo), cadastro: g(r, I.cad),
+    };
+    Object.keys(ficha).forEach(k => { if (!ficha[k]) delete ficha[k]; });
+    const idade = Number(g(r, I.idade)) || null;
+    out.push({ nome, tipo, email: g(r, I.email).toLowerCase(), telefone: tel, idade, cidade: [g(r, I.cidade), UF[norm(g(r, I.uf))] || g(r, I.uf)].filter(Boolean).join(" - "),
+      inscricao: /cancel/.test(st) ? "cancelada" : /pendente/.test(st) ? "pendente" : "ativa", ficha });
+  });
+  return out;
+}
+function acharNoApp(n) {
+  const base = S.P.filter(p => (p.tipo === "legendario") === (n.tipo === "legendario"));
+  const nn = norm(n.nome), dt = digits(n.telefone);
+  let p = base.find(p => norm(p.nome) === nn); if (p) return { p, por: "nome" };
+  if (dt.length >= 10) { p = base.find(p => digits(p.telefone) === dt); if (p) return { p, por: "telefone" }; }
+  if (n.email) { p = base.find(p => (p.email || "").toLowerCase() === n.email && norm(p.nome).split(" ")[0] === nn.split(" ")[0]); if (p) return { p, por: "e-mail" }; }
+  return null;
+}
+function analisarImport(lidos) {
+  const chave = n => n.tipo + "|" + norm(n.nome);
+  const ativos = new Set(lidos.filter(n => n.inscricao !== "cancelada").map(chave));
+  const vistos = new Set(), novos = [], ja = [], canc = [];
+  lidos.forEach(n => {
+    if (n.inscricao === "cancelada") {
+      if (ativos.has(chave(n)) || vistos.has("c" + chave(n))) return;   // cancelou e comprou de novo: vale a compra ativa
+      vistos.add("c" + chave(n));
+      const a = acharNoApp(n); canc.push({ n, p: a && a.p }); return;
+    }
+    if (vistos.has(chave(n))) return; vistos.add(chave(n));
+    const a = acharNoApp(n);
+    if (a) ja.push({ n, p: a.p, por: a.por }); else novos.push(n);
+  });
+  return { novos, ja, canc, total: lidos.length };
+}
+function importForm(tipoAtual) {
+  modal(`
+    <h3>Importar relatório de inscrições</h3>
+    <p class="hint" style="margin:0">Envie a planilha de inscritos da plataforma (.xlsx ou .csv). O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Inscrições canceladas são ignoradas. O CPF não é importado.</p>
+    <div class="field"><label for="f-arq">Planilha</label><input id="f-arq" type="file" accept=".xlsx,.xls,.csv"></div>
+    <div id="impPrev" class="imp-prev"></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="impBtn" disabled>Importar</button></div></div>`,
+  async () => {
+    if (!R) return;
+    const marcados = new Set([...document.querySelectorAll("[data-imp-novo]:checked")].map(x => Number(x.dataset.impNovo)));
+    const novos = R.novos.filter((_, i) => marcados.has(i));
+    const completar = $("#impCompletar") && $("#impCompletar").checked;
+    const marcarCanc = $("#impCanc") && $("#impCanc").checked;
+    closeModal();
+    await importarRelatorio(novos, completar ? R.ja : [], marcarCanc ? R.canc.filter(c => c.p && !cancelado(c.p)) : []);
+  });
+  let R = null;
+  $("#f-arq").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const prev = $("#impPrev"); prev.innerHTML = `<div class="hint">Lendo ${esc(f.name)}…</div>`; $("#impBtn").disabled = true;
+    try {
+      const X = await carregarXlsx();
+      const wb = X.read(await f.arrayBuffer(), { type: "array" });
+      const linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" });
+      R = analisarImport(lerRelatorio(linhas));
+      prev.innerHTML = previewImport(R);
+      $("#impBtn").disabled = !R.novos.length && !R.ja.length && !R.canc.some(c => c.p);
+      $("#impBtn").textContent = R.novos.length ? `Importar ${R.novos.length} novo(s)` : "Aplicar";
+      prev.addEventListener("change", ev => {
+        if (ev.target.id === "impTodos") document.querySelectorAll("[data-imp-novo]").forEach(x => { x.checked = ev.target.checked; });
+        const n = document.querySelectorAll("[data-imp-novo]:checked").length;
+        $("#impBtn").textContent = n ? `Importar ${n} novo(s)` : "Aplicar";
+      });
+    } catch (err) { console.error(err); R = null; prev.innerHTML = `<div class="warn-text">${esc(err.message || err)}</div>`; }
+  });
+}
+function previewImport(R) {
+  const tl = n => n.tipo === "legendario" ? "Legendário" : "Participante";
+  const nP = R.novos.filter(n => n.tipo !== "legendario").length, nL = R.novos.length - nP;
+  const cancApp = R.canc.filter(c => c.p);
+  const tag = n => [n.inscricao === "pendente" ? '<span class="chip wait">Pagamento pendente</span>' : "", n.idade >= 40 ? '<span class="tag">+40</span>' : "", n.ficha.camisa ? `<span class="tag">Camisa ${esc(n.ficha.camisa)}</span>` : ""].join(" ");
+  return `
+  <div class="imp-kpis">
+    <div><b class="num">${R.total}</b><span>linhas lidas</span></div>
+    <div class="ok"><b class="num">${R.novos.length}</b><span>novos (${nP} part. · ${nL} LGND)</span></div>
+    <div><b class="num">${R.ja.length}</b><span>já estão no app</span></div>
+    <div class="bad"><b class="num">${R.canc.length}</b><span>compra cancelada</span></div>
+  </div>
+  ${R.novos.length ? `<details open><summary><b>Novos para adicionar (${R.novos.length})</b></summary>
+    <label class="selall"><input type="checkbox" id="impTodos" checked> Marcar todos</label>
+    <ul class="imp-list">${R.novos.map((n, i) => `<li><label><input type="checkbox" data-imp-novo="${i}" checked> <b>${esc(n.nome)}</b> <span class="hint">${tl(n)} · ${esc(n.cidade || "")}${n.idade ? " · " + n.idade + " anos" : ""}</span> ${tag(n)}</label></li>`).join("")}</ul></details>`
+  : `<div class="banner"><span>Ninguém novo: todos os inscritos ativos já estão no app.</span></div>`}
+  ${R.ja.length ? `<details><summary>Já estão no app (${R.ja.length}): não serão repetidos</summary>
+    <ul class="imp-list">${R.ja.map(x => `<li>${esc(x.n.nome)} <span class="hint">${tl(x.n)} · achado pelo ${x.por}</span></li>`).join("")}</ul></details>
+    <label class="selall"><input type="checkbox" id="impCompletar"> Completar os dados de quem já está (idade, cidade, camisa, saúde, contato de emergência). Não muda status, ADM nem nada que já esteja preenchido.</label>` : ""}
+  ${cancApp.length ? `<details open><summary class="bad-text">Compra cancelada, mas estão no app (${cancApp.length})</summary>
+    <ul class="imp-list">${cancApp.map(c => `<li>${esc(c.p.nome)} <span class="hint">${tl(c.n)}</span></li>`).join("")}</ul></details>
+    <label class="selall"><input type="checkbox" id="impCanc" checked> Marcar essas pessoas como <b>compra cancelada</b> no app (não apaga ninguém)</label>` : ""}`;
+}
+async function importarRelatorio(novos, completar, cancelar) {
+  if (!novos.length && !completar.length && !cancelar.length) { toast("Nada para importar."); return; }
+  toast("Importando…");
+  await new Promise(ok => withAdm(stamp => save(async () => {
+    const fila = [
+      ...novos.map(n => () => api.add("pessoas", { nome: n.nome, email: n.email, telefone: n.telefone, cidade: n.cidade, idade: n.idade, tipo: n.tipo,
+        mais40: (n.idade || 0) >= 40, atestado: "pendente", termo: "pendente", dataAtestado: "", obs: "", ficha: n.ficha, inscricao: n.inscricao,
+        ...(n.tipo === "legendario" ? { equipe: "" } : { nfc: false, msgGrupo: false, noGrupo: false, familia: null }),
+        ...stamp, exemplo: false, origem: "relatorio", criadoEm: new Date().toISOString() })),
+      ...completar.map(({ n, p }) => () => {
+        const d = {};
+        ["email", "telefone", "cidade", "idade"].forEach(k => { if (vazio(p[k]) && !vazio(n[k])) d[k] = n[k]; });
+        if (n.idade >= 40 && !p.mais40) d.mais40 = true;
+        const ficha = { ...n.ficha, ...(p.ficha || {}) };
+        if (JSON.stringify(ficha) !== JSON.stringify(p.ficha || {})) d.ficha = ficha;
+        if (n.inscricao === "pendente" && !p.inscricao) d.inscricao = "pendente";
+        return Object.keys(d).length ? api.update("pessoas", p.id, d) : null;
+      }),
+      ...cancelar.map(({ p }) => () => api.update("pessoas", p.id, { inscricao: "cancelada" })),
+    ];
+    for (let i = 0; i < fila.length; i += 8) await Promise.all(fila.slice(i, i + 8).map(f => f()));
+  }, [novos.length && `${novos.length} adicionado(s)`, completar.length && "dados completados", cancelar.length && `${cancelar.length} marcado(s) como cancelado`].filter(Boolean).join(" · ")).then(ok)));
+}
+function fichaHtml(p) {
+  const f = p.ficha; if (!f || !Object.keys(f).length) return "";
+  const L = [["camisa", "Camisa"], ["nascimento", "Nascimento"], ["peso", "Peso"], ["altura", "Altura"], ["condicionamento", "Condicionamento (1 a 5)"],
+    ["condicaoMedica", "Condição médica"], ["medicamento", "Medicamento"], ["restricaoAlimentar", "Restrição alimentar"], ["contato", "Contato de emergência"],
+    ["parente", "Parente no TOP"], ["igreja", "Igreja"], ["profissao", "Profissão"], ["instagram", "Instagram"], ["sede", "Sede"], ["numeroLegendario", "Nº Legendário"],
+    ["jaServiu", "Já serviu"], ["areasServiu", "Áreas que já serviu"], ["areasPretende", "Quer servir em"], ["habilidades", "Habilidades"], ["veiculo", "Veículo"],
+    ["equipamento", "Equipamento"], ["ingresso", "Ingresso"], ["codigo", "Código"], ["cadastro", "Inscrito em"]];
+  return `<div class="field full"><span class="lab">Dados da inscrição</span><dl class="ficha">${L.filter(([k]) => f[k]).map(([k, l]) => `<dt>${l}</dt><dd>${esc(f[k])}</dd>`).join("")}</dl></div>`;
+}
+const saudeAlerta = p => { const f = p.ficha || {}; return [f.condicaoMedica, f.medicamento, f.restricaoAlimentar].some(v => v && !/^n[aã]o\b/i.test(v)); };
 
 /* ---------- Abertura: trilha de luz subindo a crista até o cume enquanto o app carrega ----------
    Aparece depois do login (ou na hora, para quem já está logado). */
@@ -1237,6 +1668,10 @@ function conectarDados() {
       if (JSON.stringify(ME.acesso) !== antes) { db.recarregar(); toast("Seu acesso foi atualizado pelo coordenador."); }
       render();
     }
+  });
+  if (S.isOwner) canal.on("postgres_changes", { event: "INSERT", schema: "public", table: "adm_historico" }, p => {
+    if (!S.hist.some(x => x.id === p.new.id)) S.hist.unshift(p.new);
+    if (S.view === "historico") render();
   });
   canal.subscribe(st => { if (st === "SUBSCRIBED") sharePresence(); });
   setInterval(() => markSeen(), 60 * 1000);

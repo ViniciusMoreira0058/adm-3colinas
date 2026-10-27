@@ -27,7 +27,9 @@ As permissões são conferidas no banco (RLS), não só na tela. Bloquear algué
 5. **Primeiro acesso do dono**: abra o app, toque em **Primeiro acesso? Criar minha senha**, use o e-mail do passo 1 e confirme pelo link que chega no e-mail.
 6. **Equipe**: na aba **Usuários**, cadastre cada pessoa com o e-mail dela e escolha o nível e as abas. Toque em **Enviar no WhatsApp**: a pessoa recebe o link e cria a própria senha em **Primeiro acesso**.
 7. **Participantes**: em **Participantes** e **Legendários**, use **Colar da planilha** para trazer os nomes da planilha. (Os dados pessoais não ficam no GitHub, só no banco.)
-8. **No celular**: abra o endereço da Vercel e toque em **Adicionar à tela inicial** (iPhone: botão Compartilhar; Android: menu ⋮ → Instalar app).
+8. **Histórico de alterações** (só o dono vê): se o banco foi criado antes dele existir, rode também `supabase/historico.sql` no SQL Editor. Ele registra quem criou, alterou ou apagou cada coisa e permite restaurar o que foi apagado.
+9. **Relatório de inscrições**: em Participantes ou Legendários, toque em **Importar relatório** e envie a planilha de inscritos da plataforma (.xlsx). O app só adiciona quem ainda não está, ignora compras canceladas e não importa o CPF. Tem um exemplo fictício em `exemplo/relatorio-exemplo.xlsx` para testar no modo demonstração (`?demo=1`).
+10. **No celular**: abra o endereço da Vercel e toque em **Adicionar à tela inicial** (iPhone: botão Compartilhar; Android: menu ⋮ → Instalar app).
 
 ## Arquivos
 
@@ -37,7 +39,8 @@ As permissões são conferidas no banco (RLS), não só na tela. Bloquear algué
 | `app.js` | Lógica do app (abas, formulários, permissões na tela, login) |
 | `dados.js` | Ligação com o banco: Supabase em tempo real ou memória (demonstração) |
 | `demo.js` | Dados fictícios do modo demonstração |
-| `supabase/schema.sql` | Tabelas, permissões (RLS), funções e dados iniciais |
+| `supabase/schema.sql` | Tabelas, permissões (RLS), funções, histórico e dados iniciais |
+| `supabase/historico.sql` | Só o histórico de alterações, para quem já tinha rodado o schema antes |
 | `manifest.webmanifest`, `sw.js`, `icons/` | Instalação como app no celular |
 
 ## Segurança

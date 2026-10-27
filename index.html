@@ -105,6 +105,35 @@ button { cursor: pointer; }
 .icon-btn { width: 36px; height: 36px; display: inline-grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
 .icon-btn svg { width: 18px; height: 18px; }
 
+/* Pendências */
+.pendrow { align-items: center; gap: 12px; }
+.pendtags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 4px; }
+/* Histórico */
+.panel.hist { padding: 6px 16px 14px; }
+.hdia { margin: 14px 0 4px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.hrow { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.hdia + .hrow { border-top: 0; }
+.hrow .htime { flex: none; width: 46px; color: var(--muted); font-size: 13px; padding-top: 2px; }
+.hrow.apagou .htime { color: var(--bad); }
+.hrow.criou .htime { color: var(--good); }
+.hmud { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+.hmud span { color: var(--fg); }
+.hrow .grow, .pendrow .grow { flex: 1; min-width: 0; }
+/* Importar relatório */
+.imp-prev { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow: auto; }
+.imp-prev details { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.imp-prev summary { cursor: pointer; padding: 4px 0; }
+.imp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.imp-kpis div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; }
+.imp-kpis b { font-size: 22px; }
+.imp-kpis span { font-size: 12px; color: var(--muted); }
+.imp-kpis .ok b { color: var(--good); } .imp-kpis .bad b { color: var(--bad); }
+.imp-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.imp-list label { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; cursor: pointer; }
+.bad-text { color: var(--bad); font-weight: 700; }
+.tag.saude { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.ficha { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 4px 12px; margin: 6px 0 0; font-size: 14px; }
+.ficha dt { color: var(--muted); } .ficha dd { margin: 0; }
 .selbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--bad); border-radius: 10px; background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .selbar .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .selall { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; cursor: pointer; }
@@ -438,6 +467,9 @@ a.btn { text-decoration: none; }
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-wa" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2a9.7 9.7 0 0 0-8.3 14.8L2.4 21.8l4.9-1.3A9.7 9.7 0 1 0 12 2.2zm0 17.7c-1.5 0-3-.4-4.2-1.2l-.3-.2-2.9.8.8-2.8-.2-.3A8 8 0 1 1 12 19.9zm4.4-6c-.2-.1-1.4-.7-1.7-.8-.2-.1-.4-.1-.5.1l-.8 1c-.1.2-.3.2-.5.1a6.5 6.5 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.5-.4h-.5a.9.9 0 0 0-.7.3 2.8 2.8 0 0 0-.9 2.1 4.9 4.9 0 0 0 1 2.6 11 11 0 0 0 4.3 3.8c1.6.7 2.2.7 3 .6.5-.1 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1l-.5-.3z"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/></symbol>
   <symbol id="i-group" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.5 3.6-5.5 7-5.5s6.2 2 7 5.5"/></symbol>
 </svg>
