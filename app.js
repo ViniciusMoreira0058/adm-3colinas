@@ -1552,9 +1552,13 @@ function vUsuarios() {
   const semSenha = S.equipe.filter(e => !e.user_id && e.ativo !== false).length;
   const rows = S.equipe.map(e => ({ e, on: online.find(o => o.by === e.id) }))
     .sort((a, b) => (b.e.dono ? 1 : 0) - (a.e.dono ? 1 : 0) || (b.on ? 1 : 0) - (a.on ? 1 : 0) || String(b.e.visto_em || "").localeCompare(String(a.e.visto_em || "")));
+  const abaU = S.usrAba === "notif" ? "notif" : "equipe";
+  const abasU = `<div class="seg" role="group" aria-label="Usuários" style="margin-bottom:16px"><button type="button" data-usr-aba="equipe" aria-pressed="${abaU === "equipe"}">Equipe</button><button type="button" data-usr-aba="notif" aria-pressed="${abaU === "notif"}">Enviar notificação</button></div>`;
+  if (abaU === "notif") return vEnviarNotif(abasU);
   return `
   <div class="head"><div><h2>Usuários</h2><p>Cadastre quem pode entrar no app com o e-mail da pessoa e escolha as abas que ela pode ver ou alterar. Só você vê esta aba.</p></div>
-    <div class="actions"><button class="btn" type="button" data-act="novidade">${ico("bell")} Avisar novidade</button><button class="btn primary" type="button" data-act="novo-adm">${ico("plus")} Cadastrar usuário</button></div></div>
+    <div class="actions"><button class="btn primary" type="button" data-act="novo-adm">${ico("plus")} Cadastrar usuário</button></div></div>
+  ${abasU}
   <div class="kpis">
     <div class="kpi"><span class="lbl">Cadastrados</span><span class="val num">${S.equipe.length}</span><span class="sub">${S.equipe.filter(e => e.ativo !== false).length} com acesso liberado</span></div>
     <div class="kpi"><span class="lbl">Online agora</span><span class="val num" style="color:var(--good)">${online.length}</span><span class="sub">com o app aberto</span></div>
@@ -2305,6 +2309,7 @@ document.addEventListener("click", e => {
   if (d.act === "csg-cfg") { csgCfgForm(); return; }
   if (d.act === "csg-unir") { csgUnirForm(); return; }
   if (d.act === "novidade") { novidadeForm(); return; }
+  if (d.usrAba) { S.usrAba = d.usrAba; render(); return; }
   if (d.act === "ativar-notif") { pedirNotificacao().then(render); return; }
   if (d.act === "pin-importar") { pinImportarForm(); return; }
   if (d.act === "pin-msg") { pinMsgForm(); return; }
@@ -2931,14 +2936,15 @@ async function desativarPush() {
 const NOTIF_DIAS = 10;
 function notifsVisiveis() {
   const lim = Date.now() - NOTIF_DIAS * 864e5;
-  return (S.notifs || []).filter(n => Date.parse(n.em) > lim && (!DEMO || (n.ator !== ME.id && (n.publico === "todos" || S.isOwner))))
+  const praMim = n => !(n.dados && n.dados.para && n.dados.para.length) || n.dados.para.includes(ME.id);
+  return (S.notifs || []).filter(n => Date.parse(n.em) > lim && (!DEMO || (n.ator !== ME.id && (n.publico === "todos" ? praMim(n) : S.isOwner))))
     .sort((a, b) => Date.parse(b.em) - Date.parse(a.em));
 }
 const notifNovas = () => { const l = S.notifLido || 0; return notifsVisiveis().filter(n => Date.parse(n.em) > l && notifTexto(n)).length; };
 function notifTexto(n) {
   const M = n.mudancas || {}, d = n.dados || {}, novo = k => (M[k] || [])[1], quem = n.ator_nome || "Um ADM";
   if (n.doc_id === "aviso") return { i: "upload", a: "aviso", t: "Planilha atualizada", c: `${d.novosP || 0} novo(s) senderista(s) e ${d.novosL || 0} legendário(s)${d.pagPend ? ` · ${d.pagPend} com pagamento pendente` : ""}.`, por: d.por || quem };
-  if (n.doc_id === "novidade") return { i: "bell", a: "novidade", t: "Novidade no app: " + (d.titulo || ""), c: d.texto || "", por: d.por || quem };
+  if (n.doc_id === "novidade") return { i: "bell", a: "novidade", t: (d.tipo === "msg" ? "" : "Novidade no app: ") + (d.titulo || ""), c: d.texto || "", por: d.por || quem };
   let c, i = "edit", a = abaDoRegistro(n.col);
   if (n.col === "pessoas") {
     i = "users"; a = abaDoRegistro("pessoas", { tipo: novo("tipo") || (n.dados || {}).tipo });
@@ -3005,28 +3011,54 @@ function novaNotif(n) {
 }
 
 /* Novidade do app: o dono escreve, todos os ADMs recebem a notificação e veem a explicação ao abrir o app */
+/* Usuários → Enviar notificação (só o dono): mensagem na hora para todos ou para quem ele escolher.
+   Fica em config/novidade {para: [ids dos membros] (vazio = todos)} e no histórico config/msg-hist. */
+const destinatarios = () => (S.equipe || []).filter(e => e.ativo !== false && e.id !== ME.id).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+function vEnviarNotif(abas) {
+  const H = ((S.cfgDocs || {})["msg-hist"] || {}).lista || [], nome = id => ((S.equipe || []).find(e => e.id === id) || {}).nome || "ADM";
+  return `
+  <div class="head"><div><h2>Usuários</h2><p>Envie uma notificação na hora para toda a equipe ou só para quem você escolher. Chega no celular de quem ativou as notificações e fica no sininho por 10 dias. Só você vê esta aba.</p></div>
+    <div class="actions"><button class="btn primary" type="button" data-act="novidade">${ico("bell")} Nova notificação</button></div></div>
+  ${abas}
+  <section class="panel"><h3>Enviadas <small>${H.length}</small></h3>
+  ${H.length ? `<div class="notif-list">${H.map(n => `<article class="notif">${ico("bell")}<div><b>${esc(n.titulo)}</b><p>${esc(n.texto)}</p>
+    <small>Para ${n.para && n.para.length ? esc(n.para.map(nome).join(", ")) : "todos"} · ${esc(quando(n.em))}</small></div></article>`).join("")}</div>`
+    : `<p class="empty">Nenhuma notificação enviada ainda. Toque em <b>Nova notificação</b>.</p>`}
+  </section>`;
+}
 function novidadeForm() {
+  const D = destinatarios();
   modal(`
-    <h3>Avisar novidade do app</h3>
-    <p class="hint" style="margin:0">Todos os ADMs recebem uma notificação no celular (mesmo com o app fechado, para quem ativou) e veem esta explicação quando abrirem o app.</p>
-    <div class="field"><label for="f-nt">Título</label><input id="f-nt" name="titulo" maxlength="60" required placeholder="Ex.: Nova aba Pins"></div>
-    <div class="field"><label for="f-nx">Explique a novidade</label><textarea id="f-nx" name="texto" rows="5" maxlength="600" required placeholder="Ex.: Agora dá para marcar quem já recebeu o pin do boné. Abra o menu e toque em Pins."></textarea></div>
-    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${ico("bell")} Enviar para a equipe</button></div></div>`,
+    <h3>Enviar notificação</h3>
+    <p class="hint" style="margin:0">Chega na hora no celular de quem ativou as notificações (mesmo com o app fechado), aparece como aviso quando a pessoa abrir o app e fica no sininho por 10 dias.</p>
+    <div class="field"><label for="f-nt">Título</label><input id="f-nt" name="titulo" maxlength="60" required placeholder="Ex.: Reunião hoje às 20h"></div>
+    <div class="field"><label for="f-nx">Mensagem</label><textarea id="f-nx" name="texto" rows="4" maxlength="600" required placeholder="Ex.: Pessoal, reunião da equipe ADM hoje às 20h no grupo do WhatsApp."></textarea></div>
+    <div class="dest"><span class="dest-lbl">Quem recebe</span>
+      <label class="selall"><input type="checkbox" id="f-todos" checked> <b>Todos</b> (${D.length})</label>
+      <div class="pick-list" id="f-para" hidden>${D.map(e => `<label class="selall"><input type="checkbox" name="para" value="${esc(e.id)}"> ${esc(e.nome)}${e.user_id ? "" : ' <small class="hint">(ainda não entrou no app)</small>'}</label>`).join("")}</div></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${ico("bell")} Enviar agora</button></div></div>`,
   fd => {
     const titulo = String(fd.get("titulo") || "").trim(), texto = String(fd.get("texto") || "").trim();
-    if (!titulo || !texto) { toast("Preencha o título e a explicação."); return; }
-    const n = { id: "n" + Date.now().toString(36), titulo, texto, em: new Date().toISOString(), por: ME.adm || "", porId: ME.id || "" };
-    closeModal();
-    save(() => api.set("config", "novidade", n), "Novidade enviada para a equipe");
+    const todos = $("#f-todos").checked, para = todos ? [] : fd.getAll("para").map(String);
+    if (!titulo || !texto) { toast("Preencha o título e a mensagem."); return; }
+    if (!todos && !para.length) { toast("Escolha pelo menos uma pessoa ou marque Todos."); return; }
+    const n = { id: "n" + Date.now().toString(36), tipo: "msg", titulo, texto, para, em: new Date().toISOString(), por: ME.adm || "", porId: ME.id || "" };
+    const hist = [n, ...((((S.cfgDocs || {})["msg-hist"] || {}).lista) || [])].slice(0, 30);
+    closeModal(); S.usrAba = "notif";
+    save(async () => { await api.set("config", "novidade", n); await api.set("config", "msg-hist", { lista: hist }); },
+      todos ? "Notificação enviada para todos" : `Notificação enviada para ${para.length} pessoa(s)`);
   });
+  const t = $("#f-todos"), L = $("#f-para");
+  t.onchange = () => { L.hidden = t.checked; };
 }
 function checarNovidade() {
   const n = S.novidade;
   if (!n || !n.id || !ME.acesso || n.porId === ME.id || store.get("adm3-novidade-visto") === n.id) return;
+  if (n.para && n.para.length && !n.para.includes(ME.id)) return;   // mensagem só para algumas pessoas
   if (Date.now() - new Date(n.em || 0).getTime() > 30 * 864e5) return;   // novidade antiga não aparece para quem entrou depois
   if ($("#modalRoot").innerHTML) return;
   modal(`
-    <h3>Novidade no app: ${esc(n.titulo)}</h3>
+    <h3>${n.tipo === "msg" ? "" : "Novidade no app: "}${esc(n.titulo)}</h3>
     <p style="margin:0;white-space:pre-line">${esc(n.texto)}</p>
     <p class="hint" style="margin:0">Enviado por ${esc(n.por || "Vinicius")} · ${esc(quando(n.em))}</p>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn primary" type="submit">Entendi</button></div></div>`, () => { store.set("adm3-novidade-visto", n.id); closeModal(); });
@@ -3167,7 +3199,7 @@ function conectarDados() {
     S.cronoCriando = S.cronoCriando || new Set();
     if (ficha && navigator.onLine !== false && !db.estado().offline && !S.cfgDocs[ficha] && !S.cronoCriando.has(ficha)) {
       S.cronoCriando.add(ficha); db.doc("config/" + ficha).set({ _adm: eu() }).catch(() => {}).finally(() => S.cronoCriando.delete(ficha)); }
-    if (["cronograma", "consagracao", "pins", "painel"].includes(S.view)) render();
+    if (["cronograma", "consagracao", "pins", "painel", "usuarios"].includes(S.view)) render();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });

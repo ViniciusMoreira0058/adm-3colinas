@@ -81,7 +81,8 @@ begin
     v_tipo := new.id;
     select coalesce(jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth)), '[]') into v_subs
       from public.adm_push s join public.adm_membros m on m.user_id = s.user_id
-      where m.ativo and s.user_id is distinct from auth.uid();
+      where m.ativo and s.user_id is distinct from auth.uid()
+        and (new.id <> 'novidade' or coalesce(jsonb_array_length(new.data -> 'para'), 0) = 0 or (new.data -> 'para') ? m.id::text);
   else
     -- qualquer outra mudança: só o dono recebe, e só do que os outros fazem
     if v_ator.id is null or v_ator.dono then return null; end if;
@@ -138,7 +139,9 @@ alter table public.adm_notif enable row level security;
 drop policy if exists adm_notif_ler on public.adm_notif;
 create policy adm_notif_ler on public.adm_notif for select to authenticated
   using (em > now() - interval '10 days' and (public.adm_eu()).id is not null
-         and ator is distinct from auth.uid() and (publico = 'todos' or public.adm_eh_dono()));
+         and ator is distinct from auth.uid()
+         and ((publico = 'todos' and (coalesce(jsonb_array_length(dados -> 'para'), 0) = 0 or (dados -> 'para') ? (public.adm_eu()).id::text))
+              or (publico = 'dono' and public.adm_eh_dono())));
 revoke all on public.adm_notif from anon, authenticated;
 grant select on public.adm_notif to authenticated;
 

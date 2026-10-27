@@ -85,6 +85,12 @@ button { cursor: pointer; }
 .icon-btn.bell .badge { position: absolute; top: -7px; right: -7px; box-shadow: 0 0 0 2px var(--bg); }
 .icon-btn.bell[hidden] { display: none; }
 .notif-list { display: grid; gap: 10px; }
+.pick-list { display: grid; gap: 4px; max-height: 240px; overflow: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.pick-list[hidden] { display: none; }
+.dest { display: grid; gap: 8px; }
+.dest-lbl { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.dest label { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.dest input[type=checkbox] { width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
 .notif { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .notif > svg { width: 20px; height: 20px; flex: none; color: var(--accent); margin-top: 2px; }
 .notif > div { min-width: 0; flex: 1; }
