@@ -832,7 +832,7 @@ function csgDias() {
 }
 // nome bonito: "JOÃO DA SILVA" / "joão da silva" → "João da Silva" (se já veio com maiúsculas e minúsculas, mantém)
 const PEQ = new Set(["da", "de", "do", "das", "dos", "e"]);
-const capNome = n => (n === n.toUpperCase() || n === n.toLowerCase())
+const capNome = n => n.includes("@") ? n.toLowerCase() : (n === n.toUpperCase() || n === n.toLowerCase())
   ? n.toLowerCase().split(" ").map((w, i) => i && PEQ.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : n;
 // lê a lista colada (do WhatsApp, planilha ou bloco de notas): tira numeração, marcadores, emojis e repetidos
 function lerNomesColados(txt) {
@@ -849,11 +849,17 @@ function lerNomesColados(txt) {
   return [...vistos.values()];
 }
 // contagem de presenças entre duas datas (inclusive)
+/* Nomes unidos: config/consag-alias { map: { nome normalizado → nome que fica }, separados: ["a|b"] (sugestões dispensadas) } */
+const csgAliasDoc = () => { const d = (S.cfgDocs || {})["consag-alias"] || {}; return { map: d.map || {}, separados: d.separados || [] }; };
+function csgCanon(n) { const A = csgAliasDoc().map; let x = n; for (let i = 0; i < 8 && A[norm(x)] && norm(A[norm(x)]) !== norm(x); i++) x = A[norm(x)]; return x; }
 function csgContagem(de, ate) {
   const dias = csgDias().filter(d => (!de || d.dia >= de) && (!ate || d.dia <= ate));
   const P = new Map();
-  dias.forEach(d => d.nomes.forEach(n => { const k = norm(n); const p = P.get(k) || { nome: n, n: 0, prim: d.dia, ult: d.dia };
-    p.n++; p.nome = n; p.ult = d.dia; P.set(k, p); }));
+  dias.forEach(d => { const hoje = new Set(); d.nomes.forEach(n => { const c = csgCanon(n), k = norm(c);
+    const p = P.get(k) || { k, nome: c, n: 0, prim: d.dia, ult: d.dia, vari: new Set(), diasL: [] };
+    if (norm(n) !== k) p.vari.add(n); else p.nome = n;
+    if (!hoje.has(k)) { hoje.add(k); p.n++; p.ult = d.dia; p.diasL.push(d.dia); }   // os dois nomes no mesmo dia contam uma vez
+    P.set(k, p); }); });
   const pessoas = [...P.values()].sort((a, b) => b.n - a.n || a.nome.localeCompare(b.nome, "pt-BR"));
   return { dias, pessoas, totalPres: dias.reduce((a, d) => a + d.nomes.length, 0) };
 }
@@ -864,11 +870,11 @@ function vConsagracao() {
   const nDia = Math.min(cfg.total, Math.max(0, difDias(cfg.inicio, hoje) + 1));
   const ultimo = todos[todos.length - 1], dHoje = todos.find(d => d.dia === hoje);
   const q = norm(F.q), lista = q ? pessoas.filter(p => norm(p.nome).includes(q)) : pessoas;
-  const maxN = Math.max(1, dias.length), ed = podeEditar();
+  const maxN = Math.max(1, dias.length), ed = podeEditar(), sus = csgSuspeitos();
   const periodo = F.de || F.ate ? `${F.de ? fmtDia(F.de) : "início"} a ${F.ate ? fmtDia(F.ate) : "hoje"}` : "período todo";
   return `
   <div class="head"><div><h2>Consagração</h2><p>${cfg.total} dias · começou em ${fmtDia(cfg.inicio, true)}${nDia ? ` · hoje é o <b>dia ${nDia} de ${cfg.total}</b>` : ""}. Cole todo dia a lista de quem participou: o app soma quantas vezes cada pessoa esteve.</p></div>
-    <div class="actions"><button class="btn" type="button" data-act="csg-pdf">${ico("upload")} Exportar PDF</button>${ed ? `<button class="btn" type="button" data-act="csg-cfg">${ico("edit")} Período</button><button class="btn primary" type="button" data-act="csg-colar">${ico("paste")} Colar lista do dia</button>` : ""}</div></div>
+    <div class="actions"><button class="btn" type="button" data-act="csg-pdf">${ico("upload")} Exportar PDF</button>${ed ? `<button class="btn" type="button" data-act="csg-unir">${ico("group")} Unir nomes</button><button class="btn" type="button" data-act="csg-cfg">${ico("edit")} Período</button><button class="btn primary" type="button" data-act="csg-colar">${ico("paste")} Colar lista do dia</button>` : ""}</div></div>
   <div class="kpis">
     <div class="kpi"><span class="lbl">Dias com lista</span><span class="val num">${todos.length}<small style="font-size:18px;color:var(--muted)"> / ${cfg.total}</small></span><div class="bar good"><i style="width:${pct(todos.length, cfg.total)}%"></i></div></div>
     <div class="kpi"><span class="lbl">Pessoas diferentes</span><span class="val num">${fmtNum(pessoas.length)}</span><span class="sub">no ${esc(periodo)}</span></div>
@@ -877,17 +883,109 @@ function vConsagracao() {
   </div>
   ${todos.length ? `<section class="panel"><h3>Dias <small>toque para ver ou corrigir a lista</small></h3><div class="csg-dias">${[...todos].reverse().map(d => `<button type="button" class="csg-dia ${d.dia >= (F.de || "0") && d.dia <= (F.ate || "9") ? "" : "fora"}" data-csg-dia="${d.dia}"><b>${fmtDia(d.dia)}</b><span class="num">Dia ${difDias(cfg.inicio, d.dia) + 1}</span><span class="num">${d.nomes.length} pessoas</span></button>`).join("")}</div></section>` : ""}
   <section class="panel">
-    <h3>Presenças <small>${esc(periodo)}</small></h3>
+    <h3>Presenças <small>${esc(periodo)} · toque no nome para ver os dias</small></h3>
+    ${sus.length ? `<div class="banner"><span>${ico("group")} <b>${sus.length}</b> nome(s) parecem ser da mesma pessoa.</span><button class="btn" type="button" data-act="csg-rep">Revisar</button></div>` : ""}
     <div class="csg-filtro">
       <label>De <input type="date" id="csgDe" value="${esc(F.de)}"></label>
       <label>Até <input type="date" id="csgAte" value="${esc(F.ate)}"></label>
       ${F.de || F.ate ? `<button class="btn sm" type="button" data-act="csg-todo">Período todo</button>` : ""}
       <div class="search" style="flex:1;min-width:180px">${ico("search")}<input id="csgQ" type="search" placeholder="Buscar nome" value="${esc(F.q)}" aria-label="Buscar nome"></div>
     </div>
-    ${lista.length ? `<div class="csg-lista">${lista.map((p, i) => `<div class="csg-row"><span class="pos num">${i + 1}</span><div class="nm"><b>${esc(p.nome)}</b><small class="hint">desde ${fmtDia(p.prim)} · última ${fmtDia(p.ult)}</small></div>
-      <div class="bar good" title="${pct(p.n, maxN)}% dos dias"><i style="width:${pct(p.n, maxN)}%"></i></div><span class="n num"><b>${p.n}</b>×</span></div>`).join("")}</div>`
+    ${lista.length ? `<div class="csg-lista">${lista.map((p, i) => `<button type="button" class="csg-row" data-csg-pes="${esc(p.k)}"><span class="pos num">${i + 1}</span><span class="nm"><b>${esc(p.nome)}</b><small class="hint">desde ${fmtDia(p.prim)} · última ${fmtDia(p.ult)}${p.vari.size ? ` · também como ${esc([...p.vari].join(", "))}` : ""}</small></span>
+      <span class="bar good" title="${pct(p.n, maxN)}% dos dias"><i style="width:${pct(p.n, maxN)}%"></i></span><span class="n num"><b>${p.n}</b>×</span></button>`).join("")}</div>`
       : `<div class="empty">${todos.length ? "Ninguém encontrado." : "Nenhuma lista colada ainda. Toque em <b>Colar lista do dia</b>."}</div>`}
   </section>`;
+}
+// palavras do nome (de um e-mail usa a parte antes do @: joao.silva@empresa.com → joao silva)
+const csgToks = s => norm(String(s).includes("@") ? String(s).split("@")[0].replace(/[._\-+]+/g, " ").replace(/\d+/g, " ") : s).split(" ").filter(w => w.length > 1 && !PEQ.has(w));
+function levenshtein(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 9;
+  let ant = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) { const at = [i]; for (let j = 1; j <= b.length; j++) at[j] = Math.min(ant[j] + 1, at[j - 1] + 1, ant[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); ant = at; }
+  return ant[b.length];
+}
+// pares que parecem ser a mesma pessoa
+function csgSuspeitos(pessoas = csgContagem().pessoas) {
+  const sep = new Set(csgAliasDoc().separados), out = [];
+  const T = pessoas.map(p => ({ p, t: csgToks(p.nome), s: norm(p.nome), mail: p.nome.includes("@") }));
+  for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) {
+    const a = T[i], b = T[j]; if (!a.t.length || !b.t.length) continue;
+    if (sep.has([a.p.k, b.p.k].sort().join("|"))) continue;
+    const [m, M] = a.t.length <= b.t.length ? [a.t, b.t] : [b.t, a.t];
+    let por = "";
+    if ((a.mail || b.mail) && a.t.join(" ") === b.t.join(" ")) por = "mesmo nome no e-mail";
+    else if (a.mail && b.mail && a.s.split("@")[0] === b.s.split("@")[0]) por = "mesmo e-mail com outro domínio";
+    else if (m[0] === M[0] && m.length >= 1 && m.every(w => M.includes(w)) && (m.length >= 2 || a.mail || b.mail)) por = "um nome está dentro do outro";
+    else if (m.length >= 2 && m[0] === M[0] && m[m.length - 1] === M[M.length - 1]) por = "mesmo primeiro e último nome";
+    else if (a.s.length >= 6 && levenshtein(a.s, b.s) <= 2) por = "escrita parecida";
+    else if ((a.mail || b.mail) && m.length >= 2 && m.every(w => M.includes(w))) por = "nome parecido com o e-mail";
+    if (por) out.push({ a: a.p, b: b.p, por });
+  }
+  return out;
+}
+function csgUnir(fica, sai, msg) {
+  const A = csgAliasDoc(), map = { ...A.map };
+  const destino = csgCanon(fica);
+  map[norm(sai)] = destino; delete map[norm(destino)];
+  Object.keys(map).forEach(k => { if (norm(map[k]) === norm(sai)) map[k] = destino; });   // quem apontava para o nome que saiu passa a apontar para o que fica
+  save(() => api.set("config", "consag-alias", { map, separados: A.separados }), msg || `${sai} unido com ${destino}`);
+}
+function csgSeparar(variante) {
+  const A = csgAliasDoc(), map = { ...A.map }; delete map[norm(variante)];
+  save(() => api.set("config", "consag-alias", { map, separados: A.separados }), `${variante} separado`);
+}
+function csgDispensar(a, b) {
+  const A = csgAliasDoc(), separados = [...new Set([...A.separados, [a.k, b.k].sort().join("|")])];
+  save(() => api.set("config", "consag-alias", { map: A.map, separados }), "Ok, ficam separados");
+}
+function csgRepForm() {
+  const sus = csgSuspeitos(), ed = podeEditar();
+  if (!sus.length) { closeModal(); toast("Nenhum nome parecido para revisar."); return; }
+  modal(`
+    <h3>Nomes que parecem repetidos <small class="hint">${sus.length}</small></h3>
+    <p class="hint" style="margin:0">Escolha o nome que fica e toque em <b>Unir</b>: as presenças passam a contar juntas (no mesmo dia, conta uma vez). Se não for a mesma pessoa, toque em <b>Não é a mesma</b>.</p>
+    <div class="csg-sus">${sus.map((x, i) => `<div class="csg-par">
+      <small class="hint">${esc(x.por)}</small>
+      <label><input type="radio" name="fica${i}" value="a" ${x.a.n >= x.b.n ? "checked" : ""}> <b>${esc(x.a.nome)}</b> <span class="num hint">${x.a.n}×</span></label>
+      <label><input type="radio" name="fica${i}" value="b" ${x.a.n < x.b.n ? "checked" : ""}> <b>${esc(x.b.nome)}</b> <span class="num hint">${x.b.n}×</span></label>
+      ${ed ? `<div class="actions"><button class="btn sm" type="button" data-sus-nao="${i}">Não é a mesma</button><button class="btn sm primary" type="button" data-sus-unir="${i}">Unir</button></div>` : ""}</div>`).join("")}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn primary" type="button" data-close-btn>Fechar</button></div></div>`, () => {});
+  const f = $("#mform");
+  f.querySelectorAll("[data-sus-unir]").forEach(b => b.onclick = () => { const x = sus[+b.dataset.susUnir], fa = f.querySelector(`[name=fica${b.dataset.susUnir}]:checked`).value === "a";
+    csgUnir(fa ? x.a.nome : x.b.nome, fa ? x.b.nome : x.a.nome); setTimeout(csgRepForm, 350); });
+  f.querySelectorAll("[data-sus-nao]").forEach(b => b.onclick = () => { const x = sus[+b.dataset.susNao]; csgDispensar(x.a, x.b); setTimeout(csgRepForm, 350); });
+}
+// unir na mão: escolhe o nome que fica e o(s) que entram nele
+function csgUnirForm(pre) {
+  const { pessoas } = csgContagem();
+  const opts = pessoas.map(p => `<option value="${esc(p.nome)}">${esc(p.nome)} · ${p.n}×</option>`).join("");
+  modal(`
+    <h3>Unir nomes</h3>
+    <p class="hint" style="margin:0">Use quando a mesma pessoa aparece com nomes diferentes (por exemplo, o Gmail dela e o e-mail da empresa). As presenças passam a contar juntas e dá para separar de novo depois.</p>
+    <div class="field"><label for="f-uf">Nome que fica</label><select id="f-uf">${opts}</select></div>
+    <div class="field"><label for="f-us">Juntar com</label><select id="f-us"><option value="">Escolha…</option>${opts}</select></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Unir</button></div></div>`,
+  () => { const fica = $("#f-uf").value, sai = $("#f-us").value;
+    if (!sai || norm(sai) === norm(fica)) { toast("Escolha dois nomes diferentes."); return; }
+    closeModal(); csgUnir(fica, sai); });
+  if (pre) $("#f-uf").value = pre;
+}
+// ficha da pessoa: dias em que veio, outros nomes dela, unir e separar
+function csgPessoaForm(k) {
+  const p = csgContagem().pessoas.find(x => x.k === k); if (!p) return;
+  const ed = podeEditar(), cfg = csgCfg();
+  const parecidos = csgSuspeitos().filter(x => x.a.k === k || x.b.k === k).map(x => x.a.k === k ? x.b : x.a);
+  modal(`
+    <h3>${esc(p.nome)} <small class="hint num">${p.n}×</small></h3>
+    <p class="hint" style="margin:0">Participou em ${p.n} dia(s) · desde ${fmtDia(p.prim)} · última ${fmtDia(p.ult)}</p>
+    <div class="csg-nomes">${p.diasL.map(d => `<span class="chip ok">${fmtDia(d)} · dia ${difDias(cfg.inicio, d) + 1}</span>`).join("")}</div>
+    ${p.vari.size ? `<h4 style="margin:6px 0 0">Também aparece como</h4><div class="csg-nomes">${[...p.vari].map(v => `<span class="chip">${esc(v)}${ed ? ` <button class="linkbtn" type="button" data-csg-sep="${esc(v)}">Separar</button>` : ""}</span>`).join("")}</div>` : ""}
+    ${parecidos.length ? `<h4 style="margin:6px 0 0">Parecidos</h4><div class="csg-nomes">${parecidos.map(o => `<span class="chip wait">${esc(o.nome)} · ${o.n}×${ed ? ` <button class="linkbtn" type="button" data-csg-junta="${esc(o.nome)}">Unir</button>` : ""}</span>`).join("")}</div>` : ""}
+    <div class="modal-foot"><span></span><div class="actions">${ed ? `<button class="btn" type="button" id="csgUnirOutro">Unir com outro nome</button>` : ""}<button class="btn primary" type="button" data-close-btn>Fechar</button></div></div>`, () => {});
+  const f = $("#mform");
+  f.querySelectorAll("[data-csg-sep]").forEach(b => b.onclick = () => { closeModal(); csgSeparar(b.dataset.csgSep); });
+  f.querySelectorAll("[data-csg-junta]").forEach(b => b.onclick = () => { closeModal(); csgUnir(p.nome, b.dataset.csgJunta); });
+  const u = $("#csgUnirOutro"); if (u) u.onclick = () => csgUnirForm(p.nome);
 }
 function csgColarForm(dia) {
   const ex = (S.cfgDocs || {})["consag-" + (dia || hojeISO())];
@@ -988,7 +1086,7 @@ async function gerarCsgPdf(modo, de, ate, wa) {
   const cfg = csgCfg(), { dias, pessoas, totalPres } = csgContagem(modo === "dia" ? null : de, ate);
   const doDia = modo === "dia" ? (csgDias().find(d => d.dia === de) || { nomes: [] }) : null;
   // no PDF do dia: quem veio naquele dia e quantas vezes já participou até ele
-  const linhas = doDia ? doDia.nomes.map(n => pessoas.find(p => norm(p.nome) === norm(n)) || { nome: n, n: 1, prim: de, ult: de }).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+  const linhas = doDia ? [...new Set(doDia.nomes.map(n => norm(csgCanon(n))))].map(k => pessoas.find(p => p.k === k) || { nome: k, n: 1, prim: de, ult: de }).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
     : pessoas;
   const [logo, faixa] = await Promise.all([imagemDataUrl("assets/logo.png"), faixaPdf()]);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -1995,6 +2093,8 @@ document.addEventListener("click", e => {
   if (d.act === "csg-pdf") { csgPdfForm(); return; }
   if (d.act === "csg-todo") { S.csg = { ...(S.csg || {}), de: "", ate: "" }; render(); return; }
   if (d.csgDia) { csgDiaForm(d.csgDia); return; }
+  if (d.csgPes) { csgPessoaForm(d.csgPes); return; }
+  if (d.act === "csg-rep") { csgRepForm(); return; }
   if (t.id === "notifBtn") { pedirNotificacao(); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
@@ -2040,6 +2140,7 @@ document.addEventListener("click", e => {
   if (d.act === "crono-equipes") { if (S.isOwner) equipesForm(); return; }
   if (d.act === "csg-colar") { csgColarForm(); return; }
   if (d.act === "csg-cfg") { csgCfgForm(); return; }
+  if (d.act === "csg-unir") { csgUnirForm(); return; }
   if (d.cronoDia) { S.cronoDia = d.cronoDia; store.set("crono-dia", d.cronoDia); render(); return; }
   if (d.cronoIni) { cronoMarcar(d.cronoIni, { ini: agoraHM(), iniPor: ME.adm, iniEm: new Date().toISOString() }, "Início marcado " + agoraHM()); return; }
   if (d.cronoFim) { cronoMarcar(d.cronoFim, { fim: agoraHM(), fimPor: ME.adm, fimEm: new Date().toISOString() }, "Fim marcado " + agoraHM()); return; }

@@ -1019,12 +1019,12 @@ window.ADM_DEMO = {
 {
 "col": "config",
 "id": "consag-2026-10-25",
-"data": {"dia": "2026-10-25", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Camila Andrade", "Daniel Rocha", "Eduarda Pires", "Felipe Nogueira", "Gabriela Martins", "Heitor Campos", "João Pedro Lima", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Patrícia Gomes", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Gustavo Mendes", "Marcos Antunes", "Renata Farias"], "por": {"id": "m-dono", "nome": "Vinicius Moreira"}, "em": "2026-10-25T06:30:00.000Z"}
+"data": {"dia": "2026-10-25", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Camila Andrade", "Daniel Rocha", "Eduarda Pires", "Felipe Nogueira", "Gabriela Martins", "Heitor Campos", "João Pedro Lima", "Lucas Barbosa", "mariana.duarte@construtoraalfa.com.br", "Nicolas Pereira", "Patrícia Gomes", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Gustavo Mendes", "Marcos Antunes", "Renata Farias"], "por": {"id": "m-dono", "nome": "Vinicius Moreira"}, "em": "2026-10-25T06:30:00.000Z"}
 },
 {
 "col": "config",
 "id": "consag-2026-10-26",
-"data": {"dia": "2026-10-26", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Daniel Rocha", "Eduarda Pires", "Gabriela Martins", "Heitor Campos", "João Pedro Lima", "Karina Moura", "Lucas Barbosa", "Mariana Duarte", "Nicolas Pereira", "Otávio Cardoso", "Patrícia Gomes", "Rafaela Souza", "Samuel Vieira", "Tatiane Lopes", "Vitor Araújo", "Gustavo Mendes", "Marcos Antunes", "Renata Farias"], "por": {"id": "m-thal", "nome": "Thalisson"}, "em": "2026-10-26T06:30:00.000Z"}
+"data": {"dia": "2026-10-26", "nomes": ["Ana Paula Ribeiro", "Bruno Teixeira", "Daniel Rocha", "Eduarda Pires", "Gabriela Martins", "Heitor Campos Silva", "João Pedro Lima", "Karina Moura", "Lucas Henrique Barbosa", "mariana.duarte@gmail.com", "Nicolas Pereira", "otavio.c@empresa.com", "Patrícia Gomes", "Rafaela Sousa", "Samuel Vieira", "Tatiane Lopes", "Vitor Araújo", "Gustavo Mendes", "Marcos Antunes", "Renata Farias"], "por": {"id": "m-thal", "nome": "Thalisson"}, "em": "2026-10-26T06:30:00.000Z"}
 },
 {
 "col": "config",

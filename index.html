@@ -240,6 +240,12 @@ button.chip:hover { border-color: currentColor; }
 .csg-filtro label { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
 .csg-filtro input[type=date] { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; }
 .csg-lista { display: flex; flex-direction: column; }
+.csg-row { width: 100%; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 0; }
+.csg-row:hover { background: var(--accent-soft); }
+.csg-sus { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow: auto; }
+.csg-par { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.csg-par label { display: flex; gap: 8px; align-items: center; cursor: pointer; overflow-wrap: anywhere; }
+.csg-par .actions { justify-content: flex-end; }
 .csg-row { display: grid; grid-template-columns: 30px 1fr minmax(60px, 160px) 44px; gap: 10px; align-items: center; padding: 9px 2px; border-bottom: 1px solid var(--line); }
 .csg-row .pos { color: var(--muted); font-size: 13px; text-align: center; }
 .csg-row .nm { min-width: 0; display: flex; flex-direction: column; }
