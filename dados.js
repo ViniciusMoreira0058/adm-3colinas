@@ -105,7 +105,7 @@ function criarBanco(fonte, opc = {}) {
     const naFila = () => { fila.push({ ...op, col, id, em: Date.now() }); salvarFila(); };
     if (typeof navigator !== "undefined" && navigator.onLine === false) offline = true;
     if (kFila && (fila.length || offline)) { naFila(); sincronizar(); return; }
-    try { await (op.t === "add" ? fonte.gravar(col, id, op.data, true) : executar(op)); }
+    try { await (op.t === "add" ? fonte.gravar(col, id, op.data, true) : executar({ ...op, col, id })); }
     catch (e) {
       if (kFila && ehRede(e)) { offline = true; naFila(); return; }
       if (antes === undefined) colMap(col).delete(id); else colMap(col).set(id, antes); avisar(col, id); salvarCache(); throw e;

@@ -554,7 +554,7 @@ function cronoAdms() {
   eqDoc().equipes.forEach(e => (e.adms || []).forEach(add));
   const pref = "crono-" + curTopId() + "-adm-";
   Object.entries(S.cfgDocs || {}).forEach(([k, d]) => { if (k.startsWith(pref) && d._adm) add(d._adm); });
-  if (S.isOwner) (S.equipe || []).filter(m => m.ativo !== false).forEach(add);
+  if (S.isOwner && Array.isArray(S.equipe)) S.equipe.filter(m => m.ativo !== false).forEach(add);
   if (ME.id) add(eu());
   return [...mapa.values()];
 }
