@@ -346,6 +346,9 @@ function vPainel() {
     <button class="kpi" type="button" data-go="checklist"><span class="lbl">Checklist ADM</span><span class="val num">${pct(s.tDone, s.tTotal)}%</span><span class="sub">${s.tDone} de ${s.tTotal} tarefas prontas</span></button>
     <button class="kpi ${kits < meta ? "alert" : ""}" type="button" data-go="estoque"><span class="lbl">Kits MRE lacrados</span><span class="val num">${kits}</span><span class="sub">meta ${meta} · faltam ${Math.max(0, meta - kits)}</span></button>
     <button class="kpi ${s.zero.length ? "alert" : ""}" type="button" data-go="estoque"><span class="lbl">Estoque em alerta</span><span class="val num">${s.zero.length + s.low.length}</span><span class="sub">${s.zero.length} zerados · ${s.low.length} baixos (até ${S.config.alertaBaixo})</span></button>
+    ${canSee({ id: "pins" }) && pinsTodos().length ? (() => { const P = pinsTodos(), e = P.filter(p => p.status === "entregue").length;
+      return `<button class="kpi" type="button" data-go="pins" data-pin-ir="entregue"><span class="lbl">Pins entregues</span><span class="val num">${e}<small style="font-size:18px;color:var(--muted)"> / ${P.length}</small></span><div class="bar good"><i style="width:${pct(e, P.length)}%"></i></div></button>
+    <button class="kpi ${P.length - e ? "alert" : ""}" type="button" data-go="pins" data-pin-ir="pendente"><span class="lbl">Pins pendentes</span><span class="val num">${P.length - e}</span><span class="sub">bonés ainda sem pin</span></button>`; })() : ""}
     <button class="kpi" type="button" data-go="legendarios"><span class="lbl">Legendários</span><span class="val num">${s.lg.length}</span><span class="sub">${s.lgAtest} atestados · ${s.lgAssinado} termos</span></button>
   </div>
   <div class="grid2">
@@ -1198,7 +1201,8 @@ function vPins() {
   const ent = todos.filter(p => p.status === "entregue"), pend = todos.filter(p => p.status !== "entregue");
   const lotes = [...new Set(todos.map(p => p.lote || "sem lote"))].sort((a, b) => todos.filter(p => (p.lote || "sem lote") === b).length - todos.filter(p => (p.lote || "sem lote") === a).length);
   const q = norm(F.q);
-  const rows = todos.filter(p => F.st === "todos" || (F.st === "entregue") === (p.status === "entregue"))
+  const hoje = hojeISO(), entHoje = ent.filter(p => p.entregueEm === hoje);
+  const rows = todos.filter(p => F.st === "todos" || (F.st === "hoje" ? p.status === "entregue" && p.entregueEm === hoje : (F.st === "entregue") === (p.status === "entregue")))
     .filter(p => !F.lote || (p.lote || "sem lote") === F.lote)
     .filter(p => !q || norm(p.nome).includes(q) || digits(p.telefone).includes(digits(F.q) || "§") || norm(p.email).includes(q));
   const seg = (v, l, n) => `<button type="button" data-pin-st="${v}" aria-pressed="${F.st === v}">${l} <span class="num" style="opacity:.75">${n}</span></button>`;
@@ -1206,16 +1210,16 @@ function vPins() {
   <div class="head"><div><h2>Pins</h2><p>Pins dos bonés de quem concluiu a pista: quem já recebeu e quem ainda está pendente. Toque em <b>Entregar</b> quando a pessoa receber.</p></div>
     <div class="actions">${ed ? `<button class="btn" type="button" data-act="pin-msg">${ico("chat")} Editar mensagem</button><button class="btn primary" type="button" data-act="pin-importar">${ico("upload")} Importar planilha</button>` : ""}</div></div>
   <div class="kpis">
-    <div class="kpi"><span class="lbl">Entregues</span><span class="val num">${ent.length}<small style="font-size:18px;color:var(--muted)"> / ${todos.length}</small></span><div class="bar good"><i style="width:${pct(ent.length, todos.length)}%"></i></div></div>
-    <div class="kpi ${pend.length ? "alert" : ""}"><span class="lbl">Pendentes</span><span class="val num">${pend.length}</span><span class="sub">${pend.filter(p => !waNumber(p.telefone)).length} sem telefone</span></div>
+    <button class="kpi" type="button" data-pin-st="entregue"><span class="lbl">Entregues</span><span class="val num">${ent.length}<small style="font-size:18px;color:var(--muted)"> / ${todos.length}</small></span><div class="bar good"><i style="width:${pct(ent.length, todos.length)}%"></i></div></button>
+    <button class="kpi ${pend.length ? "alert" : ""}" type="button" data-pin-st="pendente"><span class="lbl">Pendentes</span><span class="val num">${pend.length}</span><span class="sub">${pend.filter(p => !waNumber(p.telefone)).length} sem telefone</span></button>
     <div class="kpi"><span class="lbl">Lotes</span><span class="val num">${lotes.length}</span><span class="sub">${todos.length} pessoa(s)</span></div>
-    <div class="kpi"><span class="lbl">Entregues hoje</span><span class="val num">${ent.filter(p => p.entregueEm === hojeISO()).length}</span><span class="sub">${ent.filter(p => p.entregueEm === hojeISO()).map(p => (p.entreguePor || "").split(" ")[0]).filter((v, i, x) => v && x.indexOf(v) === i).join(", ") || "—"}</span></div>
+    <button class="kpi" type="button" data-pin-st="hoje" aria-pressed="${F.st === "hoje"}"><span class="lbl">Entregues hoje</span><span class="val num">${entHoje.length}</span><span class="sub">${entHoje.length ? "toque para ver quem · " + entHoje.map(p => (p.entreguePor || "").split(" ")[0]).filter((v, i, x) => v && x.indexOf(v) === i).join(", ") : "nenhum ainda"}</span></button>
   </div>
   ${lotes.length > 1 ? `<section class="panel"><h3>Por lote <small>toque para filtrar</small></h3><div class="csg-dias">${lotes.map(l => { const t = todos.filter(p => (p.lote || "sem lote") === l), e = t.filter(p => p.status === "entregue").length;
     return `<button type="button" class="csg-dia ${F.lote && F.lote !== l ? "fora" : ""}" data-pin-lote="${esc(l)}"><b>Lote ${esc(l)}</b><span class="num">${e}/${t.length} entregues</span><span class="bar good" style="margin:4px 0 0"><i style="width:${pct(e, t.length)}%"></i></span></button>`; }).join("")}</div></section>` : ""}
   <section class="panel">
     <div class="csg-filtro">
-      <div class="seg" role="group" aria-label="Status">${seg("pendente", "Pendentes", pend.length)}${seg("entregue", "Entregues", ent.length)}${seg("todos", "Todos", todos.length)}</div>
+      <div class="seg" role="group" aria-label="Status">${seg("pendente", "Pendentes", pend.length)}${seg("entregue", "Entregues", ent.length)}${entHoje.length || F.st === "hoje" ? seg("hoje", "Hoje", entHoje.length) : ""}${seg("todos", "Todos", todos.length)}</div>
       ${F.lote ? `<button class="btn sm" type="button" data-pin-lote="">Lote ${esc(F.lote)} ✕</button>` : ""}
       <div class="search" style="flex:1;min-width:180px">${ico("search")}<input id="pinQ" type="search" placeholder="Buscar nome, telefone ou e-mail" value="${esc(F.q)}" aria-label="Buscar"></div>
     </div>
@@ -2219,7 +2223,7 @@ document.addEventListener("click", e => {
   if (t.matches("[data-close]") && e.target === t) { closeModal(); return; }
   if (t.matches("[data-close-btn]")) { closeModal(); return; }
   const d = t.dataset;
-  if (d.go) { go(d.go); return; }
+  if (d.go) { if (d.pinIr) S.pinf = { lote: "", q: "", ...(S.pinf || {}), st: d.pinIr }; go(d.go); return; }
   if (d.pf) { S.pf[d.pf] = d.v; if (d.pf === "aba") store.set("pend-aba", d.v); render(); return; }
   if (d.aviso) {
     if (d.aviso === "abrir") { avisoModal(); return; }
@@ -2239,7 +2243,7 @@ document.addEventListener("click", e => {
   if (d.act === "csg-pdf") { csgPdfForm(); return; }
   if (d.act === "csg-todo") { S.csg = { ...(S.csg || {}), de: "", ate: "" }; render(); return; }
   if (d.csgDia) { csgDiaForm(d.csgDia); return; }
-  if (d.pinSt) { S.pinf.st = d.pinSt; render(); return; }
+  if (d.pinSt) { S.pinf.st = d.pinSt; render(); if (t.classList.contains("kpi")) { const l = $(".list.pend, .empty", $("#view")); if (l) l.scrollIntoView({ behavior: "smooth", block: "start" }); } return; }
   if (d.pinLote != null) { S.pinf.lote = S.pinf.lote === d.pinLote ? "" : d.pinLote; render(); return; }
   if (d.csgPes) { csgPessoaForm(d.csgPes); return; }
   if (d.act === "csg-rep") { csgRepForm(); return; }
