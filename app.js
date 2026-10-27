@@ -144,7 +144,7 @@ async function save(fn, okMsg) {
 
 /* ---------- Navegação ---------- */
 const VIEWS = [
-  { id: "painel", l: "Painel", i: "home" },
+  { id: "painel", l: "Dashboard", i: "home" },
   { id: "participantes", l: "Participantes", i: "users" },
   { id: "legendarios", l: "Legendários", i: "shield" },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
@@ -196,7 +196,7 @@ $("#backBtn").onclick = () => {
   while (v && (v === S.view || !canSee(VIEWS.find(x => x.id === v) || {}))) v = hist.pop();
   go(v || "painel", true);
 };
-/* Voltar: volta para a aba anterior; sem histórico, volta para o Painel. */
+/* Voltar: volta para a aba anterior; sem histórico, volta para o Dashboard. */
 const hist = [];
 function go(v, voltando) {
   setMenu(false);
@@ -227,6 +227,7 @@ function renderNav() {
   $("#sideTop").textContent = topName();
   const meB = $("#meBtn");
   meB.dataset.act = "sair"; meB.hidden = !ME.acesso;
+  pintarNotifBtn();
   meB.innerHTML = `${ico("key")} Sair${ME.adm ? " (" + esc(ME.adm.split(" ")[0]) + ")" : ""}`;
   const sync = $("#sync");
   sync.className = "sync " + (S.online === true ? "on" : S.online === false ? "off" : "");
@@ -584,7 +585,7 @@ function nivelTxt(e) {
   if (e.ativo === false) return `<span class="chip bad">Bloqueado</span>`;
   if (e.nivel === "total") return `<span class="chip ok">Acesso total</span>`;
   const abas = ABAS().filter(v => (e.abas || []).includes(v.id)).map(v => v.l);
-  return `<span class="chip ${e.nivel === "leitura" ? "" : "sent"}">${e.nivel === "leitura" ? "Somente leitura" : "Edita"}</span><div class="hint" style="font-size:12px;margin-top:3px">${esc(abas.length ? "Painel, " + abas.join(", ") : "só o Painel")}</div>`;
+  return `<span class="chip ${e.nivel === "leitura" ? "" : "sent"}">${e.nivel === "leitura" ? "Somente leitura" : "Edita"}</span><div class="hint" style="font-size:12px;margin-top:3px">${esc(abas.length ? "Dashboard, " + abas.join(", ") : "só o Dashboard")}</div>`;
 }
 function vUsuarios() {
   const online = onlineAdms();
@@ -632,7 +633,7 @@ function admCadForm(e) {
       <div class="field"><label for="f-afun">Função</label>${sel("funcao", FUNCOES.map(x => ({ v: x, l: x })), e.funcao || "ADM")}</div>
       ${dono ? `<div class="field full"><p class="hint" style="margin:0">Esta é a conta do dono: sempre tem acesso total e não pode ser bloqueada.</p></div>` : `
       <div class="field full"><span class="lab">O que pode acessar</span><div class="nivel-opts">${NIVEIS.map(n => `<label><input type="radio" name="nivel" value="${n.v}" ${e.nivel === n.v ? "checked" : ""}><span>${n.l}<small>${n.d}</small></span></label>`).join("")}</div></div>
-      <div class="field full"><span class="lab">Abas liberadas (o Painel sempre aparece)</span><div class="abas ${e.nivel === "total" ? "off" : ""}" id="abasBox">${ABAS().map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || (e.abas || []).includes(v.id) ? "checked" : ""}> ${v.l}</label>`).join("")}</div></div>`}
+      <div class="field full"><span class="lab">Abas liberadas (o Dashboard sempre aparece)</span><div class="abas ${e.nivel === "total" ? "off" : ""}" id="abasBox">${ABAS().map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || (e.abas || []).includes(v.id) ? "checked" : ""}> ${v.l}</label>`).join("")}</div></div>`}
       <div class="field full"><label for="f-aobs">Observações</label><input id="f-aobs" name="obs" value="${esc(e.obs)}"></div>
       ${dono ? "" : `<div class="field full"><div class="checks"><label><input type="checkbox" id="f-aativo" name="ativo" ${e.ativo !== false ? "checked" : ""}> Acesso liberado (desmarque para bloquear a entrada)</label></div></div>`}
       ${!novo && e.email && !e.user_id ? `<p class="hint field full" style="margin:0">${esc(e.nome.split(" ")[0])} ainda não criou a senha. <button class="link" type="button" id="reenviar" style="color:var(--accent);background:none;border:0;padding:0;font-weight:700">Enviar o convite de novo</button></p>` : ""}
@@ -670,7 +671,7 @@ function admCadForm(e) {
 const APP_URL = location.origin + location.pathname.replace(/index\.html$/, "");
 function conviteModal(e) {
   const nivel = e.nivel, abas = e.abas || [];
-  const oq = nivel === "total" ? "acesso total" : (nivel === "leitura" ? "somente leitura" : "edição") + " em: Painel" + ABAS().filter(v => abas.includes(v.id)).map(v => ", " + v.l).join("");
+  const oq = nivel === "total" ? "acesso total" : (nivel === "leitura" ? "somente leitura" : "edição") + " em: Dashboard" + ABAS().filter(v => abas.includes(v.id)).map(v => ", " + v.l).join("");
   const msg = `Olá ${e.nome.split(" ")[0]}! Seu acesso ao app ADM 3Colinas está liberado.\n\n1. Abra: ${APP_URL}\n2. Toque em "Primeiro acesso? Criar minha senha"\n3. Use este e-mail: ${e.email}\n4. Crie sua senha e confirme pelo link que chega no e-mail.\n\nDepois é só entrar com o e-mail e a senha. Dica: no celular, use "Adicionar à tela inicial" para ficar como app.\n\nAcesso: ${oq}.`;
   const n = waNumber(e.telefone);
   modal(`
@@ -1176,6 +1177,7 @@ document.addEventListener("click", e => {
   if (d.pendAct === "seq") { if (podeEditar()) cobrarSequencia(); return; }
   if (d.histAct === "atualizar") { S.histOk = false; render(); return; }
   if (d.act === "sair") { sair(); return; }
+  if (t.id === "notifBtn") { pedirNotificacao(); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
   if (d.act === "novo") { personForm(null, S.view === "legendarios" ? "legendario" : "participante"); return; }
@@ -1651,9 +1653,66 @@ const avisoVisivel = () => { const a = S.aviso; return !!(a && ME.acesso && a.to
   && (DEMO || a.porId !== ME.id) && ["participantes", "legendarios"].some(v => canSee({ id: v }))); };
 function checarAviso() {
   if (!avisoVisivel()) return;
+  notificarAviso(S.aviso);
   if ($("#modalRoot").innerHTML) return;   // tem outra janela aberta: fica a faixa no alto da tela
   avisoModal();
 }
+// notificação do celular/computador (aparece mesmo com o app em segundo plano, se a pessoa permitiu)
+function notificarAviso(a) {
+  if (store.get("adm3-aviso-notif") === a.id) return;
+  store.set("adm3-aviso-notif", a.id);
+  try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch {}
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const corpo = `${a.novosP} novo(s) participante(s) e ${a.novosL} legendário(s)${a.pagPend ? ` · ${a.pagPend} com pagamento pendente` : ""}. Importado por ${a.por || "um ADM"}.`;
+  const op = { body: corpo, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag: "adm3-" + a.id };
+  (navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(r => r.showNotification("Planilha atualizada · ADM 3Colinas", op))
+    : Promise.reject()).catch(() => { try { new Notification("Planilha atualizada · ADM 3Colinas", op); } catch {} });
+}
+function pintarNotifBtn() {
+  const b = $("#notifBtn"); if (!b) return;
+  b.hidden = !("Notification" in window) || Notification.permission !== "default" || !ME.acesso;
+}
+async function pedirNotificacao() {
+  try { const r = await Notification.requestPermission(); toast(r === "granted" ? "Notificações ativadas neste aparelho" : "Notificações não foram permitidas"); }
+  catch { toast("Este aparelho não aceita notificações. No iPhone, instale o app na tela inicial primeiro."); }
+  pintarNotifBtn();
+}
+
+/* Puxar a tela para baixo (celular) atualiza os dados */
+async function atualizarTudo() {
+  try {
+    if (db) await db.recarregar();
+    if (S.isOwner && !DEMO) { S.histOk = false; }
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {});
+    render(); toast("Atualizado");
+  } catch (e) { toast("Não foi possível atualizar. " + erroAmigavel(e)); }
+}
+(() => {
+  const ind = document.createElement("div"); ind.className = "ptr"; ind.setAttribute("aria-hidden", "true");
+  ind.innerHTML = `<span class="ptr-ico">↻</span><span class="ptr-txt">Puxe para atualizar</span>`;
+  document.body.appendChild(ind);
+  let y0 = null, dy = 0, ativo = false;
+  const LIM = 80;
+  const pode = () => !!ME.acesso && !$("#modalRoot").innerHTML && !$(".app").classList.contains("menu-open") && window.scrollY <= 0;
+  document.addEventListener("touchstart", e => { if (ativo || e.touches.length !== 1 || !pode()) { y0 = null; return; } y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
+  document.addEventListener("touchmove", e => {
+    if (y0 == null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy <= 0 || window.scrollY > 0) { ind.classList.remove("on"); ind.style.transform = ""; return; }
+    const d = Math.min(dy * 0.5, 110);
+    ind.classList.add("on"); ind.style.transform = `translate(-50%, ${d}px)`;
+    ind.querySelector(".ptr-ico").style.transform = `rotate(${d * 3}deg)`;
+    ind.querySelector(".ptr-txt").textContent = dy * 0.5 >= LIM ? "Solte para atualizar" : "Puxe para atualizar";
+  }, { passive: true });
+  document.addEventListener("touchend", async () => {
+    if (y0 == null) return; y0 = null;
+    if (dy * 0.5 < LIM) { ind.classList.remove("on"); ind.style.transform = ""; return; }
+    ativo = true; ind.classList.add("girando"); ind.querySelector(".ptr-txt").textContent = "Atualizando…";
+    ind.style.transform = `translate(-50%, ${LIM}px)`;
+    await atualizarTudo();
+    setTimeout(() => { ind.classList.remove("on", "girando"); ind.style.transform = ""; ativo = false; }, 300);
+  });
+})();
 function marcarAvisoVisto() { if (S.aviso) store.set("adm3-aviso-visto", S.aviso.id); }
 function avisoModal() {
   const a = S.aviso; if (!a) return;

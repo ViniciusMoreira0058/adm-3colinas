@@ -1,6 +1,6 @@
 /* Service worker do ADM 3Colinas: deixa o app instalável e abre a última versão
    guardada quando estiver sem internet. Os dados vêm sempre do Supabase. */
-const CACHE = "adm3-v5";
+const CACHE = "adm3-v6";
 const ARQUIVOS = ["./", "index.html", "app.js", "dados.js", "demo.js", "manifest.webmanifest",
   "assets/bg.jpg", "assets/logo.png", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS)).then(() => self.skipWaiting())); });
@@ -15,4 +15,9 @@ self.addEventListener("fetch", e => {
     if (r.ok) { const c = r.clone(); caches.open(CACHE).then(k => k.put(e.request, c)); }
     return r;
   }).catch(() => caches.match(e.request).then(r => r || caches.match("index.html"))));
+});
+// tocar na notificação abre (ou traz para frente) o app
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => cs.length ? cs[0].focus() : self.clients.openWindow("./")));
 });

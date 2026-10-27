@@ -137,6 +137,13 @@ button { cursor: pointer; }
 .banner.aviso { border-style: solid; }
 .banner.aviso svg { width: 16px; height: 16px; vertical-align: -3px; color: var(--accent); }
 .aviso-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+html, body { overscroll-behavior-y: contain; }
+.ptr { position: fixed; top: calc(-44px + env(safe-area-inset-top, 0px)); left: 50%; transform: translate(-50%, 0); z-index: 65; display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 13px; font-weight: 700; opacity: 0; pointer-events: none; }
+.ptr.on { opacity: 1; }
+.ptr-ico { display: inline-block; font-size: 18px; color: var(--accent); line-height: 1; }
+.ptr.girando .ptr-ico { animation: ptrgira .8s linear infinite; }
+@keyframes ptrgira { to { transform: rotate(360deg); } }
 .selbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--bad); border-radius: 10px; background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .selbar .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .selall { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; cursor: pointer; }
@@ -146,7 +153,7 @@ tr.picked td, .pcard.picked { background: var(--accent-soft); }
 .btn.danger-fill { background: var(--bad); border-color: var(--bad); color: #fff; }
 .banner { border: 1px dashed var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 10px 14px; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; font-size: 14px; }
 
-/* Painel */
+/* Dashboard */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; text-align: left; }
 button.kpi:hover { border-color: var(--accent); }
@@ -521,6 +528,7 @@ a.btn { text-decoration: none; }
     </div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
+      <button class="btn ghost" id="notifBtn" type="button" hidden><svg aria-hidden="true"><use href="#i-bell"/></svg> Ativar notificações</button>
       <button class="btn ghost" id="meBtn" type="button" data-act="quem-sou"></button>
       <button class="btn ghost" id="themeBtn" type="button"></button>
       <div class="sync" id="sync"><i></i><span>Conectando…</span></div>
@@ -532,7 +540,7 @@ a.btn { text-decoration: none; }
       <button class="backbtn" type="button" id="backBtn" hidden><svg aria-hidden="true"><use href="#i-back"/></svg><span>Voltar</span></button>
       <div class="mtop-title">
         <img class="avatar" src="icons/icon-192.png" alt="" width="40" height="40">
-        <div style="min-width:0"><span class="appname">ADM 3Colinas</span><b id="mtopTitle">Painel</b><small id="mtopSub">TOP 1922</small></div>
+        <div style="min-width:0"><span class="appname">ADM 3Colinas</span><b id="mtopTitle">Dashboard</b><small id="mtopSub">TOP 1922</small></div>
       </div>
       <button class="icon-btn" id="themeBtnM" type="button" aria-label="Trocar tema"></button>
     </div>
