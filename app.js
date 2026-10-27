@@ -152,7 +152,7 @@ const VIEWS = [
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
   { id: "consagracao", l: "Consagração", i: "group" },
-  { id: "pins", l: "Pins", i: "check", demo: true },   // em teste: só na demonstração
+  { id: "pins", l: "Pins", i: "check" },
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
@@ -1178,7 +1178,7 @@ async function gerarCsgPdf(modo, de, ate, wa) {
 }
 /* ---------- Pins (pins dos bonés: entregues ou pendentes) ----------
    Cada pessoa fica em config/pin-<id> { nome, telefone, email, conclusao, lote, status: entregue|pendente, entregueEm, entreguePor }.
-   Os dados vêm da planilha "alunos do lote" da plataforma (.csv) e o ADM marca a entrega no app. Por enquanto só na demonstração. */
+   Os dados vêm da planilha "alunos do lote" da plataforma (.csv) e o ADM marca a entrega no app. */
 const PIN_RE = /^pin-/;
 const pinsTodos = () => Object.entries(S.cfgDocs || {}).filter(([k]) => PIN_RE.test(k)).map(([k, d]) => ({ id: k, ...d }))
   .sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
@@ -1203,7 +1203,7 @@ function vPins() {
     .filter(p => !q || norm(p.nome).includes(q) || digits(p.telefone).includes(digits(F.q) || "§") || norm(p.email).includes(q));
   const seg = (v, l, n) => `<button type="button" data-pin-st="${v}" aria-pressed="${F.st === v}">${l} <span class="num" style="opacity:.75">${n}</span></button>`;
   return `
-  <div class="head"><div><h2>Pins</h2><p>Pins dos bonés de quem concluiu a pista: quem já recebeu e quem ainda está pendente. Toque em <b>Entregar</b> quando a pessoa receber.${DEMO ? " <b>Aba em teste: por enquanto só aparece na demonstração.</b>" : ""}</p></div>
+  <div class="head"><div><h2>Pins</h2><p>Pins dos bonés de quem concluiu a pista: quem já recebeu e quem ainda está pendente. Toque em <b>Entregar</b> quando a pessoa receber.</p></div>
     <div class="actions">${ed ? `<button class="btn" type="button" data-act="pin-msg">${ico("chat")} Editar mensagem</button><button class="btn primary" type="button" data-act="pin-importar">${ico("upload")} Importar planilha</button>` : ""}</div></div>
   <div class="kpis">
     <div class="kpi"><span class="lbl">Entregues</span><span class="val num">${ent.length}<small style="font-size:18px;color:var(--muted)"> / ${todos.length}</small></span><div class="bar good"><i style="width:${pct(ent.length, todos.length)}%"></i></div></div>
