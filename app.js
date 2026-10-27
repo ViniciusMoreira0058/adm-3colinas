@@ -226,7 +226,7 @@ function renderNav() {
   const online = onlineAdms().length;
   counts.usuarios = online ? `${online} on` : null;
   const novas = ME.acesso ? notifNovas() : 0;
-  $("#nav").innerHTML = VIEWS.filter(canSee).map(v => `<button type="button" data-go="${v.id}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : ""}</button>`).join("");
+  $("#nav").innerHTML = VIEWS.filter(v => canSee(v) && !v.all).map(v => `<button type="button" data-go="${v.id}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : ""}</button>`).join("");
   const sino = $("#bellBtn");
   if (sino) { sino.hidden = !ME.acesso; sino.querySelector(".badge").hidden = !novas; sino.querySelector(".badge").textContent = novas > 99 ? "99+" : novas;
     sino.setAttribute("aria-label", novas ? `Notificações: ${novas} nova(s)` : "Notificações"); }
