@@ -57,3 +57,5 @@ Depois de entrar uma vez com internet, o app abre e funciona sem conexão (útil
 ## Cronograma
 
 A aba **Cronograma** mostra o cronograma do TOP por dia (D1 a D4), com as cores da planilha (prédica, refeição, destaque). O ADM toca em **Iniciar** quando o momento começa e em **Terminar** quando acaba; o app mostra o atraso em relação ao horário previsto e quem marcou. Dá para corrigir um horário tocando nele e para adicionar, editar ou apagar momentos (vale só para o TOP atual). O cronograma padrão fica em `cronograma.js`. Não precisa rodar SQL: os dados ficam na tabela `adm_docs` (coleção `config`).
+
+Cada ADM marca o **próprio cronograma** (`config/crono-<top>-adm-<membro>`), então ninguém sobrescreve o horário de outro. O dono separa os ADMs em **equipes** e escolhe os **coordenadores** (botão Equipes). O ADM vê o dele e, só para leitura, o dos colegas de equipe; o dono e os coordenadores veem os de todos, agrupados por equipe. O PDF leva o nome do ADM no cabeçalho e pode sair de um ADM, de uma equipe inteira ou de todos.

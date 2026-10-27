@@ -969,17 +969,27 @@ window.ADM_DEMO = {
 {
 "col": "config",
 "id": "equipes-top1922",
-"data": {"equipes": [{"id": "eq1", "nome": "Equipe Trilha", "resp": {"id": "m-thal", "nome": "Thalisson"}, "adms": [{"id": "m-thal", "nome": "Thalisson"}, {"id": "m-rafa", "nome": "Rafael Lima"}]}, {"id": "eq2", "nome": "Equipe Base", "resp": {"id": "m-bru", "nome": "Bruno Costa"}, "adms": [{"id": "m-bru", "nome": "Bruno Costa"}, {"id": "m-hen", "nome": "Henrique"}]}], "coord": [{"id": "m-die", "nome": "Diego Souza"}]}
+"data": {"equipes": [{"id": "eq1", "nome": "Equipe Trilha", "adms": [{"id": "m-thal", "nome": "Thalisson"}, {"id": "m-rafa", "nome": "Rafael Lima"}]}, {"id": "eq2", "nome": "Equipe Base", "adms": [{"id": "m-bru", "nome": "Bruno Costa"}, {"id": "m-hen", "nome": "Henrique"}]}], "coord": [{"id": "m-die", "nome": "Diego Souza"}]}
 },
 {
 "col": "config",
-"id": "crono-top1922-eq1",
-"data": {"d1-01": {"ini": "10:05", "fim": "10:28", "iniPor": "Thalisson", "fimPor": "Thalisson"}, "d1-02": {"ini": "10:35", "fim": "11:40", "iniPor": "Rafael Lima", "fimPor": "Rafael Lima"}, "d1-03": {"ini": "12:10", "fim": "13:05", "iniPor": "Thalisson", "fimPor": "Thalisson"}, "d1-04": {"ini": "13:05", "fim": "13:12", "iniPor": "Thalisson", "fimPor": "Thalisson"}, "d1-05": {"ini": "13:40", "fim": "14:05", "iniPor": "Rafael Lima", "fimPor": "Rafael Lima"}, "d1-06": {"ini": "13:55", "fim": "14:10", "iniPor": "Thalisson", "fimPor": "Thalisson"}, "d1-07": {"ini": "14:20", "iniPor": "Thalisson"}}
+"id": "crono-top1922-adm-m-thal",
+"data": {"_adm": {"id": "m-thal", "nome": "Thalisson"}, "d1-01": {"ini": "10:05", "iniPor": "Thalisson", "fim": "10:28", "fimPor": "Thalisson"}, "d1-02": {"ini": "10:35", "iniPor": "Thalisson", "fim": "11:40", "fimPor": "Thalisson"}, "d1-03": {"ini": "12:10", "iniPor": "Thalisson", "fim": "13:05", "fimPor": "Thalisson"}, "d1-04": {"ini": "13:05", "iniPor": "Thalisson", "fim": "13:12", "fimPor": "Thalisson"}, "d1-05": {"ini": "13:40", "iniPor": "Thalisson", "fim": "14:05", "fimPor": "Thalisson"}, "d1-06": {"ini": "14:05", "iniPor": "Thalisson", "fim": "14:15", "fimPor": "Thalisson"}, "d1-07": {"ini": "14:20", "iniPor": "Thalisson"}}
 },
 {
 "col": "config",
-"id": "crono-top1922-eq2",
-"data": {"d1-01": {"ini": "10:00", "fim": "10:25", "iniPor": "Bruno Costa", "fimPor": "Bruno Costa"}, "d1-02": {"ini": "10:40", "fim": "11:50", "iniPor": "Bruno Costa", "fimPor": "Bruno Costa"}, "d1-03": {"ini": "12:20", "fim": "13:15", "iniPor": "Bruno Costa", "fimPor": "Bruno Costa"}, "d1-04": {"ini": "13:15", "iniPor": "Bruno Costa"}}
+"id": "crono-top1922-adm-m-rafa",
+"data": {"_adm": {"id": "m-rafa", "nome": "Rafael Lima"}, "d1-01": {"ini": "10:02", "iniPor": "Rafael Lima", "fim": "10:30", "fimPor": "Rafael Lima"}, "d1-02": {"ini": "10:38", "iniPor": "Rafael Lima", "fim": "11:45", "fimPor": "Rafael Lima"}, "d1-03": {"ini": "12:15", "iniPor": "Rafael Lima", "fim": "13:00", "fimPor": "Rafael Lima"}, "d1-04": {"ini": "13:02", "iniPor": "Rafael Lima"}}
+},
+{
+"col": "config",
+"id": "crono-top1922-adm-m-bru",
+"data": {"_adm": {"id": "m-bru", "nome": "Bruno Costa"}, "d1-01": {"ini": "10:00", "iniPor": "Bruno Costa", "fim": "10:25", "fimPor": "Bruno Costa"}, "d1-02": {"ini": "10:40", "iniPor": "Bruno Costa", "fim": "11:50", "fimPor": "Bruno Costa"}, "d1-03": {"ini": "12:20", "iniPor": "Bruno Costa", "fim": "13:15", "fimPor": "Bruno Costa"}, "d1-04": {"ini": "13:15", "iniPor": "Bruno Costa"}}
+},
+{
+"col": "config",
+"id": "crono-top1922-adm-m-hen",
+"data": {"_adm": {"id": "m-hen", "nome": "Henrique"}, "d1-01": {"ini": "10:10", "iniPor": "Henrique", "fim": "10:35", "fimPor": "Henrique"}, "d1-02": {"ini": "10:45", "iniPor": "Henrique"}}
 },
 {
 "col": "pessoas",
