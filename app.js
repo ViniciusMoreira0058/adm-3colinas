@@ -1013,6 +1013,8 @@ function erroAmigavel(e) {
   if (/row-level security|permission|sem permiss/i.test(m)) return "Você não tem permissão para essa alteração.";
   if (/duplicate|unique/i.test(m)) return "Esse e-mail já está cadastrado.";
   if (/fetch|network|Failed/i.test(m)) return "Sem internet agora. Tente de novo em instantes.";
+  if (/rate limit|too many|429/i.test(m)) return "O sistema de e-mails atingiu o limite por hora. Peça ao coordenador para desligar a confirmação por e-mail no Supabase, ou tente de novo daqui a 1 hora.";
+  if (/email not confirmed/i.test(m)) return "Seu e-mail ainda não foi confirmado. Abra o link que chegou no seu e-mail, ou peça ao coordenador para liberar.";
   return m || "Não foi possível concluir. Tente de novo.";
 }
 
