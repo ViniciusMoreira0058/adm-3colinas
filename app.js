@@ -1510,11 +1510,13 @@ function acharNoApp(n) {
 }
 function analisarImport(lidos) {
   const chave = n => n.tipo + "|" + norm(n.nome);
-  const ativos = new Set(lidos.filter(n => n.inscricao !== "cancelada").map(chave));
+  // quem cancelou e comprou de novo (às vezes com o nome escrito diferente) vale pela compra ativa
+  const ativos = new Set(lidos.filter(n => n.inscricao !== "cancelada").flatMap(n => [chave(n), digits(n.telefone).length >= 10 && n.tipo + "|t" + digits(n.telefone), n.email && n.tipo + "|e" + n.email].filter(Boolean)));
+  const ativo = n => ativos.has(chave(n)) || ativos.has(n.tipo + "|t" + digits(n.telefone)) || (n.email && ativos.has(n.tipo + "|e" + n.email));
   const vistos = new Set(), novos = [], ja = [], canc = [];
   lidos.forEach(n => {
     if (n.inscricao === "cancelada") {
-      if (ativos.has(chave(n)) || vistos.has("c" + chave(n))) return;   // cancelou e comprou de novo: vale a compra ativa
+      if (ativo(n) || vistos.has("c" + chave(n))) return;
       vistos.add("c" + chave(n));
       const a = acharNoApp(n); canc.push({ n, p: a && a.p }); return;
     }
