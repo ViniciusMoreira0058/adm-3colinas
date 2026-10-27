@@ -74,7 +74,12 @@ function criarBanco(fonte, opc = {}) {
   const pendente = (col, id) => fila.some(o => o.col === col && o.id === id);
   const iniciar = () => pronto || (pronto = carregar().then(() => {
     // o que chega em tempo real não passa por cima do que ainda está na fila deste aparelho
-    fonte.ouvir((col, id, data) => { if (!pendente(col, id)) aplicar(col, id, data); });
+    fonte.ouvir((col, id, data) => {
+      if (pendente(col, id)) return;
+      const antes = colMap(col).get(id);
+      aplicar(col, id, data);
+      if (opc.onRemoto) try { opc.onRemoto(col, id, clone(data), antes === undefined ? null : clone(antes)); } catch (e) { console.error(e); }
+    });
     if (fila.length) sincronizar();
   }));
   // envia a fila em ordem; para no primeiro erro de rede e tenta de novo depois

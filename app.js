@@ -2672,23 +2672,76 @@ function checarAviso() {
   if ($("#modalRoot").innerHTML) return;   // tem outra janela aberta: fica a faixa no alto da tela
   avisoModal();
 }
-// notificação do celular/computador (aparece mesmo com o app em segundo plano, se a pessoa permitiu)
+// mostra a notificação do celular/computador (aparece com o app em segundo plano, se a pessoa permitiu)
+function mostrarNotificacao(titulo, corpo, tag) {
+  try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch {}
+  if (!("Notification" in window) || Notification.permission !== "granted") return false;
+  const op = { body: corpo, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag };
+  const direto = () => { try { new Notification(titulo, op); } catch {} };
+  // no celular a notificação precisa sair pelo service worker; sem ele (ou se falhar), usa a do navegador
+  (navigator.serviceWorker && navigator.serviceWorker.getRegistration ? navigator.serviceWorker.getRegistration() : Promise.resolve(null))
+    .then(r => r ? r.showNotification(titulo, op) : direto()).catch(direto);
+  return true;
+}
+/* O dono recebe aviso de tudo que os ADMs atualizam (cadastros, cronograma, consagração), agrupado a cada poucos segundos */
+const notifTudo = () => S.isOwner && store.get("adm3-notif-tudo") !== "0";
+function atividadeDe(col, id, novo, antes) {
+  if (!novo) return null;
+  const mudou = k => JSON.stringify(novo[k]) !== JSON.stringify((antes || {})[k]);
+  if (col === "pessoas") {
+    if (!novo.admId || novo.admId === ME.id || (antes && antes.admEm === novo.admEm)) return null;
+    const campos = Object.keys(novo).filter(k => !["adm", "admId", "admEm", "atualizado", "importId"].includes(k) && mudou(k));
+    if (!campos.length) return null;
+    const txt = antes ? campos.slice(0, 3).map(k => `${CAMPOS[k] || k}: ${fmtValor(k, novo[k])}`).join(" · ") : `novo cadastro em ${abaDoRegistro("pessoas", novo)}`;
+    return { quem: novo.adm || "Um ADM", txt: `${novo.nome || "Cadastro"} · ${txt}` };
+  }
+  if (col !== "config") return null;
+  const m = CSG_RE.exec(id);
+  if (m && novo.por && novo.por.id !== ME.id && (novo.nomes || []).length !== ((antes || {}).nomes || []).length)
+    return { quem: novo.por.nome || "Um ADM", txt: `Consagração ${fmtDia(m[1])}: lista com ${(novo.nomes || []).length} pessoa(s)` };
+  if (/^crono-.+-adm-/.test(id) && novo._adm && novo._adm.id !== ME.id) {
+    const k = Object.keys(novo).find(k => k[0] !== "_" && mudou(k)); if (!k) return null;
+    const it = cronoPlano().flatMap(d => d.itens).find(i => i.id === k) || {}, a = novo[k] || {}, b = (antes || {})[k] || {};
+    const acao = a.fim && a.fim !== b.fim ? `terminou ${it.atv || k} às ${a.fim}` : a.ini && a.ini !== b.ini ? `iniciou ${it.atv || k} às ${a.ini}` : `ajustou ${it.atv || k}`;
+    return { quem: novo._adm.nome || "Um ADM", txt: "Cronograma: " + acao };
+  }
+  return null;
+}
+let filaAtiv = [], tAtiv = null;
+function notificarAtividade(col, id, novo, antes) {
+  if (!notifTudo()) return;
+  const a = atividadeDe(col, id, novo, antes); if (!a) return;
+  filaAtiv.push(a); clearTimeout(tAtiv); tAtiv = setTimeout(dispararAtividade, 4000);
+}
+function dispararAtividade() {
+  const f = filaAtiv; filaAtiv = []; if (!f.length) return;
+  const um = f.length === 1, titulo = um ? `${f[0].quem} atualizou o app` : `${f.length} atualizações da equipe`;
+  const corpo = f.slice(0, 4).map(a => (um ? "" : a.quem.split(" ")[0] + ": ") + a.txt).join("\n") + (f.length > 4 ? `\n+ ${f.length - 4} outra(s)` : "");
+  mostrarNotificacao(titulo + " · ADM 3Colinas", corpo, "adm3-ativ-" + Date.now());
+  toast(um ? `${f[0].quem}: ${f[0].txt}` : `${titulo}: ${f.map(a => a.quem.split(" ")[0]).filter((v, i, x) => x.indexOf(v) === i).join(", ")}`);
+}
+// notificação de planilha importada
 function notificarAviso(a) {
   if (store.get("adm3-aviso-notif") === a.id) return;
   store.set("adm3-aviso-notif", a.id);
-  try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch {}
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
   const corpo = `${a.novosP} novo(s) senderista(s) e ${a.novosL} legendário(s)${a.pagPend ? ` · ${a.pagPend} com pagamento pendente` : ""}. Importado por ${a.por || "um ADM"}.`;
-  const op = { body: corpo, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag: "adm3-" + a.id };
-  (navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(r => r.showNotification("Planilha atualizada · ADM 3Colinas", op))
-    : Promise.reject()).catch(() => { try { new Notification("Planilha atualizada · ADM 3Colinas", op); } catch {} });
+  mostrarNotificacao("Planilha atualizada · ADM 3Colinas", corpo, "adm3-" + a.id);
 }
 function pintarNotifBtn() {
   const b = $("#notifBtn"); if (!b) return;
-  b.hidden = !("Notification" in window) || Notification.permission !== "default" || !ME.acesso;
+  const tem = "Notification" in window, perm = tem ? Notification.permission : "denied";
+  if (S.isOwner && ME.acesso && perm === "granted") {
+    b.hidden = false; b.innerHTML = `${ico("bell")} ${notifTudo() ? "Avisos da equipe: ligados" : "Avisos da equipe: desligados"}`; return;
+  }
+  b.innerHTML = `${ico("bell")} Ativar notificações`;
+  b.hidden = !tem || perm !== "default" || !ME.acesso;
 }
 async function pedirNotificacao() {
-  try { const r = await Notification.requestPermission(); toast(r === "granted" ? "Notificações ativadas neste aparelho" : "Notificações não foram permitidas"); }
+  if (S.isOwner && "Notification" in window && Notification.permission === "granted") {
+    store.set("adm3-notif-tudo", notifTudo() ? "0" : "1"); pintarNotifBtn();
+    toast(notifTudo() ? "Você vai receber aviso de tudo que os ADMs atualizarem" : "Avisos da equipe desligados neste aparelho"); return;
+  }
+  try { const r = await Notification.requestPermission(); toast(r === "granted" ? (S.isOwner ? "Notificações ativadas: você vai receber aviso de tudo que os ADMs atualizarem" : "Notificações ativadas neste aparelho") : "Notificações não foram permitidas"); }
   catch { toast("Este aparelho não aceita notificações. No iPhone, instale o app na tela inicial primeiro."); }
   pintarNotifBtn();
 }
@@ -2800,8 +2853,18 @@ function conectarDados() {
       if (f.offline && !antes.offline && sessaoOk) toast("Sem internet. Pode continuar usando: as alterações ficam guardadas e são enviadas quando a conexão voltar.");
       renderNav(); },
     onEnviado: n => toast(`Internet de volta: ${n} alteração(ões) enviada(s) para a equipe.`),
+    onRemoto: notificarAtividade,
   });
   if (DEMO) S.online = "demo";
+  // demonstração: simula um ADM atualizando para o dono ver o aviso chegar
+  if (DEMO && S.isOwner && !S.demoAtiv) { S.demoAtiv = true; setTimeout(() => {
+    const p = (S.pessoas || []).find(x => x.tipo === "participante" && x.atestado !== "confirmado"); if (!p) return;
+    const { id, ...antes } = p, novo = { ...antes, atestado: "confirmado", adm: "Thalisson", admId: "m-thal", admEm: new Date().toISOString() };
+    api.update("pessoas", id, { atestado: "confirmado", adm: "Thalisson", admId: "m-thal", admEm: novo.admEm }).then(() => notificarAtividade("pessoas", id, novo, antes));
+    const cid = "crono-" + curTopId() + "-adm-m-thal", c = (S.cfgDocs || {})[cid];
+    if (c) { const k = cronoPlano()[0].itens.find(i => !(c[i.id] || {}).fim); if (k) { const m = { ...(c[k.id] || {}), ini: (c[k.id] || {}).ini || agoraHM(), fim: agoraHM(), fimPor: "Thalisson" };
+      api.update("config", cid, { [k.id]: m }).then(() => notificarAtividade("config", cid, { ...c, [k.id]: m }, c)); } }
+  }, 15000); }
   const sub = col => db.collection(col).onSnapshot(snap => {
     S[col] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     S.loaded[col] = true; render();
