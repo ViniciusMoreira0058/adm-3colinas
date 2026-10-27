@@ -1,0 +1,8 @@
+{
+  "name": "adm-3colinas",
+  "private": true,
+  "description": "App da equipe ADM 3Colinas. Site estático; só a pasta api/ (notificações) usa Node.",
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

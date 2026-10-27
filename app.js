@@ -593,6 +593,8 @@ function cronoMarcar(id, dados, msg) {
   const docId = cronoDocId(adm);
   const atual = { ...(cronoMarcas(adm)[id] || {}), ...dados };
   Object.keys(atual).forEach(k => { if (atual[k] === "") delete atual[k]; });
+  const it = cronoPlano().flatMap(d => d.itens).find(i => i.id === id);
+  if (it && it.atv) atual.atv = it.atv;
   const existe = !!(S.cfgDocs || {})[docId];
   save(() => existe ? api.update("config", docId, { [id]: atual }) : api.set("config", docId, { _adm: eu(), [id]: atual }), msg);
 }
@@ -1546,7 +1548,7 @@ function vUsuarios() {
     .sort((a, b) => (b.e.dono ? 1 : 0) - (a.e.dono ? 1 : 0) || (b.on ? 1 : 0) - (a.on ? 1 : 0) || String(b.e.visto_em || "").localeCompare(String(a.e.visto_em || "")));
   return `
   <div class="head"><div><h2>Usuários</h2><p>Cadastre quem pode entrar no app com o e-mail da pessoa e escolha as abas que ela pode ver ou alterar. Só você vê esta aba.</p></div>
-    <div class="actions"><button class="btn primary" type="button" data-act="novo-adm">${ico("plus")} Cadastrar usuário</button></div></div>
+    <div class="actions"><button class="btn" type="button" data-act="novidade">${ico("bell")} Avisar novidade</button><button class="btn primary" type="button" data-act="novo-adm">${ico("plus")} Cadastrar usuário</button></div></div>
   <div class="kpis">
     <div class="kpi"><span class="lbl">Cadastrados</span><span class="val num">${S.equipe.length}</span><span class="sub">${S.equipe.filter(e => e.ativo !== false).length} com acesso liberado</span></div>
     <div class="kpi"><span class="lbl">Online agora</span><span class="val num" style="color:var(--good)">${online.length}</span><span class="sub">com o app aberto</span></div>
@@ -1710,7 +1712,7 @@ function render() {
 }
 
 /* ---------- Formulários ---------- */
-function closeModal() { $("#modalRoot").innerHTML = ""; }
+function closeModal() { $("#modalRoot").innerHTML = ""; setTimeout(checarNovidade, 300); }
 function modal(html, onSubmit) {
   $("#modalRoot").innerHTML = `<div class="overlay" data-close><form class="modal" id="mform" novalidate>${html}</form></div>`;
   const f = $("#mform");
@@ -2183,6 +2185,7 @@ function sair() {
     const u = (await sb.auth.getSession().catch(() => ({ data: {} }))).data.session;
     if (apagar) { ADM_DADOS.limparLocal(ME.id); esquecerConta(((u && u.user && u.user.email) || store.get("adm-email") || "").toLowerCase()); }
     try { localStorage.removeItem("adm3-perfil"); } catch {}
+    await desativarPush();
     await Promise.resolve(sb.auth.signOut()).catch(() => {});
     location.reload();
   });
@@ -2294,6 +2297,7 @@ document.addEventListener("click", e => {
   if (d.act === "csg-colar") { csgColarForm(); return; }
   if (d.act === "csg-cfg") { csgCfgForm(); return; }
   if (d.act === "csg-unir") { csgUnirForm(); return; }
+  if (d.act === "novidade") { novidadeForm(); return; }
   if (d.act === "pin-importar") { pinImportarForm(); return; }
   if (d.act === "pin-msg") { pinMsgForm(); return; }
   if (d.pinOk) { pinEntregar(d.pinOk); return; }
@@ -2856,7 +2860,7 @@ function dispararAtividade() {
   const f = filaAtiv; filaAtiv = []; if (!f.length) return;
   const um = f.length === 1, titulo = um ? `${f[0].quem} atualizou o app` : `${f.length} atualizações da equipe`;
   const corpo = f.slice(0, 4).map(a => (um ? "" : a.quem.split(" ")[0] + ": ") + a.txt).join("\n") + (f.length > 4 ? `\n+ ${f.length - 4} outra(s)` : "");
-  mostrarNotificacao(titulo + " · ADM 3Colinas", corpo, "adm3-ativ-" + Date.now());
+  if (!pushOk()) mostrarNotificacao(titulo + " · ADM 3Colinas", corpo, "adm3-ativ-" + Date.now());
   toast(um ? `${f[0].quem}: ${f[0].txt}` : `${titulo}: ${f.map(a => a.quem.split(" ")[0]).filter((v, i, x) => x.indexOf(v) === i).join(", ")}`);
 }
 // notificação de planilha importada
@@ -2864,7 +2868,7 @@ function notificarAviso(a) {
   if (store.get("adm3-aviso-notif") === a.id) return;
   store.set("adm3-aviso-notif", a.id);
   const corpo = `${a.novosP} novo(s) senderista(s) e ${a.novosL} legendário(s)${a.pagPend ? ` · ${a.pagPend} com pagamento pendente` : ""}. Importado por ${a.por || "um ADM"}.`;
-  mostrarNotificacao("Planilha atualizada · ADM 3Colinas", corpo, "adm3-" + a.id);
+  if (!pushOk()) mostrarNotificacao("Planilha atualizada · ADM 3Colinas", corpo, "adm3-" + a.id);
 }
 function pintarNotifBtn() {
   const b = $("#notifBtn"); if (!b) return;
@@ -2878,11 +2882,68 @@ function pintarNotifBtn() {
 async function pedirNotificacao() {
   if (S.isOwner && "Notification" in window && Notification.permission === "granted") {
     store.set("adm3-notif-tudo", notifTudo() ? "0" : "1"); pintarNotifBtn();
+    if (notifTudo()) ativarPush(); else desativarPush();
     toast(notifTudo() ? "Você vai receber aviso de tudo que os ADMs atualizarem" : "Avisos da equipe desligados neste aparelho"); return;
   }
-  try { const r = await Notification.requestPermission(); toast(r === "granted" ? (S.isOwner ? "Notificações ativadas: você vai receber aviso de tudo que os ADMs atualizarem" : "Notificações ativadas neste aparelho") : "Notificações não foram permitidas"); }
+  try { const r = await Notification.requestPermission(); if (r === "granted") ativarPush();
+    toast(r === "granted" ? (S.isOwner ? "Notificações ativadas: você vai receber aviso de tudo que os ADMs atualizarem, mesmo com o app fechado" : "Notificações ativadas neste aparelho") : "Notificações não foram permitidas"); }
   catch { toast("Este aparelho não aceita notificações. No iPhone, instale o app na tela inicial primeiro."); }
   pintarNotifBtn();
+}
+
+/* Notificações com o app fechado (Web Push): o aparelho fica guardado em adm_push e o banco
+   chama api/push.js quando precisa avisar (supabase/push.sql). Sem isso, valem só os avisos locais acima. */
+const VAPID_PUB = "BDxZeBfN6aI5VHiCjJAKEkj7S9GSXC0VSEYKZN4kiSA5x2PmmgACCDqd3n6wubEYsd1ed9dfXEF5DkyMZMXePtA";
+const pushOk = () => !DEMO && store.get("adm3-push") === "1";
+const b64uBytes = t => { const b = atob((t + "===".slice((t.length + 3) % 4)).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function ativarPush() {
+  if (DEMO || !sb || !ME.acesso || !("PushManager" in window) || !navigator.serviceWorker || !("Notification" in window) || Notification.permission !== "granted") return false;
+  if (S.isOwner && !notifTudo()) return false;
+  try {
+    const reg = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.register("sw.js"));
+    let s = await reg.pushManager.getSubscription();
+    if (!s) s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(VAPID_PUB) });
+    const j = s.toJSON();
+    const { error } = await sb.rpc("adm_push_salvar", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+    if (error) throw error;
+    store.set("adm3-push", "1"); return true;
+  } catch (e) { console.warn("push:", e); store.set("adm3-push", "0"); return false; }
+}
+async function desativarPush() {
+  if (DEMO) return;
+  try {
+    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(), s = reg && reg.pushManager && await reg.pushManager.getSubscription();
+    if (s) { await Promise.resolve(sb.rpc("adm_push_apagar", { p_endpoint: s.endpoint })).catch(() => {}); await s.unsubscribe(); }
+  } catch {}
+  store.set("adm3-push", "0");
+}
+
+/* Novidade do app: o dono escreve, todos os ADMs recebem a notificação e veem a explicação ao abrir o app */
+function novidadeForm() {
+  modal(`
+    <h3>Avisar novidade do app</h3>
+    <p class="hint" style="margin:0">Todos os ADMs recebem uma notificação no celular (mesmo com o app fechado, para quem ativou) e veem esta explicação quando abrirem o app.</p>
+    <div class="field"><label for="f-nt">Título</label><input id="f-nt" name="titulo" maxlength="60" required placeholder="Ex.: Nova aba Pins"></div>
+    <div class="field"><label for="f-nx">Explique a novidade</label><textarea id="f-nx" name="texto" rows="5" maxlength="600" required placeholder="Ex.: Agora dá para marcar quem já recebeu o pin do boné. Abra o menu e toque em Pins."></textarea></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${ico("bell")} Enviar para a equipe</button></div></div>`,
+  fd => {
+    const titulo = String(fd.get("titulo") || "").trim(), texto = String(fd.get("texto") || "").trim();
+    if (!titulo || !texto) { toast("Preencha o título e a explicação."); return; }
+    const n = { id: "n" + Date.now().toString(36), titulo, texto, em: new Date().toISOString(), por: ME.adm || "", porId: ME.id || "" };
+    closeModal();
+    save(() => api.set("config", "novidade", n), "Novidade enviada para a equipe");
+  });
+}
+function checarNovidade() {
+  const n = S.novidade;
+  if (!n || !n.id || !ME.acesso || n.porId === ME.id || store.get("adm3-novidade-visto") === n.id) return;
+  if (Date.now() - new Date(n.em || 0).getTime() > 30 * 864e5) return;   // novidade antiga não aparece para quem entrou depois
+  if ($("#modalRoot").innerHTML) return;
+  modal(`
+    <h3>Novidade no app: ${esc(n.titulo)}</h3>
+    <p style="margin:0;white-space:pre-line">${esc(n.texto)}</p>
+    <p class="hint" style="margin:0">Enviado por ${esc(n.por || "Vinicius")} · ${esc(quando(n.em))}</p>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn primary" type="submit">Entendi</button></div></div>`, () => { store.set("adm3-novidade-visto", n.id); closeModal(); });
 }
 
 /* Puxar a tela para baixo (celular) atualiza os dados */
@@ -3021,9 +3082,11 @@ function conectarDados() {
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });
+  db.doc("config/novidade").onSnapshot(snap => { S.novidade = snap.exists ? snap.data() : null; setTimeout(checarNovidade, 900); });
   render();
   if (DEMO) return;
   markSeen(true);
+  ativarPush();   // quem já permitiu notificações passa a receber também com o app fechado
   if (S.isOwner) membros.listar().catch(() => {});
   // quem está com o app aberto + mudanças no meu próprio acesso (bloqueio, abas) e, para o dono, na equipe
   canal = sb.channel("adm-online", { config: { presence: { key: ME.id } } });

@@ -1188,6 +1188,11 @@ window.ADM_DEMO = {
 },
 {
 "col": "config",
+"id": "novidade",
+"data": {"id": "n-demo1", "titulo": "Nova aba Pins", "texto": "Agora dá para marcar quem já recebeu o pin do boné.\nAbra o menu, toque em Pins e use o botão Entregar.", "em": "2026-10-27T12:00:00.000Z", "por": "Vinicius Moreira", "porId": "m-dono"}
+},
+{
+"col": "config",
 "id": "equipes-top1922",
 "data": {"equipes": [{"id": "eq1", "nome": "Equipe Trilha", "adms": [{"id": "m-thal", "nome": "Thalisson"}, {"id": "m-rafa", "nome": "Rafael Lima"}]}, {"id": "eq2", "nome": "Equipe Base", "adms": [{"id": "m-bru", "nome": "Bruno Costa"}, {"id": "m-hen", "nome": "Henrique"}]}], "coord": [{"id": "m-die", "nome": "Diego Souza"}]}
 },

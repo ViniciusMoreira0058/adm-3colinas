@@ -1,7 +1,7 @@
 /* Service worker do ADM 3Colinas: deixa o app instalável e faz ele abrir sem internet.
    Os arquivos do app vêm da rede quando dá (sempre a versão mais nova) e da cópia guardada quando não dá.
    Os dados não passam por aqui: ficam guardados pelo próprio app (dados.js) e vão para o Supabase quando a internet volta. */
-const CACHE = "adm3-v29";
+const CACHE = "adm3-v30";
 const ARQUIVOS = ["./", "index.html", "app.js", "dados.js", "cronograma.js", "demo.js", "manifest.webmanifest",
   "assets/bg.jpg", "assets/logo.png", "icons/icon-192.png", "icons/icon-512.png"];
 // bibliotecas e fontes de fora (supabase-js, leitor de planilha, fonte Outfit)
@@ -37,4 +37,12 @@ self.addEventListener("fetch", e => {
 self.addEventListener("notificationclick", e => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => cs.length ? cs[0].focus() : self.clients.openWindow("./")));
+});
+// notificação que chega com o app fechado (enviada por api/push.js); sempre mostra, o celular exige
+self.addEventListener("push", e => {
+  let m = {};
+  try { m = e.data ? e.data.json() : {}; } catch { m = { body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(m.title || "ADM 3Colinas", {
+    body: m.body || "Tem novidade no app.", icon: "icons/icon-192.png", badge: "icons/icon-192.png",
+    tag: m.tag || "adm3", renotify: true, data: { url: m.url || "./" } }));
 });

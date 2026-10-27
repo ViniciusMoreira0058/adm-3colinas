@@ -41,6 +41,8 @@ As permissões são conferidas no banco (RLS), não só na tela. Bloquear algué
 | `demo.js` | Dados fictícios do modo demonstração |
 | `supabase/schema.sql` | Tabelas, permissões (RLS), funções, histórico e dados iniciais |
 | `supabase/historico.sql` | Só o histórico de alterações, para quem já tinha rodado o schema antes |
+| `supabase/push.sql` | Notificações com o app fechado (aparelhos, gatilho que chama `api/push`) |
+| `api/push.js`, `package.json` | Função da Vercel que entrega as notificações (Web Push) |
 | `manifest.webmanifest`, `sw.js`, `icons/` | Instalação como app no celular |
 
 ## Segurança
@@ -63,3 +65,8 @@ Cada ADM marca o **próprio cronograma** (`config/crono-<top>-adm-<membro>`), en
 ## Consagração
 
 A aba **Consagração** acompanha os 40 dias de consagração. Todo dia um ADM toca em **Colar lista do dia** e cola a lista do grupo (numeração, emojis e nomes repetidos são ignorados). O app soma quantas vezes cada pessoa participou, com filtro por período, e exporta o PDF **Lista Consagração** de um dia ou de um período, com o ADM responsável no cabeçalho. O botão **Enviar no WhatsApp** abre o compartilhar do celular com o PDF anexado (no computador, baixa o PDF e abre o WhatsApp). Os dados ficam em `adm_docs` (coleção `config`: `consag-<data>` e `consag-cfg`). Para um ADM ver a aba, libere "Consagração" no cadastro dele em Usuários. O app aponta nomes que parecem ser da mesma pessoa (nome parecido, erro de digitação, e-mail pessoal e da empresa) para unir ou marcar "não é a mesma"; também dá para unir dois nomes na mão (Unir nomes) e separar depois na ficha da pessoa. As uniões ficam em `config/consag-alias`.
+
+## Notificações com o app fechado
+
+Quem toca em **Ativar notificações** recebe aviso no celular mesmo com o app fechado (no iPhone, só com o app instalado na tela inicial, iOS 16.4 ou mais novo). O dono recebe tudo que os outros ADMs mudam (cadastros, cronograma, consagração, pins), agrupado quando muda muita coisa de uma vez; os ADMs recebem só **planilha importada** e **novidade do app** (Usuários → Avisar novidade, que também aparece como explicação quando o ADM abre o app). Funciona assim: o banco (gatilho em `adm_docs`, `supabase/push.sql`) chama `https://adm-3colinas.vercel.app/api/push`, que envia pelo Web Push. Para ligar, rode `supabase/push.sql` no SQL Editor com a chave privada VAPID no lugar indicado (a chave pública está em `app.js` e `api/push.js`). A chave privada nunca vai para o GitHub.
+
