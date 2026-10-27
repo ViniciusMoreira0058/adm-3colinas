@@ -967,6 +967,11 @@ window.ADM_DEMO = {
 }
 },
 {
+"col": "config",
+"id": "crono-top1922",
+"data": {"d1-01": {"ini": "10:05", "fim": "10:28", "iniPor": "Thalisson", "fimPor": "Thalisson"}, "d1-02": {"ini": "10:35", "fim": "11:40", "iniPor": "Vinicius Moreira", "fimPor": "Vinicius Moreira"}, "d1-03": {"ini": "12:10", "fim": "13:05", "iniPor": "Thalisson", "fimPor": "Thalisson"}, "d1-04": {"ini": "13:05", "fim": "13:12", "iniPor": "Thalisson", "fimPor": "Thalisson"}, "d1-05": {"ini": "13:40", "fim": "14:05", "iniPor": "Vinicius Moreira", "fimPor": "Vinicius Moreira"}, "d1-06": {"ini": "13:55", "fim": "14:10", "iniPor": "Thalisson", "fimPor": "Thalisson"}, "d1-07": {"ini": "14:20", "iniPor": "Thalisson"}}
+},
+{
 "col": "pessoas",
 "id": "ex01",
 "data": {

@@ -83,6 +83,7 @@ function waBtn(p) {
 const S = {
   view: "painel", online: null, canWrite: true,
   pessoas: [], tarefas: [], estoque: [], pista: [], tops: [], config: { alertaBaixo: 5, metaMRE: 110, kitsMRE: 0, topAtual: "top1922" },
+  cfgDocs: {}, cronoDia: store.get("crono-dia"),
   P: [], T: [], topSel: null, equipe: [], peers: [], isOwner: false,
   loaded: { pessoas: false, tarefas: false, estoque: false, pista: false, tops: false },
   f: { q: "", tipo: "participante", status: "todos", adm: "" },
@@ -149,6 +150,7 @@ const VIEWS = [
   { id: "legendarios", l: "Legendários", i: "shield" },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "familias", l: "Famílias", i: "fam" },
+  { id: "cronograma", l: "Cronograma", i: "clock" },
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
@@ -531,6 +533,124 @@ function vFamilias() {
     ${m.length ? `<ul>${m.map(p => `<li><span>${esc(p.nome)}</span>${p.atestado === "confirmado" && p.termo === "assinado" ? '<span class="chip ok">OK</span>' : '<span class="chip wait">Pend.</span>'}</li>`).join("")}</ul>` : `<div class="empty">Ninguém ainda.</div>`}</section>`; }).join("")}</div>`;
 }
 
+/* ---------- Cronograma ----------
+   O plano (horários do TOP) vem do cronograma padrão (cronograma.js) até alguém editar; aí fica em config/cronoplano-<top>.
+   O que aconteceu de verdade (início e fim de cada momento) fica em config/crono-<top>, um campo por momento,
+   então dois ADMs marcando momentos diferentes ao mesmo tempo não se atrapalham. */
+const CRONO_TIPOS = [{ v: "", l: "Normal" }, { v: "predica", l: "Prédica" }, { v: "refeicao", l: "Refeição" }, { v: "destaque", l: "Destaque" }, { v: "especial", l: "Especial" }, { v: "pausa", l: "Encerramento / pausa" }];
+const cronoPlano = () => ((S.cfgDocs || {})["cronoplano-" + curTopId()] || {}).dias || window.ADM_CRONO || [];
+const cronoMarcas = () => (S.cfgDocs || {})["crono-" + curTopId()] || {};
+const agoraHM = () => new Date().toTimeString().slice(0, 5);
+const minDe = h => { const m = /^(\d{1,2}):(\d{2})/.exec(h || ""); return m ? +m[1] * 60 + +m[2] : null; };
+// diferença em minutos entre dois horários do mesmo dia do TOP (a madrugada continua o dia anterior)
+const difMin = (a, b) => { const x = minDe(a), y = minDe(b); if (x == null || y == null) return null; let d = y - x; if (d > 720) d -= 1440; if (d < -720) d += 1440; return d; };
+// atraso só faz sentido perto do horário previsto (mais de 6 h de diferença = marcado em outro dia/teste)
+const atrasoDe = (plan, real) => { const d = difMin(plan, real); return d == null || Math.abs(d) > 360 ? null : d; };
+const fmtDif = d => d === 0 ? "no horário" : (d > 0 ? "+" : "−") + (Math.abs(d) >= 60 ? Math.floor(Math.abs(d) / 60) + "h" + String(Math.abs(d) % 60).padStart(2, "0") : Math.abs(d) + " min");
+function cronoDiaAtual(plano) {
+  if (S.cronoDia && plano.some(d => d.id === S.cronoDia)) return S.cronoDia;
+  const M = cronoMarcas();
+  const d = plano.find(d => d.itens.some(i => M[i.id] && M[i.id].ini) && d.itens.some(i => !(M[i.id] && M[i.id].fim)));
+  return (d || plano[0] || {}).id;
+}
+function cronoMarcar(id, dados, msg) {
+  const docId = "crono-" + curTopId();
+  const atual = { ...(cronoMarcas()[id] || {}), ...dados };
+  Object.keys(atual).forEach(k => { if (atual[k] === "") delete atual[k]; });
+  const existe = !!(S.cfgDocs || {})[docId];
+  save(() => existe ? api.update("config", docId, { [id]: atual }) : api.set("config", docId, { [id]: atual }), msg);
+}
+function vCronograma() {
+  const plano = cronoPlano(), M = cronoMarcas(), dia = cronoDiaAtual(plano), D = plano.find(d => d.id === dia) || { itens: [] };
+  const ed = podeEditar();
+  const feito = i => M[i.id] && M[i.id].fim, comecou = i => M[i.id] && M[i.id].ini;
+  const andando = D.itens.filter(i => comecou(i) && !feito(i));
+  const proximo = D.itens.find(i => !comecou(i));
+  const ultimo = [...D.itens].reverse().find(comecou);
+  const atraso = ultimo && ultimo.hora ? atrasoDe(ultimo.hora, M[ultimo.id].ini) : null;
+  const nFeito = D.itens.filter(feito).length;
+  const inicio = i => { const m = M[i.id] || {};
+    if (m.ini) { const d = i.hora ? atrasoDe(i.hora, m.ini) : null;
+      return `<button type="button" class="crono-hora" data-crono-hora="${i.id}" ${ed ? "" : "disabled"} title="${m.iniPor ? "Marcado por " + esc(m.iniPor) : ""}">${esc(m.ini)}</button>${d != null ? ` <span class="chip ${d > 10 ? "bad" : d > 0 ? "wait" : "ok"}">${fmtDif(d)}</span>` : ""}`; }
+    return ed ? `<button type="button" class="btn sm" data-crono-ini="${i.id}">Iniciar</button>` : `<span class="hint">—</span>`; };
+  const fim = i => { const m = M[i.id] || {};
+    if (m.fim) { const d = m.ini ? difMin(m.ini, m.fim) : null; return `<button type="button" class="crono-hora" data-crono-hora="${i.id}" ${ed ? "" : "disabled"} title="${m.fimPor ? "Marcado por " + esc(m.fimPor) : ""}">${esc(m.fim)}</button>${d != null && d >= 0 ? ` <span class="hint">${d} min</span>` : ""}`; }
+    return m.ini && ed ? `<button type="button" class="btn sm primary" data-crono-fim="${i.id}">Terminar</button>` : `<span class="hint">—</span>`; };
+  const cls = i => ["crono-" + (i.tipo || "normal"), feito(i) ? "feito" : comecou(i) ? "andando" : proximo && proximo.id === i.id ? "proximo" : ""].join(" ");
+  const quem = i => { const m = M[i.id] || {}; const q = [m.iniPor, m.fimPor].filter(Boolean); return q.length ? `<small class="hint">Marcado por ${esc([...new Set(q)].map(n => n.split(" ")[0]).join(", "))}</small>` : ""; };
+  return `
+  <div class="head"><div><h2>Cronograma</h2><p>${esc(topName())} · toque em <b>Iniciar</b> quando o momento começar e em <b>Terminar</b> quando acabar. O horário fica marcado para toda a equipe e funciona sem internet.</p></div>
+    ${ed ? `<div class="actions"><button class="btn" type="button" data-crono-item="novo">${ico("plus")} Novo momento</button></div>` : ""}</div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">${esc(D.nome || "")} concluído</span><span class="val num">${nFeito}<small style="font-size:18px;color:var(--muted)"> / ${D.itens.length}</small></span><div class="bar good"><i style="width:${pct(nFeito, D.itens.length)}%"></i></div></div>
+    <div class="kpi"><span class="lbl">Acontecendo agora</span><span class="val" style="font-size:17px;line-height:1.25">${andando.length ? esc(andando[andando.length - 1].atv) : "—"}</span>${andando.length ? `<span class="sub">desde ${esc(M[andando[andando.length - 1].id].ini)}${andando.length > 1 ? ` · +${andando.length - 1} em andamento` : ""}</span>` : ""}</div>
+    <div class="kpi"><span class="lbl">Próximo</span><span class="val" style="font-size:17px;line-height:1.25">${proximo ? esc(proximo.atv) : "Dia encerrado"}</span>${proximo && proximo.hora ? `<span class="sub">previsto ${esc(proximo.hora)}</span>` : ""}</div>
+    <div class="kpi ${atraso > 10 ? "alert" : ""}"><span class="lbl">Atraso</span><span class="val num">${atraso == null ? "—" : fmtDif(atraso)}</span><span class="sub">${ultimo ? "no último início marcado" : "nenhum início marcado"}</span></div>
+  </div>
+  <div class="seg" role="group" aria-label="Dia">${plano.map(d => { const n = d.itens.filter(feito).length; return `<button type="button" data-crono-dia="${d.id}" aria-pressed="${d.id === dia}">${esc(d.nome)} <span class="num" style="opacity:.75">${n}/${d.itens.length}</span></button>`; }).join("")}</div>
+  <div class="crono-leg"><span class="crono-predica">Prédica</span><span class="crono-refeicao">Refeição</span><span class="crono-destaque">Destaque</span><span class="crono-especial">Especial</span></div>
+  <div class="table-wrap crono"><table>
+    <thead><tr><th>Hora</th><th>Atividade</th><th>Local</th><th>Formação</th><th>Responsável</th><th>Início</th><th>Fim</th>${ed ? "<th></th>" : ""}</tr></thead>
+    <tbody>${D.itens.map(i => `<tr class="${cls(i)}">
+      <td class="num"><b>${esc(i.hora || "")}</b></td><td><b>${esc(i.atv)}</b>${quem(i)}</td><td>${esc(i.local || "")}</td><td>${esc(i.form || "")}</td><td>${esc(i.resp || "")}</td>
+      <td style="white-space:nowrap">${inicio(i)}</td><td style="white-space:nowrap">${fim(i)}</td>
+      ${ed ? `<td><button class="linkbtn" type="button" data-crono-item="${i.id}" aria-label="Editar ${esc(i.atv)}">${ico("edit")}</button></td>` : ""}</tr>`).join("")}</tbody></table></div>
+  <div class="cards crono-cards">${D.itens.map(i => `<article class="pcard ${cls(i)}">
+      <div class="top"><div class="crono-h num">${esc(i.hora || "—")}</div><div style="flex:1"><b>${esc(i.atv)}</b><small class="hint" style="display:block">${esc([i.local, i.form, i.resp].filter(Boolean).join(" · "))}</small>${quem(i)}</div>
+        ${ed ? `<button class="linkbtn" type="button" data-crono-item="${i.id}" aria-label="Editar ${esc(i.atv)}">${ico("edit")}</button>` : ""}</div>
+      <div class="row"><span class="lbl">Início</span>${inicio(i)}<span class="lbl" style="margin-left:8px">Fim</span>${fim(i)}</div>
+    </article>`).join("")}</div>`;
+}
+function cronoHoraForm(id) {
+  const i = cronoPlano().flatMap(d => d.itens).find(x => x.id === id); if (!i) return;
+  const m = cronoMarcas()[id] || {};
+  modal(`
+    <h3>${esc(i.atv)}</h3>
+    <p class="hint" style="margin:0">Previsto: ${esc(i.hora || "sem horário")}${m.iniPor ? ` · início marcado por ${esc(m.iniPor)}` : ""}${m.fimPor ? ` · fim marcado por ${esc(m.fimPor)}` : ""}</p>
+    <div class="grid2"><div class="field"><label for="f-cini">Começou</label><input id="f-cini" type="time" value="${esc(m.ini || "")}"></div>
+    <div class="field"><label for="f-cfim">Terminou</label><input id="f-cfim" type="time" value="${esc(m.fim || "")}"></div></div>
+    <div class="modal-foot"><button class="btn ghost" type="button" id="cLimpar">Limpar horários</button><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  () => { const ini = $("#f-cini").value, fim = $("#f-cfim").value; closeModal();
+    const d = { ini, fim };
+    if (ini !== (m.ini || "")) d.iniPor = ini ? ME.adm : ""; if (fim !== (m.fim || "")) d.fimPor = fim ? ME.adm : "";
+    cronoMarcar(id, d, "Horário salvo"); });
+  $("#cLimpar").onclick = () => { closeModal(); cronoMarcar(id, { ini: "", fim: "", iniPor: "", fimPor: "" }, "Horários apagados"); };
+}
+function cronoItemForm(id) {
+  const plano = JSON.parse(JSON.stringify(cronoPlano()));
+  const novo = id === "novo";
+  const diaAtual = cronoDiaAtual(plano);
+  let dia = plano.find(d => d.itens.some(x => x.id === id)) || plano.find(d => d.id === diaAtual) || plano[0];
+  const i = novo ? { hora: "", atv: "", tipo: "" } : dia.itens.find(x => x.id === id);
+  const campo = (k, l, ph = "") => `<div class="field"><label for="f-c${k}">${l}</label><input id="f-c${k}" value="${esc(i[k] || "")}" placeholder="${ph}"></div>`;
+  modal(`
+    <h3>${novo ? "Novo momento" : "Editar momento"}</h3>
+    <div class="grid2"><div class="field"><label for="f-cdia">Dia</label><select id="f-cdia">${plano.map(d => `<option value="${d.id}" ${d.id === dia.id ? "selected" : ""}>${esc(d.nome)}</option>`).join("")}</select></div>
+    <div class="field"><label for="f-chora">Hora prevista</label><input id="f-chora" type="time" value="${esc(i.hora || "")}"></div></div>
+    ${campo("atv", "Atividade", "Ex.: PRÉDICA 1: TUA TRANSFORMAÇÃO")}
+    <div class="grid2">${campo("local", "Local")}${campo("form", "Formação")}</div>
+    <div class="grid2">${campo("resp", "Responsável")}<div class="field"><label for="f-ctipo">Cor</label>${sel("ctipo", CRONO_TIPOS, i.tipo || "")}</div></div>
+    <p class="hint" style="margin:0">A mudança vale só para o ${esc(topName())} e aparece para toda a equipe.</p>
+    <div class="modal-foot">${novo ? "<span></span>" : `<button class="btn danger" type="button" id="cApagar">Apagar momento</button>`}<div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  () => {
+    const atv = $("#f-catv").value.trim(); if (!atv) { $("#f-catv").focus(); return; }
+    const dados = { hora: $("#f-chora").value, atv, local: $("#f-clocal").value.trim(), form: $("#f-cform").value.trim(), resp: $("#f-cresp").value.trim(), tipo: $("#f-ctipo").value };
+    Object.keys(dados).forEach(k => { if (!dados[k]) delete dados[k]; });
+    const destino = plano.find(d => d.id === $("#f-cdia").value);
+    if (!novo) dia.itens = dia.itens.filter(x => x.id !== id);
+    const item = { id: novo ? destino.id + "-" + ADM_DADOS.novoId() : id, ...dados };
+    // entra na ordem do horário (depois da meia-noite conta como fim do dia)
+    const ord = h => { const m = minDe(h); const base = minDe((destino.itens[0] || {}).hora) ?? 300; return m == null ? 9999 : m < base - 60 ? m + 1440 : m; };
+    const pos = destino.itens.findIndex(x => x.hora && ord(x.hora) > ord(item.hora));
+    if (!item.hora || pos < 0) destino.itens.push(item); else destino.itens.splice(pos, 0, item);
+    closeModal(); S.cronoDia = destino.id;
+    save(() => api.set("config", "cronoplano-" + curTopId(), { dias: plano }), novo ? "Momento adicionado" : "Momento salvo");
+  });
+  const ap = $("#cApagar");
+  if (ap) ap.onclick = () => { if (!confirm(`Apagar "${i.atv}" do cronograma?`)) return; dia.itens = dia.itens.filter(x => x.id !== id); closeModal();
+    save(() => api.set("config", "cronoplano-" + curTopId(), { dias: plano }), "Momento apagado"); };
+}
+
 function vChecklist() {
   const s = stats();
   return `
@@ -825,6 +945,7 @@ function render() {
     : v === "legendarios" ? vPessoas("legendario")
     : v === "familias" ? vFamilias()
     : v === "checklist" ? vChecklist()
+    : v === "cronograma" ? vCronograma()
     : v === "estoque" ? vEstoque()
     : vPista());
   const view = $("#view");
@@ -1335,7 +1456,7 @@ function toast(msg) {
 
 /* ---------- Eventos ---------- */
 const pending = new Map();
-const WRITE_KEYS = ["editDia", "act", "edit", "obs", "editTask", "editItem", "editTop", "topFin", "cyc", "tog", "task", "step", "kits", "editAdm"];
+const WRITE_KEYS = ["editDia", "act", "edit", "obs", "editTask", "editItem", "editTop", "topFin", "cyc", "tog", "task", "step", "kits", "editAdm", "cronoIni", "cronoFim", "cronoItem"];
 function debounceWrite(key, fn, ms = 500) { clearTimeout(pending.get(key)); pending.set(key, setTimeout(() => { pending.delete(key); fn(); }, ms)); }
 
 document.addEventListener("click", e => {
@@ -1361,6 +1482,7 @@ document.addEventListener("click", e => {
   if (d.pendAct === "seq") { if (podeEditar()) cobrarSequencia(); return; }
   if (d.histAct === "atualizar") { S.histOk = false; render(); return; }
   if (d.act === "sair") { sair(); return; }
+  if (d.act === "rede") { redeInfo(); return; }
   if (t.id === "notifBtn") { pedirNotificacao(); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
@@ -1402,7 +1524,11 @@ document.addEventListener("click", e => {
   if (d.edit) { personForm(S.P.find(p => p.id === d.edit)); return; }
   if (d.obs) { obsForm(S.P.find(p => p.id === d.obs)); return; }
   if (d.dup) { dupForm(S.P.find(p => p.id === d.dup)); return; }
-  if (d.act === "rede") { redeInfo(); return; }
+  if (d.cronoDia) { S.cronoDia = d.cronoDia; store.set("crono-dia", d.cronoDia); render(); return; }
+  if (d.cronoIni) { cronoMarcar(d.cronoIni, { ini: agoraHM(), iniPor: ME.adm, iniEm: new Date().toISOString() }, "Início marcado " + agoraHM()); return; }
+  if (d.cronoFim) { cronoMarcar(d.cronoFim, { fim: agoraHM(), fimPor: ME.adm, fimEm: new Date().toISOString() }, "Fim marcado " + agoraHM()); return; }
+  if (d.cronoHora) { cronoHoraForm(d.cronoHora); return; }
+  if (d.cronoItem) { cronoItemForm(d.cronoItem); return; }
   if (d.editTask) { taskForm(S.T.find(x => x.id === d.editTask)); return; }
   if (d.editItem) { itemForm(S.estoque.find(x => x.id === d.editItem)); return; }
   if (d.cyc) {
@@ -1990,6 +2116,7 @@ function conectarDados() {
     if (S.loaded.pessoas && S.loaded.tops) hideSplash();
   }, e => { console.error(e); toast("Não foi possível carregar os dados. " + erroAmigavel(e)); hideSplash(); });
   ["pessoas", "tarefas", "estoque", "pista", "tops"].forEach(sub);
+  db.collection("config").onSnapshot(snap => { S.cfgDocs = Object.fromEntries(snap.docs.map(d => [d.id, d.data()])); if (S.view === "cronograma" || S.view === "painel") render(); });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });
   render();

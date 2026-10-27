@@ -53,3 +53,7 @@ As permissões são conferidas no banco (RLS), não só na tela. Bloquear algué
 ## Sem internet (modo offline)
 
 Depois de entrar uma vez com internet, o app abre e funciona sem conexão (útil no TOP e na trilha). Os dados ficam guardados no aparelho e as alterações vão para uma fila que é enviada sozinha quando a internet volta. O selo **Offline · N para enviar** mostra o que ainda falta enviar. Se duas pessoas mudarem o mesmo campo, vale a última alteração que chegar ao servidor. Importar relatório, Usuários e Histórico precisam de internet. Também dá para entrar sem internet: quem já entrou com e-mail e senha neste aparelho (com internet) consegue entrar de novo offline com a mesma senha. O app guarda só uma "impressão" protegida da senha (PBKDF2), nunca a senha. Ao sair, os dados ficam no aparelho; marque "Apagar os dados guardados neste aparelho" em celular que não é seu.
+
+## Cronograma
+
+A aba **Cronograma** mostra o cronograma do TOP por dia (D1 a D4), com as cores da planilha (prédica, refeição, destaque). O ADM toca em **Iniciar** quando o momento começa e em **Terminar** quando acaba; o app mostra o atraso em relação ao horário previsto e quem marcou. Dá para corrigir um horário tocando nele e para adicionar, editar ou apagar momentos (vale só para o TOP atual). O cronograma padrão fica em `cronograma.js`. Não precisa rodar SQL: os dados ficam na tabela `adm_docs` (coleção `config`).
