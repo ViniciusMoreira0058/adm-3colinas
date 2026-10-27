@@ -1,5 +1,5 @@
 -- =====================================================================
--- ADM 3COLINAS · notificações com o app fechado (Web Push)
+-- ADM 3COLINAS · notificações com o app fechado (Web Push) e página Notificações
 -- Como usar: Supabase → SQL Editor → New query → cole tudo → Run.
 -- Pode rodar mais de uma vez sem quebrar.
 --
@@ -115,3 +115,95 @@ revoke all on function public.adm_push_disparar() from public, anon, authenticat
 drop trigger if exists adm_push on public.adm_docs;
 create trigger adm_push after insert or update on public.adm_docs
   for each row execute function public.adm_push_disparar();
+
+-- =====================================================================
+-- PÁGINA NOTIFICAÇÕES: cada aviso fica guardado por 10 dias
+-- (mesma regra: o dono vê o que os outros ADMs mudam; todos veem planilha e novidade)
+-- =====================================================================
+create table if not exists public.adm_notif (
+  id        bigint generated always as identity primary key,
+  em        timestamptz not null default now(),
+  ator      uuid,
+  ator_nome text,
+  publico   text not null check (publico in ('todos', 'dono')),
+  col       text not null,
+  doc_id    text not null,
+  acao      text not null,
+  nome      text,
+  mudancas  jsonb,          -- {campo: [antes, depois]}
+  dados     jsonb           -- planilha / novidade: o aviso inteiro
+);
+create index if not exists adm_notif_em_idx on public.adm_notif (em desc);
+alter table public.adm_notif enable row level security;
+drop policy if exists adm_notif_ler on public.adm_notif;
+create policy adm_notif_ler on public.adm_notif for select to authenticated
+  using (em > now() - interval '10 days' and (public.adm_eu()).id is not null
+         and ator is distinct from auth.uid() and (publico = 'todos' or public.adm_eh_dono()));
+revoke all on public.adm_notif from anon, authenticated;
+grant select on public.adm_notif to authenticated;
+
+-- até quando cada pessoa já viu (para o número no sininho)
+create table if not exists public.adm_notif_lido (
+  user_id uuid primary key,
+  em      timestamptz not null default now()
+);
+alter table public.adm_notif_lido enable row level security;
+revoke all on public.adm_notif_lido from anon, authenticated;
+create or replace function public.adm_notif_visto()
+returns timestamptz language sql stable security definer set search_path = ''
+as $$ select em from public.adm_notif_lido where user_id = auth.uid() $$;
+create or replace function public.adm_notif_marcar()
+returns void language sql security definer set search_path = ''
+as $$ insert into public.adm_notif_lido (user_id, em) values (auth.uid(), now())
+      on conflict (user_id) do update set em = now() $$;
+revoke all on function public.adm_notif_visto() from public, anon;
+revoke all on function public.adm_notif_marcar() from public, anon;
+grant execute on function public.adm_notif_visto() to authenticated;
+grant execute on function public.adm_notif_marcar() to authenticated;
+
+create or replace function public.adm_notif_registrar()
+returns trigger language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_ator public.adm_membros; v_dif jsonb := '{}'; k text;
+  v_ignorar text[] := array['adm','admId','admEm','atualizado','importId','obsPor','obsEm'];
+begin
+  if tg_op = 'UPDATE' and old.data = new.data then return null; end if;
+  select * into v_ator from public.adm_membros where user_id = auth.uid() limit 1;
+  if random() < 0.02 then delete from public.adm_notif where em < now() - interval '10 days'; end if;
+
+  if new.col = 'config' and new.id in ('aviso', 'novidade') then
+    insert into public.adm_notif (ator, ator_nome, publico, col, doc_id, acao, nome, dados)
+    values (auth.uid(), v_ator.nome, 'todos', new.col, new.id, lower(tg_op), new.data ->> 'titulo', new.data);
+    return null;
+  end if;
+
+  if v_ator.id is null or v_ator.dono then return null; end if;
+  if new.col = 'pessoas' and tg_op = 'INSERT' and new.data ? 'importId' then return null; end if;   -- importação: o aviso da planilha já conta
+  for k in select jsonb_object_keys(new.data) union select jsonb_object_keys(case when tg_op = 'UPDATE' then old.data else '{}'::jsonb end) loop
+    if not (k = any(v_ignorar)) and left(k, 1) <> '_'
+       and (case when tg_op = 'UPDATE' then old.data -> k end) is distinct from (new.data -> k) then
+      v_dif := v_dif || jsonb_build_object(k, jsonb_build_array(case when tg_op = 'UPDATE' then old.data -> k end, new.data -> k));
+    end if;
+  end loop;
+  if v_dif = '{}' then return null; end if;
+  insert into public.adm_notif (ator, ator_nome, publico, col, doc_id, acao, nome, mudancas)
+  values (auth.uid(), v_ator.nome, 'dono', new.col, new.id, case tg_op when 'INSERT' then 'criou' else 'alterou' end,
+          coalesce(new.data ->> 'nome', new.data ->> 'titulo', new.data ->> 'item'), v_dif);
+  return null;
+exception when others then
+  return null;   -- notificação nunca pode impedir de salvar
+end $$;
+revoke all on function public.adm_notif_registrar() from public, anon, authenticated;
+
+drop trigger if exists adm_notif on public.adm_docs;
+create trigger adm_notif after insert or update on public.adm_docs
+  for each row execute function public.adm_notif_registrar();
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'adm_notif') then
+    alter publication supabase_realtime add table public.adm_notif;
+  end if;
+end $$;

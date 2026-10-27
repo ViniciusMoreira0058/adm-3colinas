@@ -1529,3 +1529,18 @@ window.ADM_DEMO = {
 }
 ]
 };
+// página Notificações: exemplos fictícios (min = há quantos minutos)
+window.ADM_DEMO.notifs = [
+  { id: "dn1", min: 35, ator: "m-rafa", ator_nome: "Rafael Lima", publico: "dono", col: "config", doc_id: "crono-top1922-adm-m-rafa", acao: "alterou", mudancas: { "d1-02": [{ ini: "10:32" }, { ini: "10:32", fim: "11:15", atv: "REUNIÃO COORD. E SUBS" }] } },
+  { id: "dn2", min: 50, ator: "m-thal", ator_nome: "Thalisson", publico: "dono", col: "pessoas", doc_id: "ex04", acao: "alterou", nome: "João Batista Moreira", mudancas: { termo: ["pendente", "assinado"] } },
+  { id: "dn3", min: 160, ator: "m-thal", ator_nome: "Thalisson", publico: "dono", col: "config", doc_id: "pin-ex02", acao: "alterou", nome: "Beatriz Carvalho", mudancas: { status: ["pendente", "entregue"] } },
+  { id: "dn4", min: 360, ator: "m-dono", ator_nome: "Vinicius Moreira", publico: "todos", col: "config", doc_id: "novidade", acao: "insert", nome: "Nova aba Pins",
+    dados: { titulo: "Nova aba Pins", texto: "Agora dá para marcar quem já recebeu o pin do boné.\nAbra o menu, toque em Pins e use o botão Entregar.", por: "Vinicius Moreira" } },
+  { id: "dn5", min: 1300, ator: "m-bru", ator_nome: "Bruno Costa", publico: "dono", col: "config", doc_id: "consag-2026-10-26", acao: "criou", mudancas: { nomes: [null, new Array(18).fill("x")] } },
+  { id: "dn6", min: 2900, ator: "m-die", ator_nome: "Diego Souza", publico: "dono", col: "pessoas", doc_id: "ex05", acao: "alterou", nome: "Pedro Henrique Alves", mudancas: { atestado: ["pendente", "enviada"] } },
+  { id: "dn7", min: 2903, ator: "m-die", ator_nome: "Diego Souza", publico: "dono", col: "pessoas", doc_id: "ex06", acao: "alterou", nome: "André Luiz Campos", mudancas: { atestado: ["pendente", "enviada"] } },
+  { id: "dn8", min: 2906, ator: "m-die", ator_nome: "Diego Souza", publico: "dono", col: "pessoas", doc_id: "ex07", acao: "alterou", nome: "Lucas Martins Prado", mudancas: { atestado: ["pendente", "enviada"] } },
+  { id: "dn9", min: 2910, ator: "m-die", ator_nome: "Diego Souza", publico: "dono", col: "pessoas", doc_id: "ex08", acao: "alterou", nome: "Fábio Rodrigues Souza", mudancas: { telefone: ["", "(16) 99812-0000"] } },
+  { id: "dn10", min: 4300, ator: "m-dono", ator_nome: "Vinicius Moreira", publico: "todos", col: "config", doc_id: "aviso", acao: "update", dados: { novosP: 12, novosL: 5, pagPend: 3, por: "Vinicius Moreira" } },
+  { id: "dn11", min: 17000, ator: "m-thal", ator_nome: "Thalisson", publico: "dono", col: "pessoas", doc_id: "ex01", acao: "alterou", nome: "Carlos Eduardo Ramos", mudancas: { termo: ["pendente", "enviada"] } },
+];

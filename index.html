@@ -78,6 +78,21 @@ button { cursor: pointer; }
 .nav button:hover { background: var(--surface2); color: var(--fg); }
 .nav button[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
 .nav .count { margin-left: auto; font-size: 12px; color: var(--muted); }
+.badge { min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; display: inline-grid; place-items: center; line-height: 1; }
+.badge[hidden] { display: none; }
+.nav .badge { margin-left: auto; }
+.icon-btn.bell { position: relative; margin-left: auto; }
+.icon-btn.bell .badge { position: absolute; top: -7px; right: -7px; box-shadow: 0 0 0 2px var(--bg); }
+.icon-btn.bell[hidden] { display: none; }
+.notif-list { display: grid; gap: 10px; }
+.notif { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.notif > svg { width: 20px; height: 20px; flex: none; color: var(--accent); margin-top: 2px; }
+.notif > div { min-width: 0; flex: 1; }
+.notif.nova { border-color: var(--accent); }
+.notif p { margin: 4px 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+.notif small { color: var(--muted); display: block; margin-top: 6px; font-size: 12px; }
+.notif small.inline { display: inline; margin: 0; }
+.notif details summary { cursor: pointer; color: var(--accent); font-size: 13px; margin-top: 6px; font-weight: 600; }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding: 0 4px; }
 .sync { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .sync i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
@@ -630,6 +645,7 @@ a.btn { text-decoration: none; }
         <img class="avatar" src="icons/icon-192.png" alt="" width="40" height="40">
         <div style="min-width:0"><span class="appname">ADM 3Colinas</span><b id="mtopTitle">Dashboard</b><small id="mtopSub">TOP 1922</small></div>
       </div>
+      <button class="icon-btn bell" id="bellBtn" type="button" data-go="notificacoes" aria-label="Notificações" hidden><svg aria-hidden="true"><use href="#i-bell"/></svg><span class="badge num" hidden></span></button>
       <button class="icon-btn" id="themeBtnM" type="button" aria-label="Trocar tema"></button>
     </div>
     <div class="wrap" id="view"></div>

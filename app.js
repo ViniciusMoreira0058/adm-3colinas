@@ -146,6 +146,7 @@ async function save(fn, okMsg) {
 /* ---------- Navegação ---------- */
 const VIEWS = [
   { id: "painel", l: "Dashboard", i: "home" },
+  { id: "notificacoes", l: "Notificações", i: "bell", all: true },   // todos que entram no app
   { id: "participantes", l: "Senderistas", i: "users" },
   { id: "legendarios", l: "Legendários", i: "shield" },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
@@ -166,12 +167,12 @@ const NIVEIS = [
   { v: "edita", l: "Edita as abas escolhidas", d: "Vê e altera só as abas marcadas abaixo." },
   { v: "leitura", l: "Somente leitura", d: "Vê as abas marcadas abaixo, sem poder alterar nada." },
 ];
-const ABAS = () => VIEWS.filter(v => !v.owner && !v.need && v.id !== "painel" && (!v.demo || DEMO));
+const ABAS = () => VIEWS.filter(v => !v.owner && !v.need && !v.all && v.id !== "painel" && (!v.demo || DEMO));
 const precisaLogin = () => !ME.acesso;
 const canSee = v => {
   if (!ME.acesso) return v.id === "painel";
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
-  if (S.isOwner) return true;
+  if (S.isOwner || (VIEWS.find(x => x.id === v.id) || v).all) return true;
   if (v.owner) return false;
   if (v.id === "painel" || ME.acesso.nivel === "total") return true;
   if (v.need) return v.need.some(a => (ME.acesso.abas || []).includes(a));   // aba que usa os dados de outras
@@ -206,6 +207,7 @@ const hist = [];
 function go(v, voltando) {
   setMenu(false);
   if (!voltando && v !== S.view) { hist.push(S.view); if (hist.length > 30) hist.shift(); }
+  if (v === "notificacoes") { S.notifAntes = S.notifLido || 0; marcarNotifs(); } else S.notifAntes = null;
   S.view = v; store.set("top-view", v);
   sharePresence();
   if (v === "participantes") S.f.tipo = "participante";
@@ -223,7 +225,11 @@ function renderNav() {
   if (!canSee(VIEWS.find(v => v.id === S.view) || {})) S.view = "painel";
   const online = onlineAdms().length;
   counts.usuarios = online ? `${online} on` : null;
-  $("#nav").innerHTML = VIEWS.filter(canSee).map(v => `<button type="button" data-go="${v.id}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : ""}</button>`).join("");
+  const novas = ME.acesso ? notifNovas() : 0;
+  $("#nav").innerHTML = VIEWS.filter(canSee).map(v => `<button type="button" data-go="${v.id}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : ""}</button>`).join("");
+  const sino = $("#bellBtn");
+  if (sino) { sino.hidden = !ME.acesso; sino.querySelector(".badge").hidden = !novas; sino.querySelector(".badge").textContent = novas > 99 ? "99+" : novas;
+    sino.setAttribute("aria-label", novas ? `Notificações: ${novas} nova(s)` : "Notificações"); }
   $("#backBtn").hidden = S.view === "painel";
   $("#backBtn").setAttribute("aria-label", "Voltar para " + ((VIEWS.find(x => x.id === hist[hist.length - 1]) || VIEWS[0]).l));
   $("#mtopTitle").textContent = (VIEWS.find(v => v.id === S.view) || VIEWS[0]).l;
@@ -1702,6 +1708,7 @@ function render() {
     : v === "cronograma" ? vCronograma()
     : v === "consagracao" ? vConsagracao()
     : v === "pins" ? vPins()
+    : v === "notificacoes" ? vNotificacoes()
     : v === "estoque" ? vEstoque()
     : vPista());
   const view = $("#view");
@@ -2298,6 +2305,7 @@ document.addEventListener("click", e => {
   if (d.act === "csg-cfg") { csgCfgForm(); return; }
   if (d.act === "csg-unir") { csgUnirForm(); return; }
   if (d.act === "novidade") { novidadeForm(); return; }
+  if (d.act === "ativar-notif") { pedirNotificacao().then(render); return; }
   if (d.act === "pin-importar") { pinImportarForm(); return; }
   if (d.act === "pin-msg") { pinMsgForm(); return; }
   if (d.pinOk) { pinEntregar(d.pinOk); return; }
@@ -2918,6 +2926,84 @@ async function desativarPush() {
   store.set("adm3-push", "0");
 }
 
+/* ---------- Página Notificações: avisos dos últimos 10 dias + número no sininho ----------
+   No app real vêm da tabela adm_notif (supabase/push.sql), que já filtra quem vê o quê. */
+const NOTIF_DIAS = 10;
+function notifsVisiveis() {
+  const lim = Date.now() - NOTIF_DIAS * 864e5;
+  return (S.notifs || []).filter(n => Date.parse(n.em) > lim && (!DEMO || (n.ator !== ME.id && (n.publico === "todos" || S.isOwner))))
+    .sort((a, b) => Date.parse(b.em) - Date.parse(a.em));
+}
+const notifNovas = () => { const l = S.notifLido || 0; return notifsVisiveis().filter(n => Date.parse(n.em) > l && notifTexto(n)).length; };
+function notifTexto(n) {
+  const M = n.mudancas || {}, d = n.dados || {}, novo = k => (M[k] || [])[1], quem = n.ator_nome || "Um ADM";
+  if (n.doc_id === "aviso") return { i: "upload", a: "aviso", t: "Planilha atualizada", c: `${d.novosP || 0} novo(s) senderista(s) e ${d.novosL || 0} legendário(s)${d.pagPend ? ` · ${d.pagPend} com pagamento pendente` : ""}.`, por: d.por || quem };
+  if (n.doc_id === "novidade") return { i: "bell", a: "novidade", t: "Novidade no app: " + (d.titulo || ""), c: d.texto || "", por: d.por || quem };
+  let c, i = "edit", a = abaDoRegistro(n.col);
+  if (n.col === "pessoas") {
+    i = "users"; a = abaDoRegistro("pessoas", { tipo: novo("tipo") || (n.dados || {}).tipo });
+    const campos = Object.keys(M).filter(k => !IGNORAR.includes(k));
+    c = `${n.nome || "Cadastro"} · ` + (n.acao === "criou" ? `novo cadastro em ${a}` : campos.slice(0, 3).map(k => `${CAMPOS[k] || k}: ${fmtValor(k, novo(k))}`).join(" · "));
+  } else if (n.col === "config") {
+    const m = CSG_RE.exec(n.doc_id);
+    if (m) { i = "group"; a = "Consagração"; c = `Consagração ${fmtDia(m[1])}: lista com ${(novo("nomes") || []).length} pessoa(s)`; }
+    else if (/^crono-.+-adm-/.test(n.doc_id)) {
+      const k = Object.keys(M).find(k => k[0] !== "_"); if (!k) return null;
+      const x = M[k][1] || {}, y = M[k][0] || {}, it = cronoPlano().flatMap(dd => dd.itens).find(o => o.id === k) || {}, nome = x.atv || it.atv || k;
+      i = "clock"; a = "Cronograma"; c = "Cronograma: " + (x.fim && x.fim !== y.fim ? `terminou ${nome} às ${x.fim}` : x.ini && x.ini !== y.ini ? `iniciou ${nome} às ${x.ini}` : `ajustou ${nome}`);
+    } else if (/^pin-/.test(n.doc_id)) { if (!M.status) return null; i = "check"; a = "Pins"; c = `Pins: ${n.nome || "alguém"} ${novo("status") === "entregue" ? "recebeu o pin" : "voltou para pendente"}`; }
+    else if (/^equipes-/.test(n.doc_id)) { i = "users"; a = "Cronograma"; c = "Mudou as equipes do cronograma"; }
+    else if (/^cronoplano-/.test(n.doc_id)) { i = "clock"; a = "Cronograma"; c = "Mudou o plano do cronograma"; }
+    else if (n.doc_id === "consag-alias") { i = "group"; a = "Consagração"; c = "Consagração: uniu ou separou nomes"; }
+    else c = "Mudou as configurações";
+  } else c = `${a}: ${n.nome || "registro"} ${n.acao === "criou" ? "criado" : "atualizado"}`;
+  return { i, a, t: quem, c };
+}
+function vNotificacoes() {
+  const antes = S.notifAntes != null ? S.notifAntes : (S.notifLido || 0);
+  const L = notifsVisiveis().map(n => ({ n, x: notifTexto(n), ms: Date.parse(n.em) })).filter(o => o.x);
+  // várias mudanças seguidas da mesma pessoa na mesma área (até 10 min entre elas) viram um cartão só
+  const grupos = [];
+  for (const o of L) {
+    const g = grupos[grupos.length - 1], solo = x => x.a === "aviso" || x.a === "novidade";
+    if (g && !solo(o.x) && !solo(g[0].x) && g[0].x.t === o.x.t && g[0].x.a === o.x.a && g[g.length - 1].ms - o.ms < 6e5) g.push(o); else grupos.push([o]);
+  }
+  const cartao = g => { const o = g[0], nova = g.some(z => z.ms > antes), solo = o.x.a === "aviso" || o.x.a === "novidade";
+    const corpo = g.length < 3 ? g.map(z => `<p>${esc(z.x.c)}</p>`).join("")
+      : `<p>${g.length} alterações em ${esc(o.x.a)}</p><details><summary>Ver todas</summary>${g.map(z => `<p>${esc(z.x.c)} <small class="inline">${esc(quando(z.n.em))}</small></p>`).join("")}</details>`;
+    return `<article class="notif${nova ? " nova" : ""}${o.x.a === "novidade" ? " nov" : ""}">${ico(o.x.i)}<div><b>${esc(o.x.t)}</b>${nova ? ' <span class="chip ok">Nova</span>' : ""}${corpo}
+      <small>${solo ? "Por " + esc(o.x.por) + " · " : ""}${esc(quando(o.n.em))}</small></div></article>`; };
+  const podeAtivar = "Notification" in window && Notification.permission === "default";
+  return `
+  <div class="head"><div><h2>Notificações</h2><p>Os avisos ficam guardados aqui por ${NOTIF_DIAS} dias. ${S.isOwner ? "Você vê tudo que os ADMs mudam no app, além das planilhas importadas e das novidades." : "Aqui chegam as planilhas importadas e as novidades do app."}</p></div>
+    ${podeAtivar ? `<div class="actions"><button class="btn primary" type="button" data-act="ativar-notif">${ico("bell")} Ativar notificações no celular</button></div>` : ""}</div>
+  ${S.notifErro && S.isOwner ? `<div class="banner aviso"><span>${ico("bell")} Para guardar as notificações, falta rodar o <b>push.sql</b> no Supabase (SQL Editor).</span></div>` : ""}
+  <div class="notif-list">${grupos.length ? grupos.map(cartao).join("") : `<p class="empty">Nenhuma notificação nos últimos ${NOTIF_DIAS} dias.</p>`}</div>`;
+}
+async function carregarNotifs() {
+  if (DEMO) {
+    const base = Date.now();
+    S.notifs = S.notifs || (ADM_DEMO.notifs || []).map(n => ({ ...n, em: new Date(base - n.min * 6e4).toISOString() }));
+    S.notifLido = Number(store.get("adm3-notif-lido-" + ME.id) || 0);
+  } else {
+    try {
+      const [r, l] = await Promise.all([sb.from("adm_notif").select("*").order("em", { ascending: false }).limit(400), sb.rpc("adm_notif_visto")]);
+      if (r.error) throw r.error;
+      S.notifs = r.data || []; S.notifLido = l.data ? Date.parse(l.data) : 0; S.notifErro = false;
+    } catch (e) { console.warn("notificações:", e); S.notifErro = true; S.notifs = S.notifs || []; }
+  }
+  renderNav(); if (S.view === "notificacoes") render();
+}
+function marcarNotifs() {
+  S.notifLido = Date.now();
+  if (DEMO) store.set("adm3-notif-lido-" + ME.id, String(S.notifLido));
+  else if (!S.notifErro && sb) Promise.resolve(sb.rpc("adm_notif_marcar")).catch(() => {});
+}
+function novaNotif(n) {
+  S.notifs = [n, ...(S.notifs || []).filter(x => x.id !== n.id)];
+  if (S.view === "notificacoes") { marcarNotifs(); render(); } else renderNav();
+}
+
 /* Novidade do app: o dono escreve, todos os ADMs recebem a notificação e veem a explicação ao abrir o app */
 function novidadeForm() {
   modal(`
@@ -2950,6 +3036,7 @@ function checarNovidade() {
 async function atualizarTudo() {
   try {
     if (db) await db.recarregar();
+    carregarNotifs();
     if (S.isOwner && !DEMO) { S.histOk = false; }
     if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {});
     render(); toast("Atualizado");
@@ -3061,9 +3148,11 @@ function conectarDados() {
     const p = (S.pessoas || []).find(x => x.tipo === "participante" && x.atestado !== "confirmado"); if (!p) return;
     const { id, ...antes } = p, novo = { ...antes, atestado: "confirmado", adm: "Thalisson", admId: "m-thal", admEm: new Date().toISOString() };
     api.update("pessoas", id, { atestado: "confirmado", adm: "Thalisson", admId: "m-thal", admEm: novo.admEm }).then(() => notificarAtividade("pessoas", id, novo, antes));
+    novaNotif({ id: "sim1", em: new Date().toISOString(), ator: "m-thal", ator_nome: "Thalisson", publico: "dono", col: "pessoas", doc_id: id, acao: "alterou", nome: p.nome, mudancas: { atestado: [p.atestado || "pendente", "confirmado"] } });
     const cid = "crono-" + curTopId() + "-adm-m-thal", c = (S.cfgDocs || {})[cid];
     if (c) { const k = cronoPlano()[0].itens.find(i => !(c[i.id] || {}).fim); if (k) { const m = { ...(c[k.id] || {}), ini: (c[k.id] || {}).ini || agoraHM(), fim: agoraHM(), fimPor: "Thalisson" };
-      api.update("config", cid, { [k.id]: m }).then(() => notificarAtividade("config", cid, { ...c, [k.id]: m }, c)); } }
+      api.update("config", cid, { [k.id]: m }).then(() => notificarAtividade("config", cid, { ...c, [k.id]: m }, c));
+      novaNotif({ id: "sim2", em: new Date().toISOString(), ator: "m-thal", ator_nome: "Thalisson", publico: "dono", col: "config", doc_id: cid, acao: "alterou", mudancas: { [k.id]: [c[k.id] || null, { ...m, atv: k.atv }] } }); } }
   }, 15000); }
   const sub = col => db.collection(col).onSnapshot(snap => {
     S[col] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -3084,9 +3173,12 @@ function conectarDados() {
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });
   db.doc("config/novidade").onSnapshot(snap => { S.novidade = snap.exists ? snap.data() : null; setTimeout(checarNovidade, 900); });
   render();
+  carregarNotifs();
   if (DEMO) return;
   markSeen(true);
-  ativarPush();   // quem já permitiu notificações passa a receber também com o app fechado
+  ativarPush();
+  // notificação nova aparece na hora (canal separado: se a tabela ainda não existir, o resto não para)
+  sb.channel("adm-notif").on("postgres_changes", { event: "INSERT", schema: "public", table: "adm_notif" }, p => p.new && novaNotif(p.new)).subscribe();   // quem já permitiu notificações passa a receber também com o app fechado
   if (S.isOwner) membros.listar().catch(() => {});
   // quem está com o app aberto + mudanças no meu próprio acesso (bloqueio, abas) e, para o dono, na equipe
   canal = sb.channel("adm-online", { config: { presence: { key: ME.id } } });
