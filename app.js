@@ -2274,7 +2274,13 @@ function conectarDados() {
     if (S.loaded.pessoas && S.loaded.tops) hideSplash();
   }, e => { console.error(e); toast("Não foi possível carregar os dados. " + erroAmigavel(e)); hideSplash(); });
   ["pessoas", "tarefas", "estoque", "pista", "tops"].forEach(sub);
-  db.collection("config").onSnapshot(snap => { S.cfgDocs = Object.fromEntries(snap.docs.map(d => [d.id, d.data()])); if (S.view === "cronograma" || S.view === "painel") render(); });
+  db.collection("config").onSnapshot(snap => {
+    S.cfgDocs = Object.fromEntries(snap.docs.map(d => [d.id, d.data()]));
+    // cria a ficha de horários do TOP enquanto tem internet: assim, sem internet, cada ADM só acrescenta o seu horário (não sobrescreve o dos outros)
+    const cid = "crono-" + curTopId();
+    if (!S.cfgDocs[cid] && podeEditar() && navigator.onLine !== false && !(db.estado().offline) && !S.cronoCriando) { S.cronoCriando = true; db.doc("config/" + cid).set({}).catch(() => {}).finally(() => { S.cronoCriando = false; }); }
+    if (S.view === "cronograma" || S.view === "painel") render();
+  });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });
   render();
