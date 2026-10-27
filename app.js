@@ -83,7 +83,7 @@ function waBtn(p) {
 const S = {
   view: "painel", online: null, canWrite: true,
   pessoas: [], tarefas: [], estoque: [], pista: [], tops: [], config: { alertaBaixo: 5, metaMRE: 110, kitsMRE: 0, topAtual: "top1922" },
-  cfgDocs: {}, cronoDia: store.get("crono-dia"),
+  cfgDocs: {}, cronoDia: store.get("crono-dia"), cronoEq: store.get("crono-eq"),
   P: [], T: [], topSel: null, equipe: [], peers: [], isOwner: false,
   loaded: { pessoas: false, tarefas: false, estoque: false, pista: false, tops: false },
   f: { q: "", tipo: "participante", status: "todos", adm: "" },
@@ -536,10 +536,26 @@ function vFamilias() {
 /* ---------- Cronograma ----------
    O plano (horários do TOP) vem do cronograma padrão (cronograma.js) até alguém editar; aí fica em config/cronoplano-<top>.
    O que aconteceu de verdade (início e fim de cada momento) fica em config/crono-<top>, um campo por momento,
-   então dois ADMs marcando momentos diferentes ao mesmo tempo não se atrapalham. */
+   então dois ADMs marcando momentos diferentes ao mesmo tempo não se atrapalham.
+   Com equipes (config/equipes-<top>), cada equipe marca o seu: config/crono-<top>-<equipe>. O ADM vê só a(s) equipe(s) dele;
+   o dono e os coordenadores veem todas. Essa separação é da tela: os dados ficam na mesma tabela, legível pela equipe ADM. */
 const CRONO_TIPOS = [{ v: "", l: "Normal" }, { v: "predica", l: "Prédica" }, { v: "refeicao", l: "Refeição" }, { v: "destaque", l: "Destaque" }, { v: "especial", l: "Especial" }, { v: "pausa", l: "Encerramento / pausa" }];
 const cronoPlano = () => ((S.cfgDocs || {})["cronoplano-" + curTopId()] || {}).dias || window.ADM_CRONO || [];
-const cronoMarcas = () => (S.cfgDocs || {})["crono-" + curTopId()] || {};
+const eqDoc = () => { const d = (S.cfgDocs || {})["equipes-" + curTopId()] || {}; return { equipes: d.equipes || [], coord: d.coord || [] }; };
+const ehCoord = () => S.isOwner || eqDoc().coord.some(c => c.id === ME.id);
+const naEquipe = (e, id = ME.id) => !!e && (e.adms || []).some(a => a.id === id);
+const equipesVisiveis = () => ehCoord() ? eqDoc().equipes : eqDoc().equipes.filter(e => naEquipe(e));
+// equipe do cronograma na tela: null = cronograma único (ainda sem equipes); false = ADM fora de qualquer equipe
+function cronoEquipe() {
+  if (!eqDoc().equipes.length) return null;
+  const vis = equipesVisiveis();
+  return vis.find(e => e.id === S.cronoEq) || vis.find(e => naEquipe(e)) || vis[0] || false;
+}
+const cronoDocId = eq => "crono-" + curTopId() + (eq ? "-" + eq.id : "");
+function cronoMarcas(eq) { if (eq === undefined) eq = cronoEquipe(); return eq === false ? {} : (S.cfgDocs || {})[cronoDocId(eq)] || {}; }
+function podeMarcar(eq) { if (eq === undefined) eq = cronoEquipe(); return podeEditar() && eq !== false && (eq === null || ehCoord() || naEquipe(eq)); }
+const podePlano = () => podeEditar() && (!eqDoc().equipes.length || ehCoord());
+const admResp = eq => eq && eq.resp && eq.resp.nome ? eq.resp.nome : eq && (eq.adms || [])[0] ? eq.adms[0].nome : "";
 const agoraHM = () => new Date().toTimeString().slice(0, 5);
 const minDe = h => { const m = /^(\d{1,2}):(\d{2})/.exec(h || ""); return m ? +m[1] * 60 + +m[2] : null; };
 // diferença em minutos entre dois horários do mesmo dia do TOP (a madrugada continua o dia anterior)
@@ -554,15 +570,30 @@ function cronoDiaAtual(plano) {
   return (d || plano[0] || {}).id;
 }
 function cronoMarcar(id, dados, msg) {
-  const docId = "crono-" + curTopId();
+  const eq = cronoEquipe();
+  if (!podeMarcar(eq)) { toast("Você só pode marcar o cronograma da sua equipe."); return; }
+  const docId = cronoDocId(eq);
   const atual = { ...(cronoMarcas()[id] || {}), ...dados };
   Object.keys(atual).forEach(k => { if (atual[k] === "") delete atual[k]; });
   const existe = !!(S.cfgDocs || {})[docId];
   save(() => existe ? api.update("config", docId, { [id]: atual }) : api.set("config", docId, { [id]: atual }), msg);
 }
 function vCronograma() {
-  const plano = cronoPlano(), M = cronoMarcas(), dia = cronoDiaAtual(plano), D = plano.find(d => d.id === dia) || { itens: [] };
-  const ed = podeEditar();
+  const eq = cronoEquipe(), E = eqDoc();
+  const topo = `<div class="head"><div><h2>Cronograma</h2><p>${esc(topName())}${eq ? ` · <b>${esc(eq.nome)}</b>${admResp(eq) ? ` · ADM responsável: <b>${esc(admResp(eq))}</b>` : ""}` : ""} · toque em <b>Iniciar</b> quando o momento começar e em <b>Terminar</b> quando acabar. Funciona sem internet.</p></div>
+    <div class="actions">${eq !== false ? `<button class="btn" type="button" data-act="crono-pdf">${ico("upload")} Exportar PDF</button>` : ""}${S.isOwner ? `<button class="btn" type="button" data-act="crono-equipes">${ico("users")} Equipes</button>` : ""}${podePlano() ? `<button class="btn" type="button" data-crono-item="novo">${ico("plus")} Novo momento</button>` : ""}</div></div>`;
+  if (eq === false) return topo + `<section class="panel"><div class="empty">Você ainda não está em nenhuma equipe deste TOP. Peça ao coordenador para colocar você em uma equipe na aba Cronograma.</div></section>`;
+  // dono e coordenadores: resumo de todas as equipes, para escolher qual ver
+  const vis = equipesVisiveis(), planoAll = cronoPlano(), diaAll = cronoDiaAtual(planoAll), Dall = planoAll.find(d => d.id === diaAll) || { itens: [] };
+  const resumoEq = e => { const M = cronoMarcas(e); const n = Dall.itens.filter(i => M[i.id] && M[i.id].fim).length; const u = [...Dall.itens].reverse().find(i => M[i.id] && M[i.id].ini);
+    const a = u && u.hora ? atrasoDe(u.hora, M[u.id].ini) : null; return { n, a }; };
+  const faixaEq = ehCoord() && vis.length ? `<div class="crono-eqs" role="group" aria-label="Equipes">${vis.map(e => { const r = resumoEq(e);
+      return `<button type="button" class="crono-eq" data-crono-eq="${e.id}" aria-pressed="${eq && eq.id === e.id}"><b>${esc(e.nome)}</b><small>${esc(admResp(e) || "sem responsável")} · ${(e.adms || []).length} ADM(s)</small>
+        <span class="num">${esc(Dall.nome || "")} ${r.n}/${Dall.itens.length}${r.a != null ? ` · <i class="${r.a > 10 ? "bad-text" : ""}">${fmtDif(r.a)}</i>` : ""}</span></button>`; }).join("")}</div>`
+    : S.isOwner && !E.equipes.length ? `<div class="banner"><span>Divida os ADMs em equipes: cada equipe marca o seu cronograma e só você e os coordenadores veem todos.</span><button class="btn" type="button" data-act="crono-equipes">Dividir equipes</button></div>`
+    : eq && vis.length > 1 ? `<div class="seg" role="group" aria-label="Equipe">${vis.map(e => `<button type="button" data-crono-eq="${e.id}" aria-pressed="${e.id === eq.id}">${esc(e.nome)}</button>`).join("")}</div>` : "";
+  const plano = cronoPlano(), M = cronoMarcas(eq), dia = cronoDiaAtual(plano), D = plano.find(d => d.id === dia) || { itens: [] };
+  const ed = podeMarcar(eq), edPlano = podePlano();
   const feito = i => M[i.id] && M[i.id].fim, comecou = i => M[i.id] && M[i.id].ini;
   const andando = D.itens.filter(i => comecou(i) && !feito(i));
   const proximo = D.itens.find(i => !comecou(i));
@@ -578,9 +609,7 @@ function vCronograma() {
     return m.ini && ed ? `<button type="button" class="btn sm primary" data-crono-fim="${i.id}">Terminar</button>` : `<span class="hint">—</span>`; };
   const cls = i => ["crono-" + (i.tipo || "normal"), feito(i) ? "feito" : comecou(i) ? "andando" : proximo && proximo.id === i.id ? "proximo" : ""].join(" ");
   const quem = i => { const m = M[i.id] || {}; const q = [m.iniPor, m.fimPor].filter(Boolean); return q.length ? `<small class="hint">Marcado por ${esc([...new Set(q)].map(n => n.split(" ")[0]).join(", "))}</small>` : ""; };
-  return `
-  <div class="head"><div><h2>Cronograma</h2><p>${esc(topName())} · toque em <b>Iniciar</b> quando o momento começar e em <b>Terminar</b> quando acabar. O horário fica marcado para toda a equipe e funciona sem internet.</p></div>
-    <div class="actions"><button class="btn" type="button" data-act="crono-pdf">${ico("upload")} Exportar PDF</button>${ed ? `<button class="btn" type="button" data-crono-item="novo">${ico("plus")} Novo momento</button>` : ""}</div></div>
+  return topo + faixaEq + `
   <div class="kpis">
     <div class="kpi"><span class="lbl">${esc(D.nome || "")} concluído</span><span class="val num">${nFeito}<small style="font-size:18px;color:var(--muted)"> / ${D.itens.length}</small></span><div class="bar good"><i style="width:${pct(nFeito, D.itens.length)}%"></i></div></div>
     <div class="kpi"><span class="lbl">Acontecendo agora</span><span class="val" style="font-size:17px;line-height:1.25">${andando.length ? esc(andando[andando.length - 1].atv) : "—"}</span>${andando.length ? `<span class="sub">desde ${esc(M[andando[andando.length - 1].id].ini)}${andando.length > 1 ? ` · +${andando.length - 1} em andamento` : ""}</span>` : ""}</div>
@@ -590,14 +619,14 @@ function vCronograma() {
   <div class="seg" role="group" aria-label="Dia">${plano.map(d => { const n = d.itens.filter(feito).length; return `<button type="button" data-crono-dia="${d.id}" aria-pressed="${d.id === dia}">${esc(d.nome)} <span class="num" style="opacity:.75">${n}/${d.itens.length}</span></button>`; }).join("")}</div>
   <div class="crono-leg"><span class="crono-predica">Prédica</span><span class="crono-refeicao">Refeição</span><span class="crono-destaque">Destaque</span><span class="crono-especial">Especial</span></div>
   <div class="table-wrap crono"><table>
-    <thead><tr><th>Hora</th><th>Atividade</th><th>Local</th><th>Formação</th><th>Responsável</th><th>Início</th><th>Fim</th>${ed ? "<th></th>" : ""}</tr></thead>
+    <thead><tr><th>Hora</th><th>Atividade</th><th>Local</th><th>Formação</th><th>Responsável</th><th>Início</th><th>Fim</th>${edPlano ? "<th></th>" : ""}</tr></thead>
     <tbody>${D.itens.map(i => `<tr class="${cls(i)}">
       <td class="num"><b>${esc(i.hora || "")}</b></td><td><b>${esc(i.atv)}</b>${quem(i)}</td><td>${esc(i.local || "")}</td><td>${esc(i.form || "")}</td><td>${esc(i.resp || "")}</td>
       <td style="white-space:nowrap">${inicio(i)}</td><td style="white-space:nowrap">${fim(i)}</td>
-      ${ed ? `<td><button class="linkbtn" type="button" data-crono-item="${i.id}" aria-label="Editar ${esc(i.atv)}">${ico("edit")}</button></td>` : ""}</tr>`).join("")}</tbody></table></div>
+      ${edPlano ? `<td><button class="linkbtn" type="button" data-crono-item="${i.id}" aria-label="Editar ${esc(i.atv)}">${ico("edit")}</button></td>` : ""}</tr>`).join("")}</tbody></table></div>
   <div class="cards crono-cards">${D.itens.map(i => `<article class="pcard ${cls(i)}">
       <div class="top"><div class="crono-h num">${esc(i.hora || "—")}</div><div style="flex:1"><b>${esc(i.atv)}</b><small class="hint" style="display:block">${esc([i.local, i.form, i.resp].filter(Boolean).join(" · "))}</small>${quem(i)}</div>
-        ${ed ? `<button class="linkbtn" type="button" data-crono-item="${i.id}" aria-label="Editar ${esc(i.atv)}">${ico("edit")}</button>` : ""}</div>
+        ${edPlano ? `<button class="linkbtn" type="button" data-crono-item="${i.id}" aria-label="Editar ${esc(i.atv)}">${ico("edit")}</button>` : ""}</div>
       <div class="row"><span class="lbl">Início</span>${inicio(i)}<span class="lbl" style="margin-left:8px">Fim</span>${fim(i)}</div>
     </article>`).join("")}</div>`;
 }
@@ -612,15 +641,19 @@ function carregarPdf() {
 }
 const imagemDataUrl = url => fetch(url).then(r => r.blob()).then(b => new Promise(ok => { const f = new FileReader(); f.onload = () => ok(f.result); f.readAsDataURL(b); })).catch(() => null);
 function cronoPdfForm() {
-  const plano = cronoPlano(), dia = cronoDiaAtual(plano);
+  const plano = cronoPlano(), dia = cronoDiaAtual(plano), eq = cronoEquipe(), vis = equipesVisiveis();
   modal(`
     <h3>Exportar cronograma em PDF</h3>
+    ${eq && vis.length > 1 ? `<div class="field"><label for="f-peq">Equipe</label><select id="f-peq">${vis.map(e => `<option value="${e.id}" ${e.id === eq.id ? "selected" : ""}>${esc(e.nome)}${admResp(e) ? " · " + esc(admResp(e)) : ""}</option>`).join("")}<option value="todas">Todas as equipes (uma depois da outra)</option></select></div>`
+      : eq ? `<p class="hint" style="margin:0"><b>${esc(eq.nome)}</b>${admResp(eq) ? ` · ADM responsável: <b>${esc(admResp(eq))}</b>` : ""}</p>` : ""}
     <div class="field"><label for="f-pdia">O que exportar</label><select id="f-pdia">${plano.map(d => `<option value="${d.id}" ${d.id === dia ? "selected" : ""}>Só o ${esc(d.nome)}</option>`).join("")}<option value="todos">Todos os dias juntos</option></select></div>
     <p class="hint" style="margin:0">O PDF traz o horário previsto e, ao lado, o horário real de início e fim, o atraso e quem marcou. Dá para mandar pelo WhatsApp ou e-mail.</p>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="pdfBtn">${ico("upload")} Gerar PDF</button></div></div>`,
   async () => {
     const qual = $("#f-pdia").value, btn = $("#pdfBtn"); btn.disabled = true; btn.textContent = "Gerando…";
-    try { await gerarCronoPdf(qual); closeModal(); }
+    const pe = $("#f-peq") ? $("#f-peq").value : eq ? eq.id : null;
+    const equipes = pe === "todas" ? vis : pe ? vis.filter(e => e.id === pe) : [null];
+    try { await gerarCronoPdf(qual, equipes); closeModal(); }
     catch (e) { console.error(e); toast(erroAmigavel(e)); btn.disabled = false; btn.textContent = "Gerar PDF"; }
   });
 }
@@ -646,9 +679,9 @@ function faixaPdf() {
     img.src = "assets/bg.jpg";
   });
 }
-async function gerarCronoPdf(qual) {
+async function gerarCronoPdf(qual, equipes = [cronoEquipe() || null]) {
   const jsPDF = await carregarPdf();
-  const plano = cronoPlano(), M = cronoMarcas();
+  const plano = cronoPlano();
   const dias = qual === "todos" ? plano : plano.filter(d => d.id === qual);
   const [logo, faixa] = await Promise.all([imagemDataUrl("assets/logo.png"), faixaPdf()]);
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
@@ -661,7 +694,9 @@ async function gerarCronoPdf(qual) {
   const top = topName(), gerado = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   const limpa = s => String(s || "").replace(/−/g, "-");
   const local = (topDoc() || {}).local || "Franca - SP";
+  let eqAtual = null;
   const cabecalho = (d, primeira, resumo) => {
+    const eq = eqAtual, nomeEq = eq ? eq.nome : "";
     const alt = primeira ? 38 : 16;
     doc.setFillColor(...NAVY); doc.rect(0, 0, W, alt, "F");
     if (faixa) {
@@ -678,7 +713,8 @@ async function gerarCronoPdf(qual) {
       doc.setTextColor(255, 255, 255); doc.setFontSize(24);
       doc.text(`CRONOGRAMA ${d.nome}`, 38, 23);
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(220, 210, 200);
-      doc.text(`${top} · ${local}`, 38, 30);
+      doc.text(eq ? `${top} · ${nomeEq.toUpperCase()}` : `${top} · ${local}`, 38, 30);
+      if (eq && (eq.adms || []).length) { doc.setFontSize(7.5); doc.setTextColor(170, 160, 150); doc.text(`Integrantes: ${eq.adms.map(a => a.nome).join(", ")}`, 38, 34.5, { maxWidth: 150 }); }
       // resumo em "cartões" à direita
       let x = W - 12;
       [...resumo].reverse().forEach(([lbl, val, cor]) => {
@@ -695,15 +731,16 @@ async function gerarCronoPdf(qual) {
       doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
       doc.text(`CRONOGRAMA ${d.nome}`, 23, 9.8);
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(220, 210, 200);
-      doc.text(`${top} · continuação`, 23 + doc.getTextWidth(`CRONOGRAMA ${d.nome}`) * 11 / 8 + 4, 9.8);
+      doc.text(`${top}${eq ? " · " + nomeEq : ""} · ADM: ${eq ? admResp(eq) || "-" : ME.adm || "-"} · continuação`, 23 + doc.getTextWidth(`CRONOGRAMA ${d.nome}`) * 11 / 8 + 4, 9.8);
     }
   };
-  dias.forEach((d, n) => {
-    if (n) doc.addPage();
+  let n = 0;
+  equipes.forEach(eq => { eqAtual = eq; const M = cronoMarcas(eq); dias.forEach(d => {
+    if (n++) doc.addPage();
     const feitos = d.itens.filter(i => M[i.id] && M[i.id].fim).length;
     const ultimo = [...d.itens].reverse().find(i => M[i.id] && M[i.id].ini);
     const at = ultimo && ultimo.hora ? atrasoDe(ultimo.hora, M[ultimo.id].ini) : null;
-    const resumo = [["Concluídos", `${feitos}/${d.itens.length}`], ["Atraso atual", at == null ? "-" : limpa(fmtDif(at)), at == null ? null : at > 10 ? [255, 140, 120] : at > 0 ? [255, 205, 120] : [140, 230, 180]]];
+    const resumo = [["ADM responsável", (eq ? admResp(eq) : ME.adm) || "-", [255, 170, 100]], ["Concluídos", `${feitos}/${d.itens.length}`], ["Atraso atual", at == null ? "-" : limpa(fmtDif(at)), at == null ? null : at > 10 ? [255, 140, 120] : at > 0 ? [255, 205, 120] : [140, 230, 180]]];
     const paginaInicial = doc.getNumberOfPages();
     cabecalho(d, true, resumo);
     // legenda
@@ -738,16 +775,17 @@ async function gerarCronoPdf(qual) {
       },
       didDrawPage: () => { if (doc.getNumberOfPages() > paginaInicial) cabecalho(d, false); },
     });
-  });
+  }); });
   const pg = doc.getNumberOfPages();
   for (let i = 1; i <= pg; i++) {
     doc.setPage(i);
     doc.setDrawColor(...LARANJA); doc.setLineWidth(0.5); doc.line(12, H - 9.5, W - 12, H - 9.5);
     doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...TINTA); doc.text("ADM 3COLINAS", 12, H - 5.5);
-    doc.setFont("helvetica", "normal"); doc.setTextColor(...CINZA); doc.text(`Legendários Base 3 Colinas · ${top}`, 12 + doc.getTextWidth("ADM 3COLINAS") + 3, H - 5.5);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(...CINZA); doc.text(`Legendários Base 3 Colinas · ${top}${equipes.length === 1 && equipes[0] ? " · " + equipes[0].nome + " · ADM " + (admResp(equipes[0]) || "-") : ""}`, 12 + doc.getTextWidth("ADM 3COLINAS") + 3, H - 5.5);
     doc.text(`Página ${i} de ${pg}`, W - 12, H - 5.5, { align: "right" });
   }
-  const nome = `cronograma-${(qual === "todos" ? "completo" : dias[0].nome).toLowerCase()}-${top.toLowerCase().replace(/\s+/g, "")}.pdf`;
+  const slug = t => norm(t).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const nome = `cronograma-${(qual === "todos" ? "completo" : dias[0].nome).toLowerCase()}-${slug(top)}${equipes.length > 1 ? "-todas-equipes" : equipes[0] ? "-" + slug(equipes[0].nome) + (admResp(equipes[0]) ? "-" + slug(admResp(equipes[0]).split(" ")[0]) : "") : ""}.pdf`;
   const blob = doc.output("blob");
   const arq = typeof File === "function" ? new File([blob], nome, { type: "application/pdf" }) : null;
   // no celular abre o "compartilhar" (WhatsApp, e-mail…); no computador baixa o arquivo
@@ -757,6 +795,56 @@ async function gerarCronoPdf(qual) {
   const url = URL.createObjectURL(blob), a = document.createElement("a");
   a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
   toast("PDF gerado: " + nome);
+}
+/* Dividir os ADMs em equipes (só o dono): cada equipe tem nome, ADM responsável e integrantes; coordenadores veem todas */
+function equipesForm() {
+  const E = eqDoc();
+  const membrosAtivos = (S.equipe || []).filter(m => m.ativo !== false && !m.dono).map(m => ({ id: m.id, nome: m.nome }));
+  const rasc = { equipes: E.equipes.map(e => ({ ...e, adms: [...(e.adms || [])] })), coord: [...E.coord] };
+  if (!rasc.equipes.length) rasc.equipes = [{ id: "eq1", nome: "Equipe 1", adms: [] }, { id: "eq2", nome: "Equipe 2", adms: [] }];
+  const eqDe = id => rasc.equipes.find(e => e.adms.some(a => a.id === id));
+  const corpo = () => `
+    <h3>Equipes do ${esc(topName())}</h3>
+    <p class="hint" style="margin:0">Cada equipe marca o seu cronograma. O ADM vê só o da equipe dele; você e os coordenadores veem todos. O ADM responsável aparece no cabeçalho do PDF.</p>
+    <div class="eqf-list">${rasc.equipes.map((e, k) => `<div class="eqf-row">
+      <input data-eqf-nome="${k}" value="${esc(e.nome)}" aria-label="Nome da equipe" placeholder="Nome da equipe">
+      <select data-eqf-resp="${k}" aria-label="ADM responsável"><option value="">ADM responsável…</option>${e.adms.map(a => `<option value="${esc(a.id)}" ${e.resp && e.resp.id === a.id ? "selected" : ""}>${esc(a.nome)}</option>`).join("")}</select>
+      <span class="hint num">${e.adms.length} ADM(s)</span>
+      <button class="linkbtn" type="button" data-eqf-del="${k}" aria-label="Apagar ${esc(e.nome)}">${ico("x")}</button></div>`).join("")}</div>
+    <button class="btn" type="button" id="eqfAdd">${ico("plus")} Adicionar equipe</button>
+    <h4 style="margin:6px 0 0">ADMs</h4>
+    ${membrosAtivos.length ? `<div class="eqf-list">${membrosAtivos.map(m => { const e = eqDe(m.id); const c = rasc.coord.some(x => x.id === m.id);
+      return `<div class="eqf-row"><b style="flex:1;min-width:120px">${esc(m.nome)}</b>
+        <select data-eqf-adm="${esc(m.id)}" aria-label="Equipe de ${esc(m.nome)}"><option value="">Sem equipe</option>${rasc.equipes.map((x, k) => `<option value="${k}" ${e === x ? "selected" : ""}>${esc(x.nome)}</option>`).join("")}</select>
+        <label class="selall" style="margin:0"><input type="checkbox" data-eqf-coord="${esc(m.id)}" ${c ? "checked" : ""}> Coordenador</label></div>`; }).join("")}</div>`
+      : `<p class="hint">Cadastre os ADMs na aba Usuários primeiro.</p>`}
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar equipes</button></div></div>`;
+  const salvar = () => {
+    const equipes = rasc.equipes.filter(e => e.nome.trim()).map(e => ({ id: e.id, nome: e.nome.trim(), adms: e.adms, ...(e.resp && e.adms.some(a => a.id === e.resp.id) ? { resp: e.resp } : e.adms[0] ? { resp: e.adms[0] } : {}) }));
+    closeModal();
+    save(() => api.set("config", "equipes-" + curTopId(), { equipes, coord: rasc.coord }), "Equipes salvas");
+  };
+  modal(corpo(), salvar);
+  const f = $("#mform");
+  const redesenhar = () => { const y = f.scrollTop; f.innerHTML = corpo(); f.scrollTop = y; ligar(); };
+  function ligar() {
+    f.querySelectorAll("[data-eqf-nome]").forEach(i => i.oninput = () => { rasc.equipes[+i.dataset.eqfNome].nome = i.value; });
+    f.querySelectorAll("[data-eqf-nome]").forEach(i => i.onchange = redesenhar);
+    f.querySelectorAll("[data-eqf-resp]").forEach(sl => sl.onchange = () => { const e = rasc.equipes[+sl.dataset.eqfResp]; e.resp = e.adms.find(a => a.id === sl.value) || null; });
+    f.querySelectorAll("[data-eqf-del]").forEach(b => b.onclick = () => { const e = rasc.equipes[+b.dataset.eqfDel];
+      if (e.adms.length && !confirm(`Apagar a ${e.nome}? Os ADMs dela ficam sem equipe. Os horários já marcados por ela não aparecem mais.`)) return;
+      rasc.equipes.splice(+b.dataset.eqfDel, 1); redesenhar(); });
+    const add = $("#eqfAdd"); if (add) add.onclick = () => { rasc.equipes.push({ id: "eq" + ADM_DADOS.novoId(), nome: "Equipe " + (rasc.equipes.length + 1), adms: [] }); redesenhar(); };
+    f.querySelectorAll("[data-eqf-adm]").forEach(sl => sl.onchange = () => {
+      const m = membrosAtivos.find(x => x.id === sl.dataset.eqfAdm);
+      rasc.equipes.forEach(e => { e.adms = e.adms.filter(a => a.id !== m.id); if (e.resp && e.resp.id === m.id) e.resp = null; });
+      if (sl.value !== "") rasc.equipes[+sl.value].adms.push(m);
+      redesenhar(); });
+    f.querySelectorAll("[data-eqf-coord]").forEach(c => c.onchange = () => {
+      const m = membrosAtivos.find(x => x.id === c.dataset.eqfCoord);
+      rasc.coord = rasc.coord.filter(x => x.id !== m.id); if (c.checked) rasc.coord.push(m); });
+  }
+  ligar();
 }
 function cronoHoraForm(id) {
   const i = cronoPlano().flatMap(d => d.itens).find(x => x.id === id); if (!i) return;
@@ -787,7 +875,7 @@ function cronoItemForm(id) {
     ${campo("atv", "Atividade", "Ex.: PRÉDICA 1: TUA TRANSFORMAÇÃO")}
     <div class="grid2">${campo("local", "Local")}${campo("form", "Formação")}</div>
     <div class="grid2">${campo("resp", "Responsável")}<div class="field"><label for="f-ctipo">Cor</label>${sel("ctipo", CRONO_TIPOS, i.tipo || "")}</div></div>
-    <p class="hint" style="margin:0">A mudança vale só para o ${esc(topName())} e aparece para toda a equipe.</p>
+    <p class="hint" style="margin:0">A mudança vale para todas as equipes do ${esc(topName())}.</p>
     <div class="modal-foot">${novo ? "<span></span>" : `<button class="btn danger" type="button" id="cApagar">Apagar momento</button>`}<div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
   () => {
     const atv = $("#f-catv").value.trim(); if (!atv) { $("#f-catv").focus(); return; }
@@ -1682,6 +1770,8 @@ document.addEventListener("click", e => {
   if (d.edit) { personForm(S.P.find(p => p.id === d.edit)); return; }
   if (d.obs) { obsForm(S.P.find(p => p.id === d.obs)); return; }
   if (d.dup) { dupForm(S.P.find(p => p.id === d.dup)); return; }
+  if (d.cronoEq) { S.cronoEq = d.cronoEq; store.set("crono-eq", d.cronoEq); render(); return; }
+  if (d.act === "crono-equipes") { if (S.isOwner) equipesForm(); return; }
   if (d.cronoDia) { S.cronoDia = d.cronoDia; store.set("crono-dia", d.cronoDia); render(); return; }
   if (d.cronoIni) { cronoMarcar(d.cronoIni, { ini: agoraHM(), iniPor: ME.adm, iniEm: new Date().toISOString() }, "Início marcado " + agoraHM()); return; }
   if (d.cronoFim) { cronoMarcar(d.cronoFim, { fim: agoraHM(), fimPor: ME.adm, fimEm: new Date().toISOString() }, "Fim marcado " + agoraHM()); return; }
@@ -2277,8 +2367,10 @@ function conectarDados() {
   db.collection("config").onSnapshot(snap => {
     S.cfgDocs = Object.fromEntries(snap.docs.map(d => [d.id, d.data()]));
     // cria a ficha de horários do TOP enquanto tem internet: assim, sem internet, cada ADM só acrescenta o seu horário (não sobrescreve o dos outros)
-    const cid = "crono-" + curTopId();
-    if (!S.cfgDocs[cid] && podeEditar() && navigator.onLine !== false && !(db.estado().offline) && !S.cronoCriando) { S.cronoCriando = true; db.doc("config/" + cid).set({}).catch(() => {}).finally(() => { S.cronoCriando = false; }); }
+    const fichas = eqDoc().equipes.length ? equipesVisiveis().filter(e => podeMarcar(e)).map(cronoDocId) : podeEditar() ? [cronoDocId(null)] : [];
+    S.cronoCriando = S.cronoCriando || new Set();
+    if (navigator.onLine !== false && !db.estado().offline) fichas.filter(id => !S.cfgDocs[id] && !S.cronoCriando.has(id)).forEach(id => {
+      S.cronoCriando.add(id); db.doc("config/" + id).set({}).catch(() => {}).finally(() => S.cronoCriando.delete(id)); });
     if (S.view === "cronograma" || S.view === "painel") render();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });

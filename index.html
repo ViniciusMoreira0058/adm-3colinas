@@ -227,6 +227,18 @@ button.chip:hover { border-color: currentColor; }
 .crono-hora:disabled { cursor: default; }
 .crono-h { font-size: 18px; font-weight: 800; min-width: 52px; }
 .btn.sm { padding: 5px 12px; font-size: 13px; min-height: 0; }
+.crono-eqs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.crono-eq { text-align: left; display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit; cursor: pointer; }
+.crono-eq small { color: var(--muted); font-size: 12px; }
+.crono-eq span { font-size: 13px; font-weight: 600; }
+.crono-eq span i { font-style: normal; }
+.crono-eq[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.eqf-list { display: flex; flex-direction: column; gap: 8px; }
+.eqf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); }
+.eqf-row input:not([type]), .eqf-row input[data-eqf-nome] { flex: 1; min-width: 140px; }
+.eqf-row select { min-width: 150px; }
+.eqf-row input:not([type=checkbox]), .eqf-row select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg); font: inherit; }
+.eqf-row input:not([type=checkbox]):focus, .eqf-row select:focus { border-color: var(--accent); outline: none; }
 .tag { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: var(--surface2); color: var(--muted); }
 .tag.acc { background: var(--accent); color: var(--on-accent); }
 
