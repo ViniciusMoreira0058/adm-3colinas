@@ -150,6 +150,17 @@ html, body { overscroll-behavior-y: contain; }
 .bv-dicas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .bv-dicas li { display: flex; gap: 10px; align-items: flex-start; }
 .bv-dicas svg { width: 20px; height: 20px; flex: none; color: var(--accent); margin-top: 2px; }
+.obsbtn { color: var(--muted); }
+.obsbtn.tem { color: var(--accent); }
+.obsline { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; padding: 6px 9px; width: 100%; max-width: 420px; text-align: left; border-radius: 8px;
+  border: 1px dashed var(--accent); background: var(--accent-soft); color: var(--fg); font-size: 13px; line-height: 1.35; cursor: pointer; }
+.obsline svg { width: 14px; height: 14px; flex: none; color: var(--accent); margin-top: 2px; }
+.obsline span { flex: 1; white-space: pre-wrap; overflow-wrap: anywhere; }
+.obsline { flex-wrap: wrap; }
+.obsline span { min-width: 150px; }
+.obsline small { flex: 0 0 100%; padding-left: 20px; color: var(--muted); font-size: 11px; }
+.table-wrap.people td:first-child { min-width: 260px; }
+.table-wrap.people .obsline span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .selbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--bad); border-radius: 10px; background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .selbar .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .selall { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; cursor: pointer; }

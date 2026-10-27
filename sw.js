@@ -1,6 +1,6 @@
 /* Service worker do ADM 3Colinas: deixa o app instalável e abre a última versão
    guardada quando estiver sem internet. Os dados vêm sempre do Supabase. */
-const CACHE = "adm3-v7";
+const CACHE = "adm3-v8";
 const ARQUIVOS = ["./", "index.html", "app.js", "dados.js", "demo.js", "manifest.webmanifest",
   "assets/bg.jpg", "assets/logo.png", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS)).then(() => self.skipWaiting())); });

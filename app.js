@@ -369,6 +369,22 @@ function admOptions() {
   return [...new Set([...ADMS, ...S.P.map(p => p.adm).filter(Boolean)])].sort((x, y) => norm(x).localeCompare(norm(y)));
 }
 
+/* Observação do ADM em cada pessoa: aparece na lista e edita num toque */
+const obsBtn = p => `<button class="linkbtn obsbtn ${p.obs ? "tem" : ""}" type="button" data-obs="${p.id}" title="${p.obs ? "Ver ou editar observação" : "Adicionar observação"}" aria-label="Observação de ${esc(p.nome)}">${ico("chat")}</button>`;
+const obsLinha = p => p.obs ? `<button type="button" class="obsline" data-obs="${p.id}" title="Editar observação">${ico("chat")}<span>${esc(p.obs)}</span>${p.obsPor ? `<small>${esc(p.obsPor.split(" ")[0])}${p.obsEm ? " · " + esc(quando(p.obsEm)) : ""}</small>` : ""}</button>` : "";
+function obsForm(p) {
+  modal(`
+    <h3>Observação</h3>
+    <p class="hint" style="margin:0"><b>${esc(p.nome)}</b> · ${p.tipo === "legendario" ? "Legendário" : "Participante"}${p.obsPor ? ` · última por ${esc(p.obsPor)}${p.obsEm ? " " + esc(quando(p.obsEm)) : ""}` : ""}</p>
+    <div class="field"><label for="f-obsq">Anotação para a equipe ADM</label><textarea id="f-obsq" name="obs" style="min-height:140px" placeholder="Ex.: vai mandar o atestado na sexta · pediu para ficar na família do irmão · chega de carona">${esc(p.obs || "")}</textarea></div>
+    <div class="modal-foot"><div>${p.obs ? `<button class="btn danger" type="button" id="obsLimpar">Apagar observação</button>` : ""}</div>
+      <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { const obs = String(fd.get("obs") || "").trim(); closeModal();
+    if (obs === (p.obs || "")) return;
+    touch(p.id, { obs, obsPor: obs ? ME.adm || "" : "", obsEm: obs ? new Date().toISOString() : "" }, obs ? "Observação salva" : "Observação apagada"); });
+  const l = $("#obsLimpar"); if (l) l.onclick = () => { closeModal(); touch(p.id, { obs: "", obsPor: "", obsEm: "" }, "Observação apagada"); };
+  const ta = $("#f-obsq"); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+}
 const tagsInscricao = p => (S.aviso && p.importId === S.aviso.id ? ' <span class="chip ok">Novo</span>' : "") + (cancelado(p) ? ' <span class="chip bad">Compra cancelada</span>' : p.inscricao === "pendente" ? ' <span class="chip wait">Pagamento pendente</span>' : "")
   + (saudeAlerta(p) ? ' <span class="tag saude" title="Tem condição médica, medicamento ou restrição alimentar">Saúde</span>' : "");
 function vPessoas(tipo) {
@@ -418,18 +434,19 @@ function vPessoas(tipo) {
     <thead><tr>${sel ? `<th style="width:36px"><input type="checkbox" class="selbox" data-selall="1" ${todos ? "checked" : ""} aria-label="Selecionar todos"></th>` : ""}<th>Nome</th><th>WhatsApp</th>${lg ? "<th>Equipe</th>" : ""}<th>Atestado</th><th>Termo</th>${lg ? "" : "<th>Grupo · NFC</th><th>Família</th>"}<th>Responsável</th><th></th></tr></thead>
     <tbody>${rows.map(p => `<tr class="${S.sel.ids.has(p.id) ? "picked" : ""}">
       ${sel ? `<td>${caixa(p)}</td>` : ""}
-      <td><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div></td>
+      <td><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div>${obsLinha(p)}</td>
       <td class="num" style="white-space:nowrap"><div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">${waBtn(p)}<span class="hint" style="font-size:12px">${esc(p.telefone || "sem telefone")}</span></div></td>
       ${lg ? `<td>${esc(p.equipe || "—")}</td>` : ""}
       <td>${atest(p)}</td>
       <td>${cyc(TERMO, "termo", p)}</td>
       ${lg ? "" : `<td>${ticks(p)}</td><td class="num">${p.familia ? "F" + String(p.familia).padStart(2, "0") : "—"}</td>`}
       <td>${respHtml(p)}</td>
-      <td><button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></td>
+      <td style="white-space:nowrap">${obsBtn(p)}<button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></td>
     </tr>`).join("")}</tbody></table></div>
   <div class="cards">${rows.map(p => `<article class="pcard ${S.sel.ids.has(p.id) ? "picked" : ""}">
       <div class="top">${caixa(p)}<div class="pname" style="flex:1">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(p.equipe) : ""}</small></div>
-        <button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></div>
+        <div style="display:flex;gap:2px">${obsBtn(p)}<button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></div></div>
+      ${obsLinha(p)}
       <div class="row"><span class="lbl">Atestado</span>${cyc(ATESTADO, "atestado", p)}<span class="lbl">Termo</span>${cyc(TERMO, "termo", p)}</div>
       <div class="row" style="justify-content:space-between"><div class="row">${ticks(p)}${!lg && p.familia ? `<span class="tag">Família ${String(p.familia).padStart(2, "0")}</span>` : ""}</div>${waBtn(p)}</div>
       ${p.adm ? `<div class="hint" style="font-size:12px">Responsável: <b style="color:var(--fg)">${esc(p.adm)}</b>${p.admEm ? " · " + esc(quando(p.admEm)) : ""}</div>` : ""}
@@ -816,6 +833,7 @@ function personForm(p, tipo) {
     const w = $("#dupWarn");
     if (dup && w.dataset.ok !== "1") { w.hidden = false; w.dataset.ok = "1"; w.textContent = `Já existe "${dup.nome}" com esse nome ou telefone. Clique em Salvar de novo para cadastrar mesmo assim.`; return; }
     closeModal();
+    if ((data.obs || "") !== (p.obs || "")) Object.assign(data, { obsPor: data.obs ? ME.adm || "" : "", obsEm: data.obs ? new Date().toISOString() : "" });
     if (p.id) touch(p.id, data, "Cadastro atualizado");
     else withAdm(stamp => save(() => api.add("pessoas", { ...data, ...stamp, tipo: lg ? "legendario" : "participante", exemplo: false, criadoEm: new Date().toISOString() }), `${nome.split(" ")[0]} cadastrado`));
   });
@@ -1180,7 +1198,7 @@ function toast(msg) {
 
 /* ---------- Eventos ---------- */
 const pending = new Map();
-const WRITE_KEYS = ["editDia", "act", "edit", "editTask", "editItem", "editTop", "topFin", "cyc", "tog", "task", "step", "kits", "editAdm"];
+const WRITE_KEYS = ["editDia", "act", "edit", "obs", "editTask", "editItem", "editTop", "topFin", "cyc", "tog", "task", "step", "kits", "editAdm"];
 function debounceWrite(key, fn, ms = 500) { clearTimeout(pending.get(key)); pending.set(key, setTimeout(() => { pending.delete(key); fn(); }, ms)); }
 
 document.addEventListener("click", e => {
@@ -1245,6 +1263,7 @@ document.addEventListener("click", e => {
     save(async () => { for (const p of ex) await api.remove("pessoas", p.id); }, "Exemplos apagados"); return;
   }
   if (d.edit) { personForm(S.P.find(p => p.id === d.edit)); return; }
+  if (d.obs) { obsForm(S.P.find(p => p.id === d.obs)); return; }
   if (d.editTask) { taskForm(S.T.find(x => x.id === d.editTask)); return; }
   if (d.editItem) { itemForm(S.estoque.find(x => x.id === d.editItem)); return; }
   if (d.cyc) {
@@ -1353,7 +1372,7 @@ function vPendencias() {
   ${rows.length ? `<section class="panel"><div class="list pend">${rows.map(p => `<div class="li pendrow">
       <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
         <div class="pendtags">${tags(p)}${p.dataAtestado && p.atestado !== "confirmado" ? `<span class="hint">previsão: ${esc(p.dataAtestado)}</span>` : ""}</div>
-        <small class="hint">${esc(p.adm || "Sem ADM")}${p.cobradoEm ? ` · cobrado ${esc(quando(p.cobradoEm))}` : " · ainda não cobrado"}</small></div>
+        ${obsLinha(p)}<small class="hint">${esc(p.adm || "Sem ADM")}${p.cobradoEm ? ` · cobrado ${esc(quando(p.cobradoEm))}` : " · ainda não cobrado"}</small></div>
       ${waNumber(p.telefone) ? `<a class="wa" href="${waCobrar(p)}" target="_blank" rel="noopener" data-cobrar="${p.id}">${ico("wa")} Cobrar</a>` : `<span class="wa off">${ico("wa")} Sem telefone</span>`}
     </div>`).join("")}</div></section>`
   : `<section class="panel"><div class="empty">Ninguém com essa pendência. Bom trabalho.</div></section>`}`;
@@ -1413,7 +1432,7 @@ const CAMPOS = { nome: "Nome", telefone: "Telefone", email: "E-mail", atestado: 
   local: "Local", trechos: "Trechos", kitsMRE: "Kits MRE", topAtual: "TOP atual", inscricao: "Inscrição", ficha: "Dados da inscrição",
   tipo: "Tipo", top: "TOP", mais40: "+40", cobradoEm: "Cobrado em", fase: "Fase", ordem: "Ordem", metaMRE: "Meta MRE", alertaBaixo: "Alerta de estoque",
   inicio: "Início", fim: "Fim", finalizadoEm: "Finalizado em", resp: "Responsável", dia: "Dia" };
-const IGNORAR = ["adm", "admId", "admEm", "atualizado"];
+const IGNORAR = ["adm", "admId", "admEm", "atualizado", "obsPor", "obsEm"];
 function abaDoRegistro(col, d) {
   if (col === "pessoas") return d && d.tipo === "legendario" ? "Legendários" : "Participantes";
   return { tarefas: "Checklist", estoque: "Estoque", pista: "Pista", tops: "Tops", config: "Configurações" }[col] || col;
@@ -1478,7 +1497,7 @@ function vHistorico() {
   const itens = rows.slice(0, 400).map(x => {
     const d = new Date(x.em), dd = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" });
     const cab = dd !== dia ? `<div class="hdia">${esc(dd)}</div>` : ""; dia = dd;
-    const mud = x.mudancas ? Object.entries(x.mudancas).map(([k, [a, b]]) => `<li><span>${esc(CAMPOS[k] || k)}:</span> ${esc(fmtValor(k, a))} → <b>${esc(fmtValor(k, b))}</b></li>`).join("") : "";
+    const mud = x.mudancas ? Object.entries(x.mudancas).filter(([k]) => !IGNORAR.includes(k)).map(([k, [a, b]]) => `<li><span>${esc(CAMPOS[k] || k)}:</span> ${esc(fmtValor(k, a))} → <b>${esc(fmtValor(k, b))}</b></li>`).join("") : "";
     return `${cab}<div class="hrow ${x.acao}">
       <span class="htime num">${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
       <div class="grow"><div><b>${esc(x.quem)}</b> ${verbo[x.acao]} <span class="tag">${esc(x.aba)}</span> ${esc(x.nome || x.doc_id)}</div>
