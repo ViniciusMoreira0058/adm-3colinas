@@ -1550,12 +1550,14 @@ function lerRelatorio(linhas) {
     areasJa: col("Quais áreas já serviu"), areas: col("Quais áreas pretende servir"), hab: col("Habilidades"), temVeic: col("Tem veículo"),
     veic: col("Descrição do veículo"), temEq: col("Tem equipamento ou recurso próprio"), eq: col("Descrição equipamento/recurso"), codigo: col("Código"), cad: col("Data cadastro") };
   const g = (r, i) => i >= 0 && !vazio(r[i]) ? String(r[i]).replace(/\s+/g, " ").trim() : "";
-  const out = [];
+  const out = [], ignorados = [];
   linhas.slice(1).forEach(r => {
     const nome = limpaNome(r[iNome]); if (!nome) return;
     const st = sts.map(i => norm(r[i])).join(" ");
-    const tipoTxt = norm(g(r, I.tipo) || g(r, I.ingresso));
-    const tipo = /legendario/.test(tipoTxt) ? "legendario" : "participante";
+    // participante é só quem está como Senderista; legendário é quem está como Legendário
+    const tipoTxt = norm(I.tipo >= 0 ? g(r, I.tipo) : g(r, I.ingresso));
+    const tipo = /legendario/.test(tipoTxt) ? "legendario" : /senderista/.test(tipoTxt) || (I.tipo < 0 && /participante/.test(tipoTxt)) ? "participante" : "";
+    if (!tipo) { ignorados.push({ nome, como: g(r, I.tipo) || g(r, I.ingresso) || "sem tipo" }); return; }
     let tel = g(r, I.tel); if (tel && !/^\+/.test(tel) && digits(tel).length <= 11 && g(r, I.ddi)) tel = "+" + g(r, I.ddi) + " " + tel;
     const lg = tipo === "legendario";
     const ficha = {
@@ -1572,6 +1574,7 @@ function lerRelatorio(linhas) {
     out.push({ nome, tipo, email: g(r, I.email).toLowerCase(), telefone: tel, idade, cidade: [g(r, I.cidade), UF[norm(g(r, I.uf))] || g(r, I.uf)].filter(Boolean).join(" - "),
       inscricao: /cancel/.test(st) ? "cancelada" : /pendente/.test(st) ? "pendente" : "ativa", ficha });
   });
+  out.ignorados = ignorados;
   return out;
 }
 function acharNoApp(n) {
@@ -1598,12 +1601,13 @@ function analisarImport(lidos) {
     const a = acharNoApp(n);
     if (a) ja.push({ n, p: a.p, por: a.por }); else novos.push(n);
   });
-  return { novos, ja, canc, total: lidos.length };
+  const ign = lidos.ignorados || [];
+  return { novos, ja, canc, ign, total: lidos.length + ign.length };
 }
 function importForm(tipoAtual) {
   modal(`
     <h3>Importar relatório de inscrições</h3>
-    <p class="hint" style="margin:0">Envie a planilha de inscritos da plataforma (.xlsx ou .csv). O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Inscrições canceladas são ignoradas. O CPF não é importado.</p>
+    <p class="hint" style="margin:0">Envie a planilha de inscritos da plataforma (.xlsx ou .csv). O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Só entra como participante quem está como Senderista (e como legendário quem está como Legendário). Inscrições canceladas são ignoradas. O CPF não é importado.</p>
     <div class="field"><label for="f-arq">Planilha</label><input id="f-arq" type="file" accept=".xlsx,.xls,.csv"></div>
     <div id="impPrev" class="imp-prev"></div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="impBtn" disabled>Importar</button></div></div>`,
@@ -1648,6 +1652,8 @@ function previewImport(R) {
     <div><b class="num">${R.ja.length}</b><span>já estão no app</span></div>
     <div class="bad"><b class="num">${R.canc.length}</b><span>compra cancelada</span></div>
   </div>
+  ${R.ign.length ? `<details><summary class="bad-text">Fora da regra (${R.ign.length}): não são Senderista nem Legendário, não entram</summary>
+    <ul class="imp-list">${R.ign.map(x => `<li>${esc(x.nome)} <span class="hint">está como ${esc(x.como)}</span></li>`).join("")}</ul></details>` : ""}
   ${R.novos.length ? `<details open><summary><b>Novos para adicionar (${R.novos.length})</b></summary>
     <label class="selall"><input type="checkbox" id="impTodos" checked> Marcar todos</label>
     <ul class="imp-list">${R.novos.map((n, i) => `<li><label><input type="checkbox" data-imp-novo="${i}" checked> <b>${esc(n.nome)}</b> <span class="hint">${tl(n)} · ${esc(n.cidade || "")}${n.idade ? " · " + n.idade + " anos" : ""}</span> ${tag(n)}</label></li>`).join("")}</ul></details>`
