@@ -766,7 +766,7 @@ paisagem.addEventListener("change", () => { if (S.view === "aovivo" && !$("#moda
    (config/pista-vivo-<top>); enquanto o trecho anda, a posição é estimada pelo tempo previsto do trecho. */
 const MAPA_VIVO = () => true;
 const MAPA_CHEIO = () => true;
-const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências: em teste na demonstração // mapa em tela cheia: em teste na demonstração
+const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências
 const libJs = {};
 function carregarLib(nome, js, css) {
   return libJs[nome] || (libJs[nome] = new Promise((ok, erro) => {
