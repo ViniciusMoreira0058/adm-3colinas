@@ -362,6 +362,18 @@ tbody tr:hover td { background: var(--accent-soft); }
 .stock-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .stock-row:first-of-type { border-top: 0; }
 .stock-row .meta { font-size: 12px; color: var(--muted); }
+.preco-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.preco-in { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; background: var(--surface2); font-size: 13px; color: var(--muted); }
+.preco-in input { width: 84px; border: 0; background: transparent; color: var(--fg); padding: 6px 0; font: inherit; font-variant-numeric: tabular-nums; }
+.mre-ck { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); cursor: pointer; }
+.mre-ck:has(input:checked) { border-color: #ff7a1a; color: #ff7a1a; }
+.mre-lista { display: flex; flex-direction: column; }
+.mre-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 92px; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.mre-item:first-child { border-top: 0; } .mre-item > b:last-child { text-align: right; }
+.mre-item.total { border-top: 2px solid #ff7a1a; font-size: 15px; }
+.mre-qtd { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.mre-qtd input { width: 52px; padding: 5px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface2); color: var(--fg); font: inherit; }
+@media (max-width: 600px) { .mre-item { grid-template-columns: minmax(0, 1fr) auto; } .mre-item .hint { display: none; } }
 .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .stepper button { width: 30px; height: 30px; border: 0; background: var(--surface2); font-weight: 700; }
 .stepper button:hover { background: var(--accent-soft); color: var(--accent); }

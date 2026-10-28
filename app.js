@@ -765,7 +765,8 @@ paisagem.addEventListener("change", () => { if (S.view === "aovivo" && !$("#moda
    A linha vem do KMZ/KML da pista (config/pista-mapa). Os ADMs marcam quando a corrente sai e chega em cada trecho
    (config/pista-vivo-<top>); enquanto o trecho anda, a posição é estimada pelo tempo previsto do trecho. */
 const MAPA_VIVO = () => true;
-const MAPA_CHEIO = () => DEMO; // mapa em tela cheia: em teste na demonstração
+const MAPA_CHEIO = () => DEMO;
+const PRECO_ESTOQUE = () => DEMO; // preços no estoque, custo por MRE e busca em Pendências: em teste na demonstração // mapa em tela cheia: em teste na demonstração
 const libJs = {};
 function carregarLib(nome, js, css) {
   return libJs[nome] || (libJs[nome] = new Promise((ok, erro) => {
@@ -2071,22 +2072,54 @@ function vEstoque() {
     if (e.qtd <= S.config.alertaBaixo) return '<span class="chip wait">Baixo</span>';
     return '<span class="chip ok">OK</span>';
   };
-  const section = g => { const items = S.estoque.filter(e => e.grupo === g.v).sort((a, b) => (a.ordem || 0) - (b.ordem || 0)); return `
-    <section class="panel"><h3>${g.l} <small>${items.length} itens</small></h3>
-    <div>${items.length ? items.map(e => `<div class="stock-row">
-      <div style="min-width:0"><b>${esc(e.item)}</b><div class="meta">${esc([e.local, e.resp ? "compra: " + e.resp : "", e.obs].filter(Boolean).join(" · "))}</div></div>
+  const pr = PRECO_ESTOQUE(), ed = podeEditar();
+  const section = g => { const items = S.estoque.filter(e => e.grupo === g.v).sort((a, b) => (a.ordem || 0) - (b.ordem || 0)); const vg = items.reduce((a, e) => a + valorItem(e), 0); return `
+    <section class="panel"><h3>${g.l} <small>${items.length} itens${pr && vg ? " · " + brl(vg) : ""}</small></h3>
+    <div>${items.length ? items.map(e => `<div class="stock-row${pr ? " com-preco" : ""}">
+      <div style="min-width:0"><b>${esc(e.item)}</b><div class="meta">${esc([e.local, e.resp ? "compra: " + e.resp : "", e.obs].filter(Boolean).join(" · "))}</div>
+        ${pr ? `<div class="preco-linha"><label class="preco-in"><span>R$</span><input type="text" inputmode="decimal" data-preco="${e.id}" value="${e.preco != null ? fmtPreco(e.preco) : ""}" placeholder="preço un." aria-label="Preço unitário de ${esc(e.item)}" ${ed ? "" : "disabled"}></label>
+          ${e.preco != null && e.qtd ? `<span class="hint num">= ${brl(valorItem(e))}</span>` : ""}
+          <label class="mre-ck" title="Vai no MRE"><input type="checkbox" data-mre="${e.id}" ${ehMre(e) ? "checked" : ""} ${ed ? "" : "disabled"}> MRE</label></div>` : ""}</div>
       ${g.v === "equip" ? `<span class="num" style="font-weight:700">${e.qtd != null ? e.qtd : "—"}</span>` : `<div class="stepper"><button type="button" data-step="-1" data-id="${e.id}" aria-label="Menos ${esc(e.item)}">−</button><span>${e.qtd ?? 0}</span><button type="button" data-step="1" data-id="${e.id}" aria-label="Mais ${esc(e.item)}">+</button></div>`}
       <div style="display:flex;gap:4px;align-items:center">${sit(e)}<button class="linkbtn" type="button" data-edit-item="${e.id}" aria-label="Editar ${esc(e.item)}">${ico("edit")}</button></div>
     </div>`).join("") : `<div class="empty">Nenhum item.</div>`}</div></section>`; };
   return `
   <div class="head"><div><h2>Estoque e compras</h2><p>Use + e − para atualizar na hora da conferência. Alerta de estoque baixo em até ${S.config.alertaBaixo} unidades.</p></div>
     <div class="actions"><button class="btn primary" type="button" data-act="novo-item">${ico("plus")} Novo item</button></div></div>
+  ${pr ? vValoresEstoque(kits, meta) : ""}
   <section class="panel"><h3>Kits MRE lacrados <small>meta ${meta}</small></h3>
     <div class="goal"><div class="big num">${kits}<small> / ${meta}</small></div>
       <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px"><div class="bar ${kits >= meta ? "good" : ""}" style="height:10px"><i style="width:${Math.min(100, pct(kits, meta))}%"></i></div><span class="hint">Faltam ${Math.max(0, meta - kits)} kits · ${s.zero.length} itens zerados e ${s.low.length} baixos no estoque</span></div>
       <div class="stepper"><button type="button" data-kits="-1" aria-label="Menos um kit">−</button><span>${kits}</span><button type="button" data-kits="1" aria-label="Mais um kit">+</button></div>
     </div></section>
   <div class="grid2">${section(GRUPOS[0])}<div style="display:flex;flex-direction:column;gap:16px;min-width:0">${section(GRUPOS[1])}${section(GRUPOS[2])}</div></div>`;
+}
+
+// Preços do estoque: preço unitário por item (preco), valor = preço × quantidade. MRE: itens marcados (mre) com quantidade por kit (porMre).
+const brl = v => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtPreco = v => (Number(v) || 0).toFixed(2).replace(".", ",");
+const lePreco = t => { t = String(t || "").replace(/[^\d,.-]/g, ""); if (!t) return null; if (t.includes(",")) t = t.replace(/\./g, "").replace(",", "."); const n = parseFloat(t); return isNaN(n) ? null : Math.round(n * 100) / 100; };
+const valorItem = e => (Number(e.preco) || 0) * (Number(e.qtd) || 0);
+const ehMre = e => e.mre != null ? !!e.mre : e.grupo === "mre";
+const porMre = e => Number(e.porMre) > 0 ? Number(e.porMre) : 1;
+function vValoresEstoque(kits, meta) {
+  const total = S.estoque.reduce((a, e) => a + valorItem(e), 0), semPreco = S.estoque.filter(e => e.preco == null).length;
+  const mre = S.estoque.filter(ehMre).sort((a, b) => norm(a.item).localeCompare(norm(b.item)));
+  const custo = mre.reduce((a, e) => a + (Number(e.preco) || 0) * porMre(e), 0), ed = podeEditar();
+  const kitsDoEstoque = mre.length ? Math.min(...mre.map(e => Math.floor((Number(e.qtd) || 0) / porMre(e)))) : 0;
+  const limita = mre.find(e => Math.floor((Number(e.qtd) || 0) / porMre(e)) === kitsDoEstoque);
+  return `<div class="kpis">
+    <div class="kpi"><span class="lbl">Valor em estoque</span><span class="val num">${brl(total)}</span><span class="sub">${semPreco ? `${semPreco} item(ns) sem preço` : "todos os itens com preço"}</span></div>
+    <div class="kpi alert"><span class="lbl">Custo de 1 MRE</span><span class="val num">${brl(custo)}</span><span class="sub">${mre.length} item(ns) no MRE${mre.some(e => e.preco == null) ? " · falta preço em " + mre.filter(e => e.preco == null).length : ""}</span></div>
+    <div class="kpi"><span class="lbl">Meta de ${meta} MREs</span><span class="val num">${brl(custo * meta)}</span><span class="sub">${kits} lacrados = ${brl(custo * kits)}</span></div>
+    <div class="kpi"><span class="lbl">Dá para montar</span><span class="val num">${kitsDoEstoque}</span><span class="sub">${limita ? `com o estoque atual · limitado por ${esc(limita.item)}` : "MREs com o estoque atual"}</span></div>
+  </div>
+  <section class="panel mre-box"><h3>MRE <small>o que vai em cada kit · marque o quadradinho MRE no item para incluir</small></h3>
+    ${mre.length ? `<div class="mre-lista">${mre.map(e => `<div class="mre-item"><b>${esc(e.item)}</b>
+      <label class="mre-qtd">${ed ? `<input type="number" min="1" step="1" inputmode="numeric" data-por-mre="${e.id}" value="${porMre(e)}" aria-label="Quantidade de ${esc(e.item)} por MRE">` : `<span class="num">${porMre(e)}</span>`} por kit</label>
+      <span class="num hint">${e.preco != null ? `${brl(e.preco)} un.` : "sem preço"}</span><b class="num">${e.preco != null ? brl(e.preco * porMre(e)) : "—"}</b></div>`).join("")}
+      <div class="mre-item total"><b>Total por MRE</b><span></span><span></span><b class="num">${brl(custo)}</b></div></div>` : `<div class="empty">Nenhum item marcado como MRE.</div>`}
+  </section>`;
 }
 
 function vPista() {
@@ -2356,14 +2389,14 @@ function render() {
     : vPista());
   const view = $("#view");
   const focusId = document.activeElement && document.activeElement.id;
-  const caret = focusId === "q" || focusId === "hq" ? document.activeElement.selectionStart : null;
+  const caret = focusId === "q" || focusId === "hq" || focusId === "pq" ? document.activeElement.selectionStart : null;
   view.innerHTML = html;
   botaoPdf();
   document.body.classList.toggle("av-tv", modoTv());
   if (S.view !== "aovivo") S.mapaCheio = false;
   document.body.classList.toggle("av-mapa-cheio", !!S.mapaCheio);
   if (S.view === "aovivo") montarMapaVivo(); else if (mapaAV) { try { mapaAV.map.remove(); } catch (e) {} mapaAV = null; }
-  if ((focusId === "q" || focusId === "hq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
+  if ((focusId === "q" || focusId === "hq" || focusId === "pq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
 }
 
 /* ---------- Formulários ---------- */
@@ -2586,14 +2619,17 @@ function itemForm(e) {
       <div class="field"><label for="f-qtd">Quantidade</label><input id="f-qtd" name="qtd" type="number" min="0" inputmode="numeric" value="${e.qtd ?? ""}"></div>
       <div class="field"><label for="f-local">Local</label><input id="f-local" name="local" value="${esc(e.local)}"></div>
       <div class="field"><label for="f-resp">Responsável pela compra</label><input id="f-resp" name="resp" list="adms4" value="${esc(e.resp)}"><datalist id="adms4">${ADMS.map(a => `<option value="${a}">`).join("")}</datalist></div>
+      ${PRECO_ESTOQUE() ? `<div class="field"><label for="f-preco">Preço unitário (R$)</label><input id="f-preco" name="preco" inputmode="decimal" value="${e.preco != null ? fmtPreco(e.preco) : ""}" placeholder="0,00"></div>
+      <div class="field"><label for="f-pormre">Quantidade por MRE</label><input id="f-pormre" name="porMre" type="number" min="1" inputmode="numeric" value="${porMre(e)}"></div>` : ""}
       <div class="field full"><label for="f-iobs">Observações</label><input id="f-iobs" name="obs" value="${esc(e.obs)}"></div>
-      <div class="field full"><div class="checks"><label><input type="checkbox" id="f-conferir" name="conferir" ${e.conferir ? "checked" : ""}> Falta conferir</label></div></div>
+      <div class="field full"><div class="checks"><label><input type="checkbox" id="f-conferir" name="conferir" ${e.conferir ? "checked" : ""}> Falta conferir</label>${PRECO_ESTOQUE() ? `<label><input type="checkbox" name="mre" ${ehMre(e) ? "checked" : ""}> Vai no MRE</label>` : ""}</div></div>
     </div>
     <div class="modal-foot"><div>${e.id ? `<button class="btn danger" type="button" id="delBtn">Excluir</button>` : ""}</div>
       <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
   (fd) => {
     const item = String(fd.get("item") || "").trim(); if (!item) { $("#f-item").focus(); return; }
     const data = { item, grupo: fd.get("grupo"), qtd: fd.get("qtd") === "" ? null : Number(fd.get("qtd")), local: String(fd.get("local") || "").trim(), resp: String(fd.get("resp") || "").trim(), obs: String(fd.get("obs") || "").trim(), conferir: fd.get("conferir") === "on", atualizado: new Date().toISOString() };
+    if (PRECO_ESTOQUE()) { data.preco = lePreco(fd.get("preco")); data.mre = fd.get("mre") === "on"; data.porMre = Math.max(1, Number(fd.get("porMre")) || 1); }
     closeModal();
     if (e.id) save(() => api.update("estoque", e.id, data), "Item atualizado");
     else save(() => api.add("estoque", { ...data, ordem: Date.now() }), "Item criado");
@@ -3063,6 +3099,7 @@ document.addEventListener("click", e => {
 document.addEventListener("input", e => {
   if (e.target.id === "q") { S.f.q = e.target.value; render(); }
   if (e.target.id === "hq") { S.hf.q = e.target.value; render(); }
+  if (e.target.id === "pq") { S.pf.q = e.target.value; render(); }
   if (e.target.id === "pinQ") { S.pinf.q = e.target.value; render(); const q = $("#pinQ"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   if (e.target.id === "csgQ") { S.csg.q = e.target.value; render(); const q = $("#csgQ"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
 });
@@ -3071,6 +3108,9 @@ document.addEventListener("change", e => {
   if (e.target.dataset.selall && S.isOwner) { S.sel.ids = new Set(e.target.checked ? filterPeople().map(p => p.id) : []); render(); return; }
   if (e.target.id === "admSel") { S.f.adm = e.target.value; render(); }
   if (e.target.id === "pfAdm") { S.pf.adm = e.target.value; render(); }
+  if (e.target.dataset.preco && podeEditar()) { const v = lePreco(e.target.value); save(() => api.update("estoque", e.target.dataset.preco, { preco: v, atualizado: new Date().toISOString() }), v == null ? "Preço apagado" : "Preço salvo"); return; }
+  if (e.target.dataset.mre && podeEditar()) { const on = e.target.checked; save(() => api.update("estoque", e.target.dataset.mre, { mre: on, atualizado: new Date().toISOString() }), on ? "Item incluído no MRE" : "Item tirado do MRE"); return; }
+  if (e.target.dataset.porMre && podeEditar()) { const n = Math.max(1, Math.round(Number(e.target.value) || 1)); save(() => api.update("estoque", e.target.dataset.porMre, { porMre: n, atualizado: new Date().toISOString() })); return; }
   if (e.target.id === "csgDe" || e.target.id === "csgAte") { S.csg[e.target.id === "csgDe" ? "de" : "ate"] = e.target.value; render(); }
   const hk = { hQuem: "quem", hAba: "aba", hAcao: "acao" }[e.target.id];
   if (hk) { S.hf[hk] = e.target.value; render(); }
@@ -3114,9 +3154,12 @@ function textoCobranca(p, tpl = msgCobranca()) {
     .replace(/\{top\}/g, topName()).replace(/\{pendencias\}/g, listaE(pendDe(p).map(k => PEND[k])));
 }
 const waCobrar = (p, txt) => { const n = waNumber(p.telefone); return n ? `https://wa.me/${n}?text=${encodeURIComponent(txt || textoCobranca(p))}` : ""; };
+// busca em Pendências: nome, telefone, e-mail ou ADM
+const pendBusca = p => { const q = PRECO_ESTOQUE() ? norm(S.pf.q || "").trim() : ""; if (!q) return true; const d = q.replace(/\D/g, "");
+  return norm(p.nome).includes(q) || norm(p.email).includes(q) || norm(p.adm).includes(q) || (d.length >= 3 && digits(p.telefone).includes(d)); };
 function pendLista() {
   const { quem, oque, adm } = S.pf;
-  return S.P.filter(p => quem === "todos" || (quem === "legendario") === (p.tipo === "legendario"))
+  return S.P.filter(pendBusca).filter(p => quem === "todos" || (quem === "legendario") === (p.tipo === "legendario"))
     .filter(p => !adm || (p.adm || "") === adm)
     .filter(p => { const k = pendDe(p); return oque === "qualquer" ? k.length : k.includes(oque); })
     .sort((a, b) => (a.cobradoEm || "").localeCompare(b.cobradoEm || "") || norm(a.nome).localeCompare(norm(b.nome)));
@@ -3133,7 +3176,7 @@ function textoPagamento(p, tpl = msgPagamento()) {
 }
 function pagLista() {
   const { quem, adm } = S.pf;
-  return S.P.filter(pagPendente).filter(p => quem === "todos" || (quem === "legendario") === (p.tipo === "legendario"))
+  return S.P.filter(pagPendente).filter(pendBusca).filter(p => quem === "todos" || (quem === "legendario") === (p.tipo === "legendario"))
     .filter(p => !adm || (p.adm || "") === adm)
     .sort((a, b) => (a.cobradoPagEm || "").localeCompare(b.cobradoPagEm || "") || norm(a.nome).localeCompare(norm(b.nome)));
 }
@@ -3157,6 +3200,7 @@ function vPagamentos(abas) {
   </div>
   <div class="toolbar">
     <div class="seg" role="group" aria-label="Quem">${seg("quem", "participante", "Senderistas")}${seg("quem", "legendario", "Legendários")}${seg("quem", "todos", "Todos")}</div>
+    ${PRECO_ESTOQUE() ? `<label class="search">${ico("search")}<input id="pq" type="search" placeholder="Buscar pessoa por nome, telefone ou e-mail" value="${esc(S.pf.q || "")}" aria-label="Buscar nas pendências"></label>` : ""}
     <select class="sel" id="pfAdm" aria-label="ADM responsável"><option value="">Todos os ADMs</option>${admOptions().map(a => `<option ${S.pf.adm === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>
   </div>
   ${rows.length ? `<section class="panel"><div class="list pend">${rows.map(p => `<div class="li pendrow">
@@ -3199,6 +3243,7 @@ function vPendencias() {
   </div>
   <div class="toolbar">
     <div class="seg" role="group" aria-label="Quem">${seg("quem", "participante", "Senderistas")}${seg("quem", "legendario", "Legendários")}${seg("quem", "todos", "Todos")}</div>
+    ${PRECO_ESTOQUE() ? `<label class="search">${ico("search")}<input id="pq" type="search" placeholder="Buscar pessoa por nome, telefone ou e-mail" value="${esc(S.pf.q || "")}" aria-label="Buscar nas pendências"></label>` : ""}
     <select class="sel" id="pfAdm" aria-label="ADM responsável"><option value="">Todos os ADMs</option>${admOptions().map(a => `<option ${S.pf.adm === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>
   </div>
   <div class="seg" role="group" aria-label="Pendência">${seg("oque", "qualquer", "Qualquer pendência")}${seg("oque", "atestado", "Atestado")}${seg("oque", "termo", "Termo")}${seg("oque", "grupo", "Grupo")}</div>

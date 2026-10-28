@@ -1565,3 +1565,13 @@ window.ADM_DEMO.notifs = [
     "d1-1": { ini: min(40), fim: min(12), iniPor: "Thalisson", fimPor: "Rafael Lima" },
     "d1-2": { ini: min(8), iniPor: "Rafael Lima" } } } });
 })();
+// preços fictícios do estoque na demonstração (preço unitário) e quantidade por MRE
+(function () {
+  const P = { "Gorras": 25, "Snickers": 4.5, "Hidramax 20 g": 1.5, "Hidramax 400 g": 35, "Gel carbo": 6, "Hidramax": 1.5, "Café solúvel": 1.2, "Atum": 8.9,
+    "Doce de leite": 2.5, "Rapadura": 2, "Barra de cereal": 1.8, "Salsicha em lata": 6.5, "Clube Social / Pit Stop": 1.5, "Miojo": 2.2, "Sacola plástica MRE vazia": 0.4,
+    "Abridor de latas": 7, "Gás para fogareiro": 18, "Fogareiro das famílias": 95 };
+  const K = { "Hidramax": 2, "Barra de cereal": 2, "Miojo": 2 };
+  window.ADM_DEMO.docs.forEach(d => { if (d.col !== "estoque") return; const i = d.data.item;
+    if (P[i] != null) d.data.preco = P[i]; else if (/^Tag /.test(i)) d.data.preco = 3;
+    if (K[i]) d.data.porMre = K[i]; });
+})();
