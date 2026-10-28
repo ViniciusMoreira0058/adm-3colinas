@@ -204,6 +204,8 @@ const canSee = v => {
   return temAba(ME.acesso.abas, v);   // página que usa dados de outra (ex.: Pendências) também precisa de Senderistas ou Legendários
 };
 const podeEditar = () => S.isOwner || (!!ME.acesso && ME.acesso.nivel !== "leitura");
+// importar planilhas: o dono, quem tem acesso total ou quem o dono liberou com a página "Importação do dia" marcada no cadastro
+const podeImportar = () => S.isOwner || (!!ME.acesso && (ME.acesso.nivel === "total" || (ME.acesso.nivel !== "leitura" && (ME.acesso.abas || []).includes("importacao"))));
 const podeTops = () => S.isOwner || (!!ME.acesso && ME.acesso.nivel === "total");
 function setMenu(open) {
   $(".app").classList.toggle("menu-open", open);
@@ -679,7 +681,7 @@ function vPessoas(tipo) {
   <div class="head"><div><h2>${lg ? "Legendários" : "Senderistas"}</h2><p>${lg ? "Servos do TOP: equipe, atestado e termo LGND." : "Cadastro, atestado, termo, grupo e NFC de cada senderista."} Toque no status para avançar. Quem mexer por último vira o ADM responsável.</p></div>
     <div class="actions">
       ${S.isOwner && total ? `<button class="btn ${sel ? "primary" : ""}" type="button" data-act="selecionar" aria-pressed="${sel}">${ico("check")} ${sel ? "Concluir seleção" : "Selecionar"}</button>` : ""}
-      <button class="btn" type="button" data-act="importar">${ico("upload")} Importar relatório</button>
+      ${podeImportar() ? `<button class="btn" type="button" data-act="importar">${ico("upload")} Importar relatório</button>` : ""}
       <button class="btn" type="button" data-act="colar">${ico("paste")} Colar lista</button>
       ${nLix ? `<button class="btn" type="button" data-act="lixeira">${ico("trash")} Excluídos (${nLix})</button>` : ""}
       <button class="btn primary" type="button" data-act="novo">${ico("plus")} ${lg ? "Novo legendário" : "Novo senderista"}</button>
@@ -752,7 +754,7 @@ function vEquipes() {
   const nPag = lgs.filter(pagPendente).length;
   return `
   <div class="head"><div><h2>Equipes LGND</h2><p>Em qual área cada legendário vai servir. Vem da planilha de equipes (botão Importar relatório em Legendários)${ed ? " e você pode mudar ou incluir alguém aqui" : ""}.</p></div>
-    ${ed ? `<div class="actions"><button class="btn" type="button" data-act="importar-eq">${ico("upload")} Importar planilha de equipes</button><button class="btn primary" type="button" data-eq-add="">${ico("plus")} Colocar em uma equipe</button></div>` : ""}</div>
+    ${ed ? `<div class="actions">${podeImportar() ? `<button class="btn" type="button" data-act="importar-eq">${ico("upload")} Importar planilha de equipes</button>` : ""}<button class="btn primary" type="button" data-eq-add="">${ico("plus")} Colocar em uma equipe</button></div>` : ""}</div>
   <div class="kpis">
     <div class="kpi"><span class="lbl">Com equipe</span><span class="val num">${lgs.length - sem.length}</span><span class="sub">de ${lgs.length} legendários</span></div>
     <div class="kpi"><span class="lbl">Equipes</span><span class="val num">${com.length}</span><span class="sub">com gente</span></div>
@@ -931,7 +933,7 @@ const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o 
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
 const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "familias", "consagracao"]],
   ["Operação", ["cronograma", "aovivo", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
-const EXTRA = () => DEMO; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
+const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
 /* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
 const IMPS = [
@@ -959,7 +961,7 @@ function vImportacao() {
       <div class="imp-txt"><b>${i.l}</b><small>${esc(i.d)}</small>
         ${u ? `<span class="imp-st ok">Importada hoje às ${horaTxt(u.em)}${u.por ? " por " + esc(u.por) : ""}${u.txt ? " · " + esc(u.txt) : ""}</span>`
           : `<span class="imp-st">Falta importar hoje${ant ? ` · última em ${fmtDate(ant.dia)}${ant.por ? " por " + esc(ant.por) : ""}` : ""}</span>`}</div>
-      ${ed ? `<button class="btn ${u ? "glass" : "primary"}" type="button" data-act="importar">${ico("upload")} ${u ? "De novo" : "Importar"}</button>` : ""}</div>`; };
+      ${podeImportar() ? `<button class="btn ${u ? "glass" : "primary"}" type="button" data-act="importar">${ico("upload")} ${u ? "De novo" : "Importar"}</button>` : ""}</div>`; };
   const pin = ult.pins, nome = k => k === "pins" ? "Pins" : (IMPS.find(i => i.k === k) || {}).l || k;
   const hist = (impDoc().hist || []).slice(0, 12);
   return `
@@ -1090,7 +1092,7 @@ const GUIA = {
   pista: ["KM da pista", ["Trechos de cada dia com metros e tempo."]],
   pins: ["Pins", ["Entrega dos pins por lote. Importe a planilha do lote quando chegar."]],
   estoque: ["Estoque e compras", ["Use + e − na conferência. Preço de cada item soma o valor em estoque.", "Marque MRE nos itens que vão no kit e some os MREs montados."]],
-  importacao: ["Importação do dia", ["As 4 planilhas na ordem: inscrições, assinaturas, avaliações e equipes.", "Todas pelo mesmo botão Importar. O ✓ mostra quem já importou hoje."]],
+  importacao: ["Importação do dia", ["As 4 planilhas na ordem: inscrições, assinaturas, avaliações e equipes.", "Só importa quem o dono liberou no cadastro. O ✓ mostra quem já importou hoje."]],
   tops: ["Tops", ["Histórico dos TOPs, iniciar e finalizar. Também gera o backup."]],
   postop: ["Pós-TOP", ["Depois do TOP, dê suas notas e conte o que foi bom e o que melhorar."]],
   usuarios: ["Usuários", ["Cadastre ADMs e escolha as páginas que cada um vê e se pode editar."]],
@@ -1099,7 +1101,7 @@ const GUIA = {
 function vGuia() {
   const vs = VIEWS.filter(v => GUIA[v.id] && canSee(v));
   const ROTINA = [
-    canSee({ id: "importacao" }) && ["Todo dia de manhã", "Importe as 4 planilhas em Importação do dia.", "importacao"],
+    ["Todo dia de manhã", "Após o Admin importar a planilha do dia.", canSee({ id: "importacao" }) ? "importacao" : "painel"],
     canSee({ id: "pendencias" }) && ["Depois de importar", "Abra Pendências e use Cobrar em sequência.", "pendencias"],
     ["Durante o TOP", "Marque o Cronograma e registre as Ocorrências. O Ao vivo mostra tudo para a equipe.", canSee({ id: "cronograma" }) ? "cronograma" : "painel"],
     canSee({ id: "postop" }) && ["Depois do TOP", "Responda o Pós-TOP. O dono gera o Relatório final.", "postop"],
@@ -2799,7 +2801,7 @@ function admCadForm(e) {
       ${dono ? `<div class="field full"><p class="hint" style="margin:0">Esta é a conta do dono: sempre tem acesso total e não pode ser bloqueada.</p></div>` : `
       <div class="field full"><span class="lab">O que pode acessar</span><div class="nivel-opts">${NIVEIS.map(n => `<label><input type="radio" name="nivel" value="${n.v}" ${e.nivel === n.v ? "checked" : ""}><span>${n.l}<small>${n.d}</small></span></label>`).join("")}</div></div>
       <div class="field full"><span class="lab">Páginas que pode ver (o Dashboard sempre aparece)</span><div class="abas ${e.nivel === "total" ? "off" : ""}" id="abasBox">${MENU_GRUPOS.map(([g, ids]) => { const vs = ABAS().filter(v => ids.includes(v.id)); return vs.length ? `<div class="abas-grp">${g}</div>` + vs.map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("") : ""; }).join("")}${ABAS().filter(v => !MENU_GRUPOS.some(([, ids]) => ids.includes(v.id))).map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("")}</div>
-        <p class="hint" style="margin:6px 0 0">Equipes LGND, Pendências, Ao vivo, Ocorrências e Importação do dia usam os dados de Senderistas, Legendários ou Cronograma: marque também a página de onde vêm os dados. Usuários e Histórico são só seus.</p></div>`}
+        <p class="hint" style="margin:6px 0 0">Equipes LGND, Pendências, Ao vivo, Ocorrências e Importação do dia usam os dados de Senderistas, Legendários ou Cronograma: marque também a página de onde vêm os dados. Marcar <b>Importação do dia</b> libera a pessoa para importar as planilhas. Usuários e Histórico são só seus.</p></div>`}
       <div class="field full"><label for="f-aobs">Observações</label><input id="f-aobs" name="obs" value="${esc(e.obs)}"></div>
       ${dono ? "" : `<div class="field full"><div class="checks"><label><input type="checkbox" id="f-aativo" name="ativo" ${e.ativo !== false ? "checked" : ""}> Acesso liberado (desmarque para bloquear a entrada)</label></div></div>`}
       ${!novo && e.email && !e.user_id ? `<p class="hint field full" style="margin:0">${esc(e.nome.split(" ")[0])} ainda não criou a senha. <button class="link" type="button" id="reenviar" style="color:var(--accent);background:none;border:0;padding:0;font-weight:700">Enviar o convite de novo</button></p>` : ""}
@@ -3561,12 +3563,12 @@ document.addEventListener("click", e => {
     else if (!S.mapaCheio && document.fullscreenElement && !modoTv()) document.exitFullscreen().catch(() => {});
     render(); return; }
   if (d.act === "aovivo-tela") { const el = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen ? el.requestFullscreen() : Promise.resolve()).catch(() => {}); return; }
-  if (d.act === "importar-eq") { importForm("legendario"); return; }
+  if (d.act === "importar-eq") { if (podeImportar()) importForm("legendario"); return; }
   if (d.eqAdd !== undefined && podeEditar()) { equipePessoaForm(null, d.eqAdd); return; }
   if (d.eqP && podeEditar()) { const p = S.P.find(x => x.id === d.eqP); if (p) equipePessoaForm(p); return; }
-  if (d.act === "assinaturas") { assinaturasForm(); return; }
+  if (d.act === "assinaturas") { if (podeImportar()) assinaturasForm(); return; }
   if (d.act === "lixeira") { lixeiraForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
-  if (d.act === "importar") { importForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
+  if (d.act === "importar") { if (podeImportar()) importForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.restaurar && S.isOwner) {
     const h = S.hist.find(x => String(x.id) === d.restaurar);
     if ($("#mform")) closeModal();
