@@ -3516,8 +3516,9 @@ async function desativarPush() {
 const NOTIF_DIAS = 10;
 function notifsVisiveis() {
   const lim = Date.now() - NOTIF_DIAS * 864e5;
-  const praMim = n => !(n.dados && n.dados.para && n.dados.para.length) || n.dados.para.includes(ME.id);
-  return (S.notifs || []).filter(n => Date.parse(n.em) > lim && (!DEMO || (n.ator !== ME.id && (n.publico === "todos" ? praMim(n) : S.isOwner))))
+  // avisos e mensagens que eu mesmo mandei também ficam no meu sininho
+  const praMim = n => n.ator === ME.id || !(n.dados && n.dados.para && n.dados.para.length) || n.dados.para.includes(ME.id);
+  return (S.notifs || []).filter(n => Date.parse(n.em) > lim && (!DEMO || (n.publico === "todos" ? praMim(n) : n.ator !== ME.id && S.isOwner)))
     .sort((a, b) => Date.parse(b.em) - Date.parse(a.em));
 }
 const notifNovas = () => { const l = S.notifLido || 0; return notifsVisiveis().filter(n => Date.parse(n.em) > l && notifTexto(n)).length; };
@@ -3625,7 +3626,8 @@ function novidadeForm() {
     const n = { id: "n" + Date.now().toString(36), tipo: "msg", titulo, texto, para, em: new Date().toISOString(), por: ME.adm || "", porId: ME.id || "" };
     const hist = [n, ...((((S.cfgDocs || {})["msg-hist"] || {}).lista) || [])].slice(0, 30);
     closeModal(); S.usrAba = "notif";
-    save(async () => { await api.set("config", "novidade", n); await api.set("config", "msg-hist", { lista: hist }); },
+    save(async () => { await api.set("config", "novidade", n); await api.set("config", "msg-hist", { lista: hist });
+        if (DEMO) novaNotif({ id: "env-" + n.id, em: n.em, ator: ME.id, ator_nome: ME.adm || "", publico: "todos", col: "config", doc_id: "novidade", acao: "insert", nome: n.titulo, dados: n }); },
       todos ? "Notificação enviada para todos" : `Notificação enviada para ${para.length} pessoa(s)`);
   });
   const t = $("#f-todos"), L = $("#f-para");
