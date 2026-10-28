@@ -166,6 +166,7 @@ const VIEWS = [
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
   { id: "aovivo", l: "Ao vivo", i: "flag", need: ["cronograma"] },   // painel para TV/celular
+  { id: "ocorrencias", l: "Ocorrências", i: "heart", need: ["participantes", "legendarios", "cronograma"], demo: true },   // registro durante o TOP
   { id: "consagracao", l: "Consagração", i: "group" },
   { id: "pins", l: "Pins", i: "check" },
   { id: "checklist", l: "Checklist", i: "list" },
@@ -372,7 +373,7 @@ function vPainel() {
       <span class="eyebrow">ADM 3Colinas · Legendários</span>
       <h2>${esc(topName())}</h2>
       <p>${esc([(topDoc() || {}).local || "Franca - SP", (topDoc() || {}).inicio ? fmtDate(topDoc().inicio) + ((topDoc() || {}).fim ? " a " + fmtDate(topDoc().fim) : "") : ""].filter(Boolean).join(" · "))} · tudo atualiza na hora em que alguém da equipe mexe.</p>
-      <div class="actions"><button class="btn primary" type="button" data-act="novo">${ico("plus")} Novo senderista</button><button class="btn glass" type="button" data-go="tops">${ico("flag")} Todos os Tops</button></div>
+      <div class="actions"><button class="btn primary" type="button" data-act="novo">${ico("plus")} Novo senderista</button><button class="btn glass" type="button" data-go="tops">${ico("flag")} Todos os Tops</button>${RELATORIO_FINAL() ? `<button class="btn glass" type="button" data-act="relatorio">${ico("list")} Relatório final</button>` : ""}</div>
     </div>
   </section>
 
@@ -747,6 +748,7 @@ function vAoVivo() {
   return `<div class="aovivo${mapa ? " tem-mapa" : ""}">${sobre}<div class="av-info">
     <div class="av-top"><div><span class="eyebrow">${esc(topName())} · ${esc(D.nome || "")}</span><b class="av-relogio num">${hora}</b></div>
       <div class="actions"><span class="chip ${atraso > 10 ? "bad" : atraso > 0 ? "wait" : "ok"} av-atraso">${atraso == null ? "Sem marcações ainda" : atraso > 0 ? "Atrasado " + fmtDif(atraso).replace("+", "") : atraso < 0 ? "Adiantado " + fmtDif(atraso).replace("−", "") : "No horário"}</span>
+      ${RELATORIO_FINAL() && ocorrAbertas().length ? `<button class="chip bad av-atraso" type="button" data-go="ocorrencias">${ocorrAbertas().length} ocorrência(s) aberta(s)</button>` : ""}
       ${paisagem.matches ? "" : tv ? `<button class="btn" type="button" data-act="aovivo-tv">Sair do modo TV</button>` : `<button class="btn" type="button" data-act="aovivo-tv">Modo TV</button><button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button>`}</div></div>
     <section class="av-agora"><span class="lbl">Agora</span><h2>${agora ? esc(agora.atv) : prox ? "Aguardando início" : "Dia encerrado"}</h2>
       ${agora ? `<p>${[agora.local, agora.resp].filter(Boolean).map(esc).join(" · ")}${M[agora.id].ini ? ` · desde ${esc(M[agora.id].ini)}${agora.hora ? ` (previsto ${esc(agora.hora)})` : ""}` : ""}</p>` : ""}</section>
@@ -769,6 +771,7 @@ paisagem.addEventListener("change", () => { if (S.view === "aovivo" && !$("#moda
 const MAPA_VIVO = () => true;
 const MAPA_CHEIO = () => true;
 const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências
+const RELATORIO_FINAL = () => DEMO; // ocorrências e relatório final do TOP: em teste na demonstração
 const libJs = {};
 function carregarLib(nome, js, css) {
   return libJs[nome] || (libJs[nome] = new Promise((ok, erro) => {
@@ -2124,6 +2127,141 @@ function vValoresEstoque(kits, meta) {
   </section>`;
 }
 
+/* ---------- Ocorrências durante o TOP ----------
+   Cada ocorrência é um documento config/ocorr-<top>-<id> (um por ocorrência, para dois ADMs não sobrescreverem um ao outro).
+   O dono recebe o aviso como qualquer alteração dos ADMs. Apagar = marcar excluida (fica no histórico). */
+const OC_TIPOS = ["Mal-estar", "Lesão", "Desistência", "Equipamento perdido ou quebrado", "Comportamento", "Outro"];
+const OC_GRAV = [{ v: "leve", l: "Leve", c: "ok" }, { v: "moderada", l: "Moderada", c: "wait" }, { v: "grave", l: "Grave", c: "bad" }];
+const ocPref = () => "ocorr-" + curTopId() + "-";
+const ocorrencias = () => Object.entries(S.cfgDocs || {}).filter(([k, v]) => k.startsWith(ocPref()) && v && !v.excluida).map(([id, v]) => ({ ...v, id })).sort((a, b) => String(b.em).localeCompare(String(a.em)));
+const ocorrAbertas = () => ocorrencias().filter(o => o.status !== "resolvida");
+function salvarOcorr(id, o, msg) { const { id: _, ...data } = o; save(() => api.set("config", id, { ...data, top: curTopId(), atualizadoPor: ME.adm || "" }), msg); }
+function vOcorrencias() {
+  const L = ocorrencias(), ab = L.filter(o => o.status !== "resolvida"), f = S.ocFiltro || "abertas", ed = podeEditar();
+  const rows = f === "abertas" ? ab : L;
+  const hm = iso => new Date(iso).toLocaleString("pt-BR", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const pessoaDe = o => o.pessoaId && S.pessoas.find(p => p.id === o.pessoaId);
+  return `
+  <div class="head"><div><h2>Ocorrências</h2><p>Tudo o que acontecer durante o ${esc(topName())}: mal-estar, lesão, desistência, equipamento. Quem registra fica anotado e você recebe o aviso.</p></div>
+    <div class="actions">${ed ? `<button class="btn primary" type="button" data-act="nova-ocorr">${ico("plus")} Nova ocorrência</button>` : ""}</div></div>
+  <div class="kpis">
+    <button class="kpi ${ab.length ? "alert" : ""}" type="button" data-oc-filtro="abertas"><span class="lbl">Abertas</span><span class="val num">${ab.length}</span><span class="sub">precisam de acompanhamento</span></button>
+    <div class="kpi"><span class="lbl">Graves</span><span class="val num">${L.filter(o => o.grav === "grave").length}</span><span class="sub">${ab.filter(o => o.grav === "grave").length} ainda aberta(s)</span></div>
+    <div class="kpi"><span class="lbl">Desistências</span><span class="val num">${L.filter(o => o.tipo === "Desistência").length}</span><span class="sub">no TOP</span></div>
+    <button class="kpi" type="button" data-oc-filtro="todas"><span class="lbl">Total</span><span class="val num">${L.length}</span><span class="sub">${L.length - ab.length} resolvida(s)</span></button>
+  </div>
+  <div class="seg" role="group" aria-label="Quais"><button type="button" data-oc-filtro="abertas" aria-pressed="${f === "abertas"}">Abertas</button><button type="button" data-oc-filtro="todas" aria-pressed="${f === "todas"}">Todas</button></div>
+  ${rows.length ? `<div class="oc-lista">${rows.map(o => { const g = OC_GRAV.find(x => x.v === o.grav) || OC_GRAV[0], p = pessoaDe(o); return `
+    <article class="panel oc ${o.status === "resolvida" ? "feita" : ""} ${o.grav}">
+      <div class="oc-top"><span class="num oc-hora">${esc(hm(o.em))}</span><span class="chip ${g.c}">${g.l}</span><span class="tag">${esc(o.tipo)}</span>${o.status === "resolvida" ? `<span class="chip ok">Resolvida</span>` : ""}</div>
+      <h3>${esc(o.nome || "Sem pessoa")}${p ? ` <small>${tipoNome(p)}${p.equipe ? " · " + esc(equipeTxt(p)) : ""}</small>` : ""}</h3>
+      ${o.desc ? `<p>${esc(o.desc)}</p>` : ""}
+      ${o.prov ? `<p class="hint"><b>Providência:</b> ${esc(o.prov)}</p>` : ""}
+      <small class="hint">${[o.local && "em " + o.local, o.atendido && "atendido por " + o.atendido, o.por && "registrado por " + o.por, o.status === "resolvida" && o.resolvidaEm && `resolvida ${quando(o.resolvidaEm)}${o.resolvidaPor ? " por " + o.resolvidaPor : ""}`].filter(Boolean).map(esc).join(" · ")}</small>
+      <div class="actions">${p ? `<button class="btn sm" type="button" data-oc-saude="${esc(p.id)}">${ico("heart")} Ficha de saúde</button>` : ""}
+        ${ed ? `<button class="btn sm" type="button" data-oc-edit="${esc(o.id)}">${ico("edit")} Editar</button><button class="btn sm ${o.status === "resolvida" ? "" : "primary"}" type="button" data-oc-resolver="${esc(o.id)}">${o.status === "resolvida" ? "Reabrir" : "Marcar resolvida"}</button>` : ""}</div>
+    </article>`; }).join("")}</div>`
+  : `<section class="panel"><div class="empty">${f === "abertas" && L.length ? "Nenhuma ocorrência aberta." : "Nenhuma ocorrência registrada neste TOP."}</div></section>`}`;
+}
+function ocorrForm(o) {
+  if (!podeEditar()) { toast("Seu acesso é somente leitura."); return; }
+  const novo = !o, agora = new Date(), mo = momentoAtual();
+  o = o || { tipo: "Mal-estar", grav: "leve", local: mo ? mo.atv : "", atendido: ME.adm || "", status: "aberta" };
+  const quando0 = new Date(o.em || agora), hh = quando0.toTimeString().slice(0, 5), dd = quando0.toLocaleDateString("sv");
+  const pessoas = S.P.filter(p => !cancelado(p)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+  modal(`
+    <h3>${novo ? "Nova ocorrência" : "Editar ocorrência"}</h3>
+    <div class="form">
+      <div class="field full"><label for="f-ocp">Pessoa</label><input id="f-ocp" name="nome" list="ocPessoas" value="${esc(o.nome || "")}" placeholder="Nome do senderista ou legendário" autocomplete="off">
+        <datalist id="ocPessoas">${pessoas.map(p => `<option value="${esc(p.nome)}">${p.tipo === "legendario" ? "Legendário" : "Senderista"}</option>`).join("")}</datalist></div>
+      <div class="field"><label for="f-oct">Tipo</label><select id="f-oct" name="tipo">${OC_TIPOS.map(t => `<option ${o.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-ocg">Gravidade</label><select id="f-ocg" name="grav">${OC_GRAV.map(g => `<option value="${g.v}" ${o.grav === g.v ? "selected" : ""}>${g.l}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-ocd">Dia</label><input id="f-ocd" name="dia" type="date" value="${dd}"></div>
+      <div class="field"><label for="f-och">Hora</label><input id="f-och" name="hora" type="time" value="${hh}"></div>
+      <div class="field full"><label for="f-ocl">Onde ou em qual momento</label><input id="f-ocl" name="local" value="${esc(o.local || "")}" placeholder="ex.: trecho Cemitério → Cercados, Camp D1"></div>
+      <div class="field full"><label for="f-ocx">O que aconteceu</label><textarea id="f-ocx" name="desc" style="min-height:90px">${esc(o.desc || "")}</textarea></div>
+      <div class="field full"><label for="f-ocv">O que foi feito</label><textarea id="f-ocv" name="prov" style="min-height:70px" placeholder="ex.: atendido pela equipe médica, voltou para a pista">${esc(o.prov || "")}</textarea></div>
+      <div class="field"><label for="f-oca">Atendido por</label><input id="f-oca" name="atendido" value="${esc(o.atendido || "")}"></div>
+      <div class="field"><label for="f-ocs">Situação</label><select id="f-ocs" name="status"><option value="aberta" ${o.status !== "resolvida" ? "selected" : ""}>Aberta</option><option value="resolvida" ${o.status === "resolvida" ? "selected" : ""}>Resolvida</option></select></div>
+    </div>
+    <div class="modal-foot"><div>${novo ? "" : `<button class="btn danger" type="button" id="delBtn">Excluir</button>`}</div>
+      <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => {
+    const nome = String(fd.get("nome") || "").trim(), desc = String(fd.get("desc") || "").trim();
+    if (!nome && !desc) { $("#f-ocx").focus(); toast("Diga quem ou o que aconteceu."); return; }
+    const p = S.P.find(x => norm(x.nome) === norm(nome));
+    const em = new Date(`${fd.get("dia") || dd}T${fd.get("hora") || hh}:00`);
+    const st = fd.get("status");
+    const data = { ...o, nome: p ? p.nome : nome, pessoaId: p ? p.id : null, tipo: fd.get("tipo"), grav: fd.get("grav"), em: isNaN(em) ? agora.toISOString() : em.toISOString(),
+      local: String(fd.get("local") || "").trim(), desc, prov: String(fd.get("prov") || "").trim(), atendido: String(fd.get("atendido") || "").trim(), status: st,
+      por: o.por || ME.adm || "", criadaEm: o.criadaEm || agora.toISOString(),
+      resolvidaEm: st === "resolvida" ? (o.resolvidaEm || agora.toISOString()) : null, resolvidaPor: st === "resolvida" ? (o.resolvidaPor || ME.adm || "") : null };
+    closeModal();
+    salvarOcorr(o.id || ocPref() + Date.now().toString(36), data, novo ? "Ocorrência registrada" : "Ocorrência atualizada");
+  });
+  const del = $("#delBtn");
+  if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); salvarOcorr(o.id, { ...o, excluida: true }, "Ocorrência excluída"); };
+}
+
+/* ---------- Relatório final do TOP ----------
+   Junta os números do TOP em um PDF (mesmo visual das listas): inscritos, documentos, cronograma (atrasos), ocorrências, estoque/MRE, pista e pins. */
+const atrasoTxt = a => a == null ? "-" : a > 0 ? fmtDif(a).slice(1) + " atrasado" : a < 0 ? fmtDif(a).slice(1) + " adiantado" : "no horário";
+function dadosRelatorio() {
+  const s = stats(), plano = cronoPlano(), M = marcasTodas(), td = topDoc() || {};
+  const dias = plano.map(d => {
+    const it = (d.itens || []).filter(i => M[i.id] && M[i.id].ini);
+    const at = it.map(i => ({ i, a: i.hora ? atrasoDe(i.hora, M[i.id].ini) : null })).filter(x => x.a != null);
+    const pior = at.reduce((m, x) => !m || x.a > m.a ? x : m, null), ult = at[at.length - 1];
+    return { nome: d.nome || d.id, total: (d.itens || []).length, feitos: (d.itens || []).filter(i => M[i.id] && M[i.id].fim).length, marcados: it.length,
+      media: at.length ? Math.round(at.reduce((a, x) => a + x.a, 0) / at.length) : null, pior, fim: ult ? ult.a : null };
+  }).filter(d => d.total);
+  const oc = ocorrencias(), porTipo = {}; oc.forEach(o => { porTipo[o.tipo] = (porTipo[o.tipo] || 0) + 1; });
+  const mre = S.estoque.filter(ehMre), custo = mre.reduce((a, e) => a + (Number(e.preco) || 0) * porMre(e), 0), kits = topKits(), meta = S.config.metaMRE || 110;
+  const valor = S.estoque.reduce((a, e) => a + valorItem(e), 0);
+  const pins = typeof pinsTodos === "function" ? pinsTodos() : [], pinsOk = pins.filter(p => p.status === "entregue").length;
+  const canc = S.P.filter(p => p.tipo !== "legendario" && cancelado(p)).length, pend = S.P.filter(p => !cancelado(p) && p.inscricao === "pendente").length;
+  const desist = oc.filter(o => o.tipo === "Desistência").length;
+  return { s, td, dias, oc, porTipo, custo, kits, meta, valor, pins, pinsOk, canc, pend, desist, mreN: mre.length };
+}
+function relatorioForm() {
+  const R = dadosRelatorio(), { s } = R, km = (s.pistaM / 1000).toFixed(1).replace(".", ",");
+  const linha = (l, v) => `<div class="li"><span class="grow">${l}</span><b class="num">${v}</b></div>`;
+  modal(`
+    <h3>Relatório final · ${esc(topName())}</h3>
+    <p class="hint" style="margin:0 0 10px">Resumo do TOP com os dados do app agora. Baixe o PDF para guardar ou mandar para a coordenação.</p>
+    <div class="rel-grid">
+      <section><h4>Pessoas</h4><div class="list">${linha("Senderistas", s.n)}${linha("Legendários", s.lg.length)}${linha("Desistências no TOP", R.desist)}${linha("Compras canceladas", R.canc)}${linha("Boletos ainda pendentes", R.pend)}</div></section>
+      <section><h4>Documentos</h4><div class="list">${linha("Atestado OK", `${s.atestado} / ${s.n}`)}${linha("Termo assinado", `${s.termo} / ${s.n}`)}${linha("No grupo", `${s.grupo} / ${s.n}`)}${linha("Checklist ADM", `${pct(s.tDone, s.tTotal)}%`)}</div></section>
+      <section><h4>Cronograma</h4><div class="list">${R.dias.map(d => linha(esc(d.nome), `${d.feitos}/${d.total} · ${d.fim == null ? "sem marcação" : atrasoTxt(d.fim)}`)).join("") || linha("Sem marcações", "-")}</div></section>
+      <section><h4>Ocorrências</h4><div class="list">${linha("Total", R.oc.length)}${linha("Graves", R.oc.filter(o => o.grav === "grave").length)}${Object.entries(R.porTipo).map(([t, n]) => linha(esc(t), n)).join("")}</div></section>
+      <section><h4>Estoque e MRE</h4><div class="list">${linha("Kits MRE lacrados", `${R.kits} / ${R.meta}`)}${linha("Custo de 1 MRE", brl(R.custo))}${linha("Gasto nos kits lacrados", brl(R.custo * R.kits))}${linha("Valor em estoque", brl(R.valor))}</div></section>
+      <section><h4>Pista e pins</h4><div class="list">${linha("Pista total", km + " km")}${R.pins.length ? linha("Pins entregues", `${R.pinsOk} / ${R.pins.length}`) : ""}</div></section>
+    </div>
+    <div class="modal-foot"><span><button class="btn ghost" type="button" data-close-btn>Fechar</button></span>
+      <div class="actions"><button class="btn" type="button" id="relWa">${ico("wa")} Enviar no WhatsApp</button><button class="btn primary" type="button" id="relPdf">Baixar PDF</button></div></div>`, () => {});
+  const gera = wa => gerarListaPdf(relatorioPdf(R), wa).catch(e => toast("Não foi possível gerar o PDF. " + e.message));
+  $("#relPdf").onclick = () => gera(false); $("#relWa").onclick = () => gera(true);
+}
+function relatorioPdf(R) {
+  const { s, td } = R, km = (s.pistaM / 1000).toFixed(1).replace(".", ",");
+  const hm = iso => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const per = [td.inicio && fmtDate(td.inicio), td.fim && fmtDate(td.fim)].filter(Boolean).join(" a ");
+  return { titulo: "Relatório final", arquivo: "Relatorio final " + topName(), orient: "portrait",
+    sub: [topName(), td.local, per].filter(Boolean).join(" · "), legenda: "Números do TOP no momento em que o relatório foi gerado",
+    resumo: [["Senderistas", s.n], ["Ocorrências", R.oc.length], ["MREs", `${R.kits}/${R.meta}`]],
+    colunas: [{ t: "Item", bold: true }, { t: "Resultado", w: 92 }],
+    secoes: [
+      { titulo: "Pessoas", linhas: [["Senderistas", s.n], ["Legendários", s.lg.length], ["+40", s.mais40.length], ["Desistências registradas no TOP", R.desist], ["Compras canceladas", R.canc], ["Boletos ainda pendentes", R.pend]] },
+      { titulo: "Documentos e preparação", linhas: [["Atestado OK", `${s.atestado} de ${s.n} (${pct(s.atestado, s.n)}%)`], ["Termo assinado", `${s.termo} de ${s.n} (${pct(s.termo, s.n)}%)`], ["Entraram no grupo", `${s.grupo} de ${s.n}`], ["Legendários com termo", `${s.lgAssinado} de ${s.lg.length}`], ["Checklist ADM", `${s.tDone} de ${s.tTotal} tarefas (${pct(s.tDone, s.tTotal)}%)`]] },
+      { titulo: "Cronograma", linhas: R.dias.length ? R.dias.flatMap(d => [[`${d.nome}: momentos concluídos`, `${d.feitos} de ${d.total}`], [`${d.nome}: atraso médio`, d.media == null ? "sem marcação" : atrasoTxt(d.media)],
+          [`${d.nome}: maior atraso`, d.pior ? `${atrasoTxt(d.pior.a)} em ${d.pior.i.atv}` : "-"], [`${d.nome}: no último momento marcado`, atrasoTxt(d.fim)]]) : [["Cronograma", "sem marcações"]] },
+      { titulo: `Ocorrências (${R.oc.length})`, linhas: [["Graves", R.oc.filter(o => o.grav === "grave").length], ...Object.entries(R.porTipo).map(([t, n]) => [t, n]),
+          ...[...R.oc].reverse().map(o => [`${hm(o.em)} · ${o.nome || "Sem pessoa"}`, `${o.tipo} (${(OC_GRAV.find(g => g.v === o.grav) || {}).l || ""})${o.desc ? ": " + o.desc : ""}${o.prov ? " · " + o.prov : ""}${o.status === "resolvida" ? " · resolvida" : " · ABERTA"}`])] },
+      { titulo: "Estoque e MRE", linhas: [["Kits MRE lacrados", `${R.kits} de ${R.meta}`], ["Itens no MRE", R.mreN], ["Custo de 1 MRE", brl(R.custo)], ["Gasto nos kits lacrados", brl(R.custo * R.kits)], ["Custo da meta de MREs", brl(R.custo * R.meta)], ["Valor em estoque", brl(R.valor)], ["Itens zerados", s.zero.length], ["Itens baixos", s.low.length]] },
+      { titulo: "Pista e pins", linhas: [["Pista total", km + " km"], ...(R.pins.length ? [["Pins entregues", `${R.pinsOk} de ${R.pins.length}`]] : [])] },
+    ] };
+}
+
 function vPista() {
   const totalM = stats().pistaM;
   const dias = [...S.pista].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
@@ -2336,7 +2474,7 @@ function vTops() {
   const sel = curTopId();
   return `
   <div class="head"><div><h2>Tops</h2><p>Histórico de todos os TOPs da base 3 Colinas. Ao finalizar um TOP, ele fica registrado aqui com senderistas, documentos e checklist.</p></div>
-    <div class="actions">${podeTops() ? `<button class="btn primary" type="button" data-act="novo-top">${ico("plus")} Iniciar novo TOP</button>` : ""}</div></div>
+    <div class="actions">${RELATORIO_FINAL() ? `<button class="btn" type="button" data-act="relatorio">${ico("list")} Relatório final do ${esc(topName())}</button>` : ""}${podeTops() ? `<button class="btn primary" type="button" data-act="novo-top">${ico("plus")} Iniciar novo TOP</button>` : ""}</div></div>
   ${ativo ? "" : `<div class="banner"><span>Nenhum TOP em andamento. Inicie o próximo para começar a cadastrar senderistas.</span></div>`}
   <div class="tops">${list.map(t => { const s = topStats(t.id); const fin = t.status === "finalizado"; const kits = t.kitsMRE || 0; return `
     <article class="topcard ${t.id === sel ? "sel" : ""}">
@@ -2382,6 +2520,7 @@ function render() {
     : v === "familias" ? vFamilias()
     : v === "equipes" ? vEquipes()
     : v === "aovivo" ? vAoVivo()
+    : v === "ocorrencias" ? vOcorrencias()
     : v === "checklist" ? vChecklist()
     : v === "cronograma" ? vCronograma()
     : v === "consagracao" ? vConsagracao()
@@ -3001,6 +3140,12 @@ document.addEventListener("click", e => {
   if (d.pvDesf != null && podeEditar()) { if (confirm("Desfazer a marcação deste trecho?")) marcarTrecho(+d.pvDesf, "desf"); return; }
   if (d.act === "saude") { saudeBusca(); return; }
   if (d.act === "aovivo-tv") { const on = !modoTv(); try { localStorage.setItem("adm3-avtv", on ? "1" : "0"); } catch (e) {} if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); render(); return; }
+  if (d.act === "nova-ocorr") { ocorrForm(); return; }
+  if (d.ocEdit) { const o = ocorrencias().find(x => x.id === d.ocEdit); if (o) ocorrForm(o); return; }
+  if (d.ocResolver && podeEditar()) { const o = ocorrencias().find(x => x.id === d.ocResolver); if (o) salvarOcorr(o.id, { ...o, status: o.status === "resolvida" ? "aberta" : "resolvida", resolvidaEm: o.status === "resolvida" ? null : new Date().toISOString(), resolvidaPor: ME.adm || "" }, o.status === "resolvida" ? "Ocorrência reaberta" : "Ocorrência resolvida"); return; }
+  if (d.ocSaude) { const p = S.pessoas.find(x => x.id === d.ocSaude); if (p) saudeFicha(p); return; }
+  if (d.ocFiltro) { S.ocFiltro = d.ocFiltro; render(); return; }
+  if (d.act === "relatorio") { relatorioForm(); return; }
   if (d.act === "mapa-cheio") { S.mapaCheio = !S.mapaCheio; if (mapaAV) mapaAV.dia = null;
     const el = document.documentElement;
     if (S.mapaCheio && !document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {});
@@ -4234,7 +4379,7 @@ function conectarDados() {
     S.cronoCriando = S.cronoCriando || new Set();
     if (ficha && navigator.onLine !== false && !db.estado().offline && !S.cfgDocs[ficha] && !S.cronoCriando.has(ficha)) {
       S.cronoCriando.add(ficha); db.doc("config/" + ficha).set({ _adm: eu() }).catch(() => {}).finally(() => S.cronoCriando.delete(ficha)); }
-    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios", "aovivo"].includes(S.view)) render();
+    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios", "aovivo", "ocorrencias", "tops"].includes(S.view)) render();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });

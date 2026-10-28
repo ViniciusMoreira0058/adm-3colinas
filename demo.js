@@ -1575,3 +1575,15 @@ window.ADM_DEMO.notifs = [
     if (P[i] != null) d.data.preco = P[i]; else if (/^Tag /.test(i)) d.data.preco = 3;
     if (K[i]) d.data.porMre = K[i]; });
 })();
+// ocorrências fictícias do TOP na demonstração
+(function () {
+  const D = window.ADM_DEMO.docs, nome = id => ((D.find(d => d.col === "pessoas" && d.id === id) || {}).data || {}).nome || "";
+  const h = m => new Date(Date.now() - m * 6e4).toISOString();
+  const oc = [
+    ["a1", { pessoaId: "ex02", tipo: "Mal-estar", grav: "moderada", em: h(150), local: "Trecho Desembarque → 2º Revista", desc: "Tontura e enjoo na subida. Pressão baixa.", prov: "Hidratação e descanso de 15 min com a equipe médica. Voltou para a pista.", atendido: "Equipe médica", status: "resolvida", resolvidaEm: h(130), resolvidaPor: "Thalisson", por: "Thalisson" }],
+    ["a2", { pessoaId: "ex05", tipo: "Lesão", grav: "grave", em: h(45), local: "Trecho Cemitério → Cercados pelo mundo", desc: "Torceu o tornozelo na descida de pedras.", prov: "Imobilizado. Aguardando o carro de apoio no ponto de acesso.", atendido: "Rafael Lima", status: "aberta", por: "Rafael Lima" }],
+    ["a3", { pessoaId: "ex07", tipo: "Desistência", grav: "leve", em: h(30), local: "Camp D1", desc: "Pediu para sair por motivo pessoal.", prov: "Família avisada, vai buscar no portão às 18h.", atendido: "Vinicius Moreira", status: "aberta", por: "Vinicius Moreira" }],
+    ["a4", { pessoaId: null, nome: "Fogareiro da Família 04", tipo: "Equipamento perdido ou quebrado", grav: "leve", em: h(20), local: "Camp D1", desc: "Válvula do fogareiro quebrou.", prov: "Trocado pelo reserva do estoque.", atendido: "Henrique", status: "resolvida", resolvidaEm: h(10), resolvidaPor: "Henrique", por: "Henrique" }],
+  ];
+  oc.forEach(([k, o]) => D.push({ col: "config", id: "ocorr-top1922-" + k, data: { ...o, nome: o.nome || nome(o.pessoaId), top: "top1922" } }));
+})();
