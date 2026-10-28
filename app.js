@@ -446,7 +446,7 @@ function vPainelNovo() {
       <div>${anel(pct(s.atestado, s.n), "#ff7a1a")}<span>Atestado</span><small class="num">${s.atestado} de ${s.n}</small>${tendencia("atestado", s.atestado)}</div>
       <div>${anel(pct(s.termo, s.n), "#ff7a1a")}<span>Termo</span><small class="num">${s.termo} de ${s.n}</small>${tendencia("termo", s.termo)}</div>
       <div>${anel(pct(s.grupo, s.n), "var(--good)")}<span>Grupo</span><small class="num">${s.grupo} de ${s.n}</small>${tendencia("grupo", s.grupo)}</div></div>`, "pendencias")}
-    ${bloco("Logística", "box", `<div class="dminis">
+    ${bloco("Itens", "box", `<div class="dminis">
       ${mini("Kits MRE", `${kits}<small>/${meta}</small>`, `<span class="bar ${kits >= meta ? "good" : ""}"><i style="width:${Math.min(100, pct(kits, meta))}%"></i></span>`, "estoque")}
       ${PRECO_ESTOQUE() ? mini("Valor em estoque", `<span class="dinheiro">${brl(valor)}</span>`, `${s.zero.length + s.low.length} item(ns) em alerta`, "estoque") : mini("Estoque em alerta", s.zero.length + s.low.length, `${s.zero.length} zerados`, "estoque")}
       ${mini("Checklist", pct(s.tDone, s.tTotal) + "%", `${s.tDone} de ${s.tTotal} prontas`, "checklist")}
@@ -906,7 +906,7 @@ const MAPA_VIVO = () => true;
 const MAPA_CHEIO = () => true;
 const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
-const DASH_NOVO = () => DEMO; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje): em teste na demonstração
+const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const TERMO_LINK = () => true; // link individual do termo (planilha de assinaturas) na cobrança
 const libJs = {};
 function carregarLib(nome, js, css) {
