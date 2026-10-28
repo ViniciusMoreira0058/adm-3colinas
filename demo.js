@@ -1612,3 +1612,18 @@ window.ADM_DEMO.notifs = [
   const dia = n => new Date(Date.now() + n * 864e5).toLocaleDateString("sv");
   if (!t.data.inicio) { t.data.inicio = dia(9); t.data.fim = dia(12); }
 })();
+// importação do dia (2 de 4 feitas hoje) e último backup há 8 dias, para mostrar o lembrete
+(function () {
+  const dia = n => new Date(Date.now() - n * 864e5).toLocaleDateString("sv");
+  const h = (n, hh, mm) => { const d = new Date(Date.now() - n * 864e5); d.setHours(hh, mm, 0, 0); return d.toISOString(); };
+  const ultimo = {
+    inscricoes: { dia: dia(0), em: h(0, 8, 12), por: "Vinicius", arquivo: "relatorio_inscricoes.xlsx", txt: "2 novo(s)" },
+    assinaturas: { dia: dia(0), em: h(0, 8, 15), por: "Vinicius", arquivo: "assinaturas_evento.csv", txt: "3 assinado(s) · 5 link(s)" },
+    avaliacoes: { dia: dia(1), em: h(1, 19, 40), por: "Rafael", arquivo: "relatorio_de_avaliacoes.xlsx", txt: "4 atualizado(s)" },
+    equipes: { dia: dia(1), em: h(1, 19, 44), por: "Rafael", arquivo: "relatorio_de_equipe.xlsx", txt: "nada mudou" },
+    pins: { dia: dia(6), em: h(6, 10, 5), por: "Vinicius", arquivo: "alunos_do_lote.csv", txt: "12 novo(s)" },
+  };
+  const hist = Object.entries(ultimo).map(([k, u]) => ({ k, ...u })).sort((a, b) => b.em.localeCompare(a.em));
+  window.ADM_DEMO.docs.push({ col: "config", id: "importacoes-top1922", data: { ultimo, hist, top: "top1922" } });
+  window.ADM_DEMO.docs.push({ col: "config", id: "backup-ultimo", data: { em: h(8, 9, 0), por: "Vinicius", top: "top1922" } });
+})();

@@ -161,7 +161,7 @@ const VIEWS = [
   { id: "notificacoes", l: "Notificações", i: "bell", all: true },   // todos que entram no app
   { id: "participantes", l: "Senderistas", i: "users" },
   { id: "legendarios", l: "Legendários", i: "shield" },
-  { id: "equipes", l: "Equipes LGND", i: "group", need: ["legendarios"] },
+  { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
@@ -172,6 +172,7 @@ const VIEWS = [
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
+  { id: "importacao", l: "Importação do dia", c: "Importação", i: "upload", need: ["participantes", "legendarios"], org: true },   // as 4 planilhas do dia com ✓
   { id: "tops", l: "Tops", i: "flag" },
   { id: "usuarios", l: "Usuários", i: "key", owner: true },
   { id: "historico", l: "Histórico", i: "clock", owner: true },
@@ -182,9 +183,11 @@ const NIVEIS = [
   { v: "edita", l: "Edita as abas escolhidas", d: "Vê e altera só as abas marcadas abaixo." },
   { v: "leitura", l: "Somente leitura", d: "Vê as abas marcadas abaixo, sem poder alterar nada." },
 ];
-const ABAS = () => VIEWS.filter(v => !v.owner && !v.need && !v.all && v.id !== "painel" && (!v.demo || DEMO));
+const ABAS = () => VIEWS.filter(v => !v.owner && !v.need && !v.all && !v.org && v.id !== "painel" && (!v.demo || DEMO));
 const precisaLogin = () => !ME.acesso;
 const canSee = v => {
+  if (ORG()) v = VIEWS.find(x => x.id === v.id) || v;   // {id} sozinho também respeita need/owner da aba
+  if (v.org && !ORG()) return false;
   if (!ME.acesso) return v.id === "painel";
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
   if (S.isOwner || (VIEWS.find(x => x.id === v.id) || v).all) return true;
@@ -241,14 +244,21 @@ function renderNav() {
   const online = onlineAdms().length;
   counts.usuarios = online ? `${online} on` : null;
   const novas = ME.acesso ? notifNovas() : 0;
-  $("#nav").innerHTML = VIEWS.filter(v => canSee(v) && !v.all).map(v => `<button type="button" data-go="${v.id}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : ""}</button>`).join("");
+  const navBtn = v => `<button type="button" data-go="${v.id}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : v.id === "importacao" && impFaltam() ? `<span class="badge num">${impFaltam()}</span>` : ""}</button>`;
+  const vis = VIEWS.filter(v => canSee(v) && !v.all);
+  document.body.classList.toggle("org", ORG());
+  $("#nav").innerHTML = !ORG() ? vis.map(navBtn).join("")
+    : MENU_GRUPOS.map(([g, ids]) => { const b = vis.filter(v => ids.includes(v.id)); return b.length ? (g ? `<div class="nav-grp">${g}</div>` : "") + b.map(navBtn).join("") : ""; }).join("")
+      + vis.filter(v => !MENU_GRUPOS.some(([, ids]) => ids.includes(v.id))).map(navBtn).join("");
+  const bb = $("#buscaBtn"); if (bb) bb.hidden = !(ORG() && ME.acesso);
   const sb = $("#saudeBtn"); if (sb) sb.hidden = !(NOVO() && ME.acesso && (canSee({ id: "participantes" }) || canSee({ id: "legendarios" })));
   const sino = $("#bellBtn");
   if (sino) { sino.hidden = !ME.acesso; sino.querySelector(".badge").hidden = !novas; sino.querySelector(".badge").textContent = novas > 99 ? "99+" : novas;
     sino.setAttribute("aria-label", novas ? `Notificações: ${novas} nova(s)` : "Notificações"); }
   $("#backBtn").hidden = S.view === "painel";
   $("#backBtn").setAttribute("aria-label", "Voltar para " + ((VIEWS.find(x => x.id === hist[hist.length - 1]) || VIEWS[0]).l));
-  $("#mtopTitle").textContent = (VIEWS.find(v => v.id === S.view) || VIEWS[0]).l;
+  const vAtual = VIEWS.find(v => v.id === S.view) || VIEWS[0];
+  $("#mtopTitle").textContent = ORG() && vAtual.c ? vAtual.c : vAtual.l;
   const td = topDoc();
   $("#mtopSub").textContent = `${topName()} · ${td && td.status === "finalizado" ? "finalizado" : "em andamento"}`;
   $("#sideTop").textContent = topName();
@@ -414,6 +424,7 @@ function vPainelNovo() {
     : `<span class="cd-n">Em andamento</span><span class="cd-l">${td.status === "finalizado" ? "TOP finalizado" : "bom TOP!"}</span>`;
   // o que fazer hoje: só o que tem pendência, com atalho para a tela certa
   const tarefas = [
+    [ORG() ? impFaltam() : 0, "planilha(s) do dia para importar", "importacao", "", "wait"],
     [conta("termo"), "termo(s) para cobrar", "pendencias", "aba:doc;oque:termo;quem:todos", "wait"],
     [conta("atestado"), "atestado(s) faltando", "pendencias", "aba:doc;oque:atestado;quem:todos", "wait"],
     [pagPend, "boleto(s) pendente(s)", "pendencias", "aba:pag;quem:todos", "bad"],
@@ -425,7 +436,7 @@ function vPainelNovo() {
   ].filter(t => t[0] > 0 && canSee({ id: t[2] }));
   const bloco = (titulo, ico_, corpo, go_) => `<section class="panel dash-bloco"><h3>${ico(ico_)} ${titulo}${go_ ? `<button class="linkbtn" type="button" data-go="${go_}">ver ›</button>` : ""}</h3>${corpo}</section>`;
   const mini = (l, v, sub, go_, extra = "") => `<${go_ ? `button type="button" data-go="${go_}"${extra}` : "div"} class="dmini"><span class="lbl">${l}</span><b class="num">${v}</b>${sub ? `<small>${sub}</small>` : ""}</${go_ ? "button" : "div"}>`;
-  return `
+  return `${backupBanner()}
   ${ME.acesso && ["pedir", "bloqueado", "instalar"].includes(estadoNotif()) ? `<div class="banner aviso"><span>${ico("bell")} <b>Notificações desligadas neste aparelho.</b> Ative para receber os avisos do app no celular.</span><button class="btn primary" type="button" data-act="notif-ajuda">Ativar</button></div>` : ""}
   <section class="dash-topo">
     <div class="dash-id"><img class="dash-logo" src="assets/logo.png" alt="Track 3 Colinas · Franca SP">
@@ -795,7 +806,9 @@ function equipesImportForm(linhas) {
     closeModal();
     save(async () => { for (let i = 0; i < marcar.length; i += 8) await Promise.all(marcar.slice(i, i + 8).map(({ p, equipe, funcao }) => api.update("pessoas", p.id, { equipe, funcao }))); },
       `Equipes: ${marcar.length} legendário(s) atualizado(s)`);
+    marcarImport("equipes", `${marcar.length} atualizado(s)`);
   });
+  if (!marcar.length) marcarImport("equipes", "nada mudou");
 }
 
 /* ---------- Cronograma ----------
@@ -908,6 +921,116 @@ const MAPA_CHEIO = () => true;
 const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
+const ORG = () => DEMO; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
+const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "familias", "consagracao"]],
+  ["Operação", ["cronograma", "aovivo", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "usuarios", "historico"]]];
+
+/* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
+const IMPS = [
+  { k: "inscricoes", l: "Relatório de inscrições", d: "Planilha .xlsx da plataforma. Cria e atualiza senderistas e legendários, pagamento e cancelados. Sempre a primeira." },
+  { k: "assinaturas", l: "Assinaturas do termo", d: "CSV assinaturas_evento. Marca quem assinou e guarda o link do termo de cada pessoa." },
+  { k: "avaliacoes", l: "Avaliações médicas", d: "relatorio_de_avaliacoes. Documento Recebido vira Confirmado e Apto vira Apto." },
+  { k: "equipes", l: "Equipes LGND", d: "relatorio_de_equipe. Equipe e função de cada legendário." },
+];
+const impDocId = () => "importacoes-" + curTopId();
+const impDoc = () => (S.cfgDocs || {})[impDocId()] || {};
+const impHoje = k => { const u = (impDoc().ultimo || {})[k]; return u && u.dia === hojeISO() ? u : null; };
+const impFaltam = () => canSee({ id: "importacao" }) ? IMPS.filter(i => !impHoje(i.k)).length : 0;
+const horaTxt = iso => { try { return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
+let impArquivo = "";
+function marcarImport(k, txt) {
+  if (!ORG()) return;
+  const d = impDoc(), ult = { ...(d.ultimo || {}) };
+  ult[k] = { dia: hojeISO(), em: new Date().toISOString(), por: ME.adm || "", arquivo: impArquivo || "", txt: txt || "" };
+  api.set("config", impDocId(), { ultimo: ult, hist: [{ k, ...ult[k] }, ...(d.hist || [])].slice(0, 60), top: curTopId() }).catch(e => console.error(e));
+}
+function vImportacao() {
+  const ult = impDoc().ultimo || {}, feitos = IMPS.filter(i => impHoje(i.k)).length, ed = podeEditar();
+  const passo = (i, n) => { const u = impHoje(i.k), ant = ult[i.k];
+    return `<div class="imp-passo ${u ? "ok" : ""}"><span class="imp-n num">${u ? ico("check") : n}</span>
+      <div class="imp-txt"><b>${i.l}</b><small>${esc(i.d)}</small>
+        ${u ? `<span class="imp-st ok">Importada hoje às ${horaTxt(u.em)}${u.por ? " por " + esc(u.por) : ""}${u.txt ? " · " + esc(u.txt) : ""}</span>`
+          : `<span class="imp-st">Falta importar hoje${ant ? ` · última em ${fmtDate(ant.dia)}${ant.por ? " por " + esc(ant.por) : ""}` : ""}</span>`}</div>
+      ${ed ? `<button class="btn ${u ? "glass" : "primary"}" type="button" data-act="importar">${ico("upload")} ${u ? "De novo" : "Importar"}</button>` : ""}</div>`; };
+  const pin = ult.pins, nome = k => k === "pins" ? "Pins" : (IMPS.find(i => i.k === k) || {}).l || k;
+  const hist = (impDoc().hist || []).slice(0, 12);
+  return `
+  <div class="head"><div><h2>Importação do dia</h2><p>As 4 planilhas que mantêm o app atualizado, na ordem. Todas entram pelo mesmo botão Importar: o app reconhece qual é.</p></div></div>
+  <section class="panel imp-dia"><h3>Hoje <small>${feitos} de ${IMPS.length} importadas</small></h3>
+    <div class="bar ${feitos === IMPS.length ? "good" : ""}" style="height:8px;margin-bottom:12px"><i style="width:${pct(feitos, IMPS.length)}%"></i></div>
+    <div class="imp-passos">${IMPS.map((i, n) => passo(i, n + 1)).join("")}</div>
+    <div class="imp-passo extra"><span class="imp-n">${ico("check")}</span><div class="imp-txt"><b>Pins (alunos do lote)</b><small>Só quando chega lote novo, pela aba Pins.</small>
+      <span class="imp-st">${pin ? `Última em ${fmtDate(pin.dia)}${pin.por ? " por " + esc(pin.por) : ""}` : "Ainda não importada por aqui"}</span></div>
+      ${canSee({ id: "pins" }) ? `<button class="btn glass" type="button" data-go="pins">Abrir Pins</button>` : ""}</div>
+  </section>
+  ${hist.length ? `<section class="panel"><h3>Últimas importações</h3><div class="imp-hist">${hist.map(h => `<div><b>${esc(nome(h.k))}</b><span class="hint">${fmtDate(h.dia)} ${horaTxt(h.em)}${h.por ? " · " + esc(h.por) : ""}${h.txt ? " · " + esc(h.txt) : ""}</span></div>`).join("")}</div></section>` : ""}`;
+}
+
+/* Busca geral: acha pessoa, item do estoque, ocorrência, tarefa ou tela de qualquer lugar (lupa no alto ou tecla /). */
+function buscaGeral() {
+  const dig = x => String(x || "").replace(/\D/g, "");
+  const achar = q => {
+    const k = norm(q.trim()), kd = dig(q); if (k.length < 2) return [];
+    const bate = (...xs) => xs.some(x => x && norm(String(x)).includes(k)) || (kd.length >= 4 && xs.some(x => dig(x).includes(kd)));
+    const grp = [];
+    const pes = S.P.filter(p => canSee({ id: p.tipo === "legendario" ? "legendarios" : "participantes" }) && bate(p.nome, p.telefone, p.email, p.cidade, p.equipe)).slice(0, 8);
+    if (pes.length) grp.push(["Pessoas", pes.map(p => `<button type="button" class="bg-li" data-edit="${p.id}"><span><b>${esc(p.nome)}</b><small>${tipoNome(p)}${cancelado(p) ? " · cancelada" : ""}${p.telefone ? " · " + esc(p.telefone) : ""}${p.equipe ? " · " + esc(equipeTxt(p)) : ""}</small></span>${ico("users")}</button>`)]);
+    if (canSee({ id: "estoque" })) { const it = S.estoque.filter(e => bate(e.item, e.local)).slice(0, 6);
+      if (it.length) grp.push(["Estoque", it.map(e => `<button type="button" class="bg-li" data-edit-item="${e.id}"><span><b>${esc(e.item)}</b><small>${e.qtd ?? 0} un.${e.local ? " · " + esc(e.local) : ""}</small></span>${ico("box")}</button>`)]); }
+    if (canSee({ id: "ocorrencias" })) { const oc = ocorrencias().filter(o => bate(o.nome, o.tipo, o.local, o.desc, o.texto, o.obs, o.oque)).slice(0, 6);
+      if (oc.length) grp.push(["Ocorrências", oc.map(o => `<button type="button" class="bg-li" data-bg-go="ocorrencias"><span><b>${esc(o.nome || o.tipo || "Ocorrência")}</b><small>${esc([o.tipo, o.status === "resolvida" ? "resolvida" : "aberta"].filter(Boolean).join(" · "))}</small></span>${ico("heart")}</button>`)]); }
+    if (canSee({ id: "checklist" })) { const tk = S.T.filter(t => bate(t.titulo, t.responsavel)).slice(0, 6);
+      if (tk.length) grp.push(["Checklist", tk.map(t => `<button type="button" class="bg-li" data-edit-task="${t.id}"><span><b>${esc(t.titulo || "Tarefa")}</b><small>${esc(opt(TASK, t.status).l)}${t.responsavel ? " · " + esc(t.responsavel) : ""}</small></span>${ico("list")}</button>`)]); }
+    const tl = VIEWS.filter(v => canSee(v) && bate(v.l, v.c)).slice(0, 5);
+    if (tl.length) grp.push(["Telas", tl.map(v => `<button type="button" class="bg-li" data-bg-go="${v.id}"><span><b>${v.l}</b><small>abrir a tela</small></span>${ico(v.i)}</button>`)]);
+    return grp;
+  };
+  const pinta = q => { const g = achar(q);
+    $("#bgRes").innerHTML = q.trim().length < 2 ? `<div class="hint">Digite pelo menos 2 letras: nome, telefone, e-mail, item do estoque, tarefa…</div>`
+      : g.length ? g.map(([t, l]) => `<div class="bg-grp"><span class="eyebrow">${t}</span>${l.join("")}</div>`).join("") : `<div class="empty">Nada encontrado para “${esc(q)}”.</div>`; };
+  modal(`
+    <h3>Buscar no app</h3>
+    <div class="field"><input id="bgQ" type="search" placeholder="Nome, telefone, item, tarefa ou tela" autocomplete="off" enterkeyhint="search"></div>
+    <div id="bgRes" class="bg-res"></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => {});
+  pinta("");
+  $("#bgQ").addEventListener("input", e => pinta(e.target.value));
+  $("#bgRes").addEventListener("click", e => { const b = e.target.closest("[data-bg-go]"); if (b) { e.stopPropagation(); closeModal(); go(b.dataset.bgGo); } }, true);
+}
+
+/* Backup semanal: baixa uma planilha (.xlsx) com tudo do TOP. O dono vê um lembrete no Dashboard quando passa de 7 dias. */
+const backupDoc = () => (S.cfgDocs || {})["backup-ultimo"] || null;
+const diasDesde = iso => iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 864e5) : null;
+function backupBanner() {
+  if (!ORG() || !S.isOwner) return "";
+  const b = backupDoc(), d = b ? diasDesde(b.em) : null;
+  if (d != null && d < 7) return "";
+  return `<div class="banner aviso"><span>${ico("upload")} <b>Backup da semana.</b> ${d == null ? "Ainda não tem nenhum backup guardado." : `O último foi há ${d} dias${b.por ? " (" + esc(b.por) + ")" : ""}.`} Baixe a planilha com tudo do TOP e guarde no Drive.</span><button class="btn primary" type="button" data-act="backup">Baixar backup</button></div>`;
+}
+async function baixarBackup() {
+  toast("Gerando o backup…");
+  try {
+    const X = await carregarXlsx(), wb = X.utils.book_new();
+    const cel = v => v == null ? "" : typeof v === "object" ? JSON.stringify(v).slice(0, 32000) : v;
+    const aba = (nome, lista) => {
+      const cols = [...new Set(lista.flatMap(o => Object.keys(o || {})))].filter(c => c !== "_adm");
+      X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([cols, ...lista.map(o => cols.map(c => cel(o[c])))]), nome.slice(0, 31));
+    };
+    const lg = p => p.tipo === "legendario";
+    aba("Senderistas", S.P.filter(p => !lg(p)));
+    aba("Legendários", S.P.filter(lg));
+    aba("Checklist", S.T);
+    aba("Estoque", S.estoque);
+    aba("Pista", S.pista);
+    aba("Ocorrências", ocorrencias());
+    aba("Pins", pinsTodos());
+    aba("Tops", S.tops);
+    aba("Configurações", Object.entries(S.cfgDocs || {}).filter(([k]) => k !== "pista-mapa").map(([id, d]) => ({ id, dados: d })));
+    X.writeFile(wb, `backup-adm3colinas-${curTopId()}-${hojeISO()}.xlsx`);
+    await api.set("config", "backup-ultimo", { em: new Date().toISOString(), por: ME.adm || "", top: curTopId() });
+    toast("Backup baixado. Guarde o arquivo no Drive.");
+  } catch (e) { console.error(e); toast("Não consegui gerar o backup. Confira a internet."); }
+}
 const TERMO_LINK = () => true; // link individual do termo (planilha de assinaturas) na cobrança
 const libJs = {};
 function carregarLib(nome, js, css) {
@@ -2081,6 +2204,7 @@ function pinImportarForm() {
       return Object.keys(d).length ? () => api.update("config", n.id, d) : null; }).filter(Boolean);
     closeModal();
     save(async () => { for (const op of ops) await op(); }, `Planilha importada: ${R.filter(n => !atuais[n.id]).length} novo(s), ${ops.length - R.filter(n => !atuais[n.id]).length} atualizado(s)`);
+    marcarImport("pins", `${R.filter(n => !atuais[n.id]).length} novo(s)`);
   });
   let R = null;
   $("#f-pincsv").addEventListener("change", async e => {
@@ -2615,7 +2739,7 @@ function vTops() {
   const ativo = list.find(t => t.status === "ativo");
   const sel = curTopId();
   return `
-  <div class="head"><div><h2>Tops</h2><p>Histórico de todos os TOPs da base 3 Colinas. Ao finalizar um TOP, ele fica registrado aqui com senderistas, documentos e checklist.</p></div>
+  <div class="head"><div><h2>Tops</h2><p>Histórico de todos os TOPs da base 3 Colinas. Ao finalizar um TOP, ele fica registrado aqui com senderistas, documentos e checklist.</p></div>${ORG() && S.isOwner ? `<div class="actions"><button class="btn glass" type="button" data-act="backup">${ico("upload")} Baixar backup</button></div>` : ""}
     <div class="actions">${RELATORIO_FINAL() ? `<button class="btn" type="button" data-act="relatorio">${ico("list")} Relatório final do ${esc(topName())}</button>` : ""}${podeTops() ? `<button class="btn primary" type="button" data-act="novo-top">${ico("plus")} Iniciar novo TOP</button>` : ""}</div></div>
   ${ativo ? "" : `<div class="banner"><span>Nenhum TOP em andamento. Inicie o próximo para começar a cadastrar senderistas.</span></div>`}
   <div class="tops">${list.map(t => { const s = topStats(t.id); const fin = t.status === "finalizado"; const kits = t.kitsMRE || 0; return `
@@ -2652,7 +2776,7 @@ function render() {
   const other = tid !== atualId() && v !== "tops"
     ? `<div class="banner"><span>Você está vendo o <b>${esc(topName())}</b>${td && td.status === "finalizado" ? " (finalizado)" : ""}. O que mudar aqui fica no histórico dele.</span><button class="btn" type="button" data-top-open="${esc(atualId())}">Voltar para o ${esc(topName(atualId()))}</button></div>` : "";
   const faixa = avisoVisivel() ? `<div class="banner aviso"><span>${ico("bell")} <b>Planilha atualizada</b> por ${esc(S.aviso.por || "um ADM")}: ${S.aviso.novosP + S.aviso.novosL} novo(s) (${S.aviso.novosP} part. · ${S.aviso.novosL} LGND).</span><button class="btn" type="button" data-aviso="abrir">Ver resumo</button></div>` : "";
-  const html = faixa + other + (v === "painel" ? vPainel()
+  let html = faixa + other + (v === "painel" ? vPainel()
     : v === "tops" ? vTops()
     : v === "usuarios" ? vUsuarios()
     : v === "historico" ? vHistorico()
@@ -2669,7 +2793,10 @@ function render() {
     : v === "pins" ? vPins()
     : v === "notificacoes" ? vNotificacoes()
     : v === "estoque" ? vEstoque()
+    : v === "importacao" ? vImportacao()
     : vPista());
+  // padrão das telas: o nome do grupo do menu aparece em cima do título de cada tela
+  if (ORG()) { const g = (MENU_GRUPOS.find(([, ids]) => ids.includes(v)) || [])[0]; if (g) html = html.replace('<div class="head"><div><h2>', `<div class="head"><div><span class="eyebrow">${g}</span><h2>`); }
   const view = $("#view");
   const focusId = document.activeElement && document.activeElement.id;
   const caret = focusId === "q" || focusId === "hq" || focusId === "pq" ? document.activeElement.selectionStart : null;
@@ -3285,6 +3412,8 @@ document.addEventListener("click", e => {
   if (d.pvFim != null && podeEditar()) { marcarTrecho(+d.pvFim, "fim"); return; }
   if (d.pvDesf != null && podeEditar()) { if (confirm("Desfazer a marcação deste trecho?")) marcarTrecho(+d.pvDesf, "desf"); return; }
   if (d.act === "saude") { saudeBusca(); return; }
+  if (d.act === "busca") { buscaGeral(); return; }
+  if (d.act === "backup") { baixarBackup(); return; }
   if (d.act === "aovivo-tv") { const on = !modoTv(); try { localStorage.setItem("adm3-avtv", on ? "1" : "0"); } catch (e) {} if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); render(); return; }
   if (d.copiarLink) { const p = S.pessoas.find(x => x.id === d.copiarLink); if (p && p.termoLink) copiarTexto(p.termoLink, "Link do termo copiado"); return; }
   if (d.act === "nova-ocorr") { ocorrForm(); return; }
@@ -3414,6 +3543,7 @@ document.addEventListener("change", e => {
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target.matches && e.target.matches("[data-hist-ver]")) { e.target.click(); return; }
+  if (ORG() && ME.acesso && !$("#modalRoot").innerHTML && (e.key === "/" || (e.key === "k" && (e.ctrlKey || e.metaKey))) && !(e.target.closest && e.target.closest("input, textarea, select"))) { e.preventDefault(); buscaGeral(); return; }
   if (e.key !== "Escape") return;
   if ($(".login") && precisaLogin()) return;
   if (S.mapaCheio && !$("#modalRoot").innerHTML) { S.mapaCheio = false; if (mapaAV) mapaAV.dia = null; render(); return; }
@@ -3872,6 +4002,7 @@ function assinaturasForm(pre) {
     const lista = [...mud.entries()];
     save(async () => { for (let i = 0; i < lista.length; i += 8) await Promise.all(lista.slice(i, i + 8).map(([id, d]) => api.update("pessoas", id, d))); },
       [A.marcar.length && `Termo assinado: ${A.marcar.length}`, A.links.length && `link do termo salvo: ${A.links.length}`].filter(Boolean).join(" · "));
+    marcarImport("assinaturas", [A.marcar.length && `${A.marcar.length} assinado(s)`, A.links.length && `${A.links.length} link(s)`].filter(Boolean).join(" · "));
   });
   let A = null;
   const mostrar = linhas => {
@@ -3894,12 +4025,14 @@ function assinaturasForm(pre) {
         ${A.nao.length ? `<details open><summary class="bad-text">Assinaram, mas não achei no app (${A.nao.length})</summary><p class="hint" style="margin:6px 0">Confira se o nome está escrito diferente no app e marque o termo na ficha.</p><ul class="imp-list">${A.nao.map(n => li(n, n.email ? " · " + esc(n.email) : "")).join("")}</ul></details>` : ""}`;
       const nL = A.links.length;
       $("#assBtn").disabled = !(A.marcar.length + nL);
+      if (!(A.marcar.length + nL)) marcarImport("assinaturas", "nada mudou");
       $("#assBtn").textContent = A.marcar.length + nL ? [A.marcar.length && `Marcar ${A.marcar.length} como assinado`, nL && `salvar ${nL} link(s)`].filter(Boolean).join(" e ") : "Nada para atualizar";
     } catch (err) { console.error(err); prev.innerHTML = `<div class="bad-text">Não consegui ler esse arquivo.</div>`; }
   };
   if (pre) mostrar(pre);
   $("#f-ass").addEventListener("change", async e => {
     const f = e.target.files[0]; if (!f) return;
+    impArquivo = f.name;
     $("#assPrev").innerHTML = `<div class="hint">Lendo ${esc(f.name)}…</div>`; $("#assBtn").disabled = true;
     try {
       mostrar(await lerPlanilha(f));
@@ -3948,7 +4081,9 @@ function avaliacoesForm(linhas) {
     const em = new Date().toISOString();
     save(async () => { for (let i = 0; i < A.marcar.length; i += 8) await Promise.all(A.marcar.slice(i, i + 8).map(({ p, novo }) => api.update("pessoas", p.id, { atestado: novo, ...(novo === "apto" ? { aptoEm: em } : {}) }))); },
       `Atestado: ${A.marcar.length} pessoa(s) atualizada(s)`);
+    marcarImport("avaliacoes", `${A.marcar.length} atualizado(s)`);
   });
+  if (!A.marcar.length) marcarImport("avaliacoes", "nada mudou");
 }
 function analisarAssinaturas(linhas) {
   const h = (linhas[0] || []).map(x => norm(String(x)));
@@ -3996,6 +4131,7 @@ function importForm(tipoAtual) {
   $("#f-arq").addEventListener("change", async e => {
     const f = e.target.files[0]; if (!f) return;
     const prev = $("#impPrev"); prev.innerHTML = `<div class="hint">Lendo ${esc(f.name)}…</div>`; $("#impBtn").disabled = true;
+    impArquivo = f.name;
     try {
       const linhas = await lerPlanilha(f);
       if (ehAssinaturas(linhas)) { closeModal(); assinaturasForm(linhas); return; }
@@ -4005,6 +4141,7 @@ function importForm(tipoAtual) {
       prev.innerHTML = previewImport(R);
       $("#impBtn").disabled = !R.novos.length && !R.ja.length && !R.canc.some(c => c.p) && !R.fora.length;
       $("#impBtn").textContent = R.novos.length ? `Importar ${R.novos.length} novo(s)` : "Aplicar";
+      if ($("#impBtn").disabled) marcarImport("inscricoes", "ninguém novo");
       prev.addEventListener("change", ev => {
         if (ev.target.id === "impTodos") document.querySelectorAll("[data-imp-novo]").forEach(x => { x.checked = ev.target.checked; });
         const n = document.querySelectorAll("[data-imp-novo]:checked").length;
@@ -4045,7 +4182,7 @@ function previewImport(R) {
     <ul class="imp-list">${R.fora.map(({ p, como }) => `<li><label><input type="checkbox" data-imp-fora="${esc(p.id)}" checked> <b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.telefone ? " · " + esc(p.telefone) : ""}${p.adm ? " · cadastrado/mexido por " + esc(p.adm) : ""}</span>${como ? ` <span class="chip wait">no relatório está como ${esc(como)}</span>` : ""}</label></li>`).join("")}</ul></details>` : ""}`;
 }
 async function importarRelatorio(novos, completar, cancelar, arquivo, excluir = []) {
-  if (!novos.length && !completar.length && !cancelar.length && !excluir.length) { toast("Nada para importar."); return; }
+  if (!novos.length && !completar.length && !cancelar.length && !excluir.length) { toast("Nada para importar."); marcarImport("inscricoes", "ninguém novo"); return; }
   toast("Importando…");
   const importId = "imp" + Date.now().toString(36);
   let completados = 0, erro = false;
@@ -4074,6 +4211,7 @@ async function importarRelatorio(novos, completar, cancelar, arquivo, excluir = 
     catch (e) { erro = true; throw e; }
   }, [novos.length && `${novos.length} adicionado(s)`, completar.length && "dados completados", cancelar.length && `${cancelar.length} marcado(s) como cancelado`, excluir.length && `${excluir.length} excluído(s)`].filter(Boolean).join(" · ")).then(ok)));
   if (erro) return;
+  marcarImport("inscricoes", [novos.length && `${novos.length} novo(s)`, cancelar.length && `${cancelar.length} cancelado(s)`, excluir.length && `${excluir.length} excluído(s)`].filter(Boolean).join(" · ") || "dados conferidos");
   render();
   // aviso para a equipe: os outros ADMs veem o resumo na tela assim que a importação termina
   const lg = n => n.tipo === "legendario";

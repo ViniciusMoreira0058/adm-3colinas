@@ -727,6 +727,38 @@ button.dmini { cursor: pointer; } button.dmini:hover { border-color: #ff7a1a; }
 .av-momento { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #ff7a1a 12%, transparent); border-left: 4px solid #ff7a1a; }
 .av-momento .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #ff7a1a; font-weight: 700; }
 @keyframes corrente { 0% { box-shadow: 0 0 0 0 rgba(255,122,26,.7); } 100% { box-shadow: 0 0 0 18px rgba(255,122,26,0); } }
+
+/* Organização (demo): menu em grupos, importação do dia, busca geral, títulos padrão */
+.nav-grp { margin: 14px 10px 4px; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); opacity: .8; }
+.nav-grp:first-child { margin-top: 4px; }
+body.org .mtop-title b { font-size: 16px; }
+body.org .mtop { gap: 8px; }
+body.org .head .eyebrow { display: block; margin-bottom: 6px; }
+body.org .head p { max-width: 70ch; }
+.imp-passos { display: flex; flex-direction: column; gap: 10px; }
+.imp-passo { display: flex; align-items: center; gap: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface2); }
+.imp-passo.ok { border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.imp-passo.extra { margin-top: 10px; opacity: .9; border-style: dashed; background: transparent; }
+.imp-n { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 17px; background: var(--accent-soft); color: var(--accent); }
+.imp-n svg { width: 20px; height: 20px; }
+.imp-passo.ok .imp-n { background: var(--good); color: #fff; }
+.imp-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.imp-txt small { color: var(--muted); font-size: 13px; }
+.imp-st { font-size: 13px; font-weight: 700; color: var(--warn, #f5a524); }
+.imp-st.ok { color: var(--good); }
+.imp-hist { display: flex; flex-direction: column; }
+.imp-hist > div { display: flex; flex-direction: column; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.imp-hist > div:last-child { border-bottom: 0; }
+@media (max-width: 520px) { .imp-passo { flex-wrap: wrap; } .imp-passo .btn { width: 100%; justify-content: center; } }
+.bg-res { display: flex; flex-direction: column; gap: 14px; max-height: 55vh; overflow: auto; }
+.bg-grp { display: flex; flex-direction: column; gap: 6px; }
+.bg-li { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface2); color: var(--fg); text-align: left; }
+.bg-li span { display: flex; flex-direction: column; min-width: 0; }
+.bg-li small { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bg-li svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.bg-li:hover { border-color: var(--accent); }
+@media (max-width: 1023px) { body.org #themeBtnM { display: none; } }   /* o tema continua no menu */
+@media (max-width: 520px) { body.org .backbtn span { display: none; } body.org .mtop:has(#backBtn:not([hidden])) .avatar { display: none; } }
 </style>
 
 </head>
@@ -811,6 +843,7 @@ button.dmini { cursor: pointer; } button.dmini:hover { border-color: #ff7a1a; }
         <img class="avatar" src="icons/icon-192.png" alt="" width="40" height="40">
         <div style="min-width:0"><span class="appname">ADM 3Colinas</span><b id="mtopTitle">Dashboard</b><small id="mtopSub">TOP 1922</small></div>
       </div>
+      <button class="icon-btn" id="buscaBtn" type="button" data-act="busca" aria-label="Buscar no app" title="Buscar (tecla /)" hidden><svg aria-hidden="true"><use href="#i-search"/></svg></button>
       <button class="icon-btn saude-btn" id="saudeBtn" type="button" data-act="saude" aria-label="Ficha de saúde" title="Ficha de saúde" hidden><svg aria-hidden="true"><use href="#i-heart"/></svg></button>
       <button class="icon-btn bell" id="bellBtn" type="button" data-go="notificacoes" aria-label="Notificações" hidden><svg aria-hidden="true"><use href="#i-bell"/></svg><span class="badge num" hidden></span></button>
       <button class="icon-btn" id="themeBtnM" type="button" aria-label="Trocar tema"></button>
