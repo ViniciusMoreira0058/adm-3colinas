@@ -219,8 +219,8 @@ const initialHash = (location.hash || "").slice(1);
 S.view = VIEWS.some(v => v.id === initialHash) ? initialHash : (VIEWS.some(v => v.id === store.get("top-view")) ? store.get("top-view") : "painel");
 
 function renderNav() {
-  const parts = S.P.filter(p => p.tipo !== "legendario").length;
-  const lg = S.P.filter(p => p.tipo === "legendario").length;
+  const parts = S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).length;
+  const lg = S.P.filter(p => p.tipo === "legendario" && !cancelado(p)).length;
   const counts = { participantes: parts, legendarios: lg };
   if (!canSee(VIEWS.find(v => v.id === S.view) || {})) S.view = "painel";
   const online = onlineAdms().length;
@@ -270,10 +270,10 @@ function redeInfo() {
 
 /* ---------- Métricas ---------- */
 function stats() {
-  const all = S.P.filter(p => p.tipo !== "legendario");
+  const all = S.P.filter(p => p.tipo !== "legendario" && !cancelado(p));   // compra cancelada não conta (igual à plataforma)
   const dup = all.filter(p => repetidos().has(p.id)).length;
   const n = all.length;
-  const lg = S.P.filter(p => p.tipo === "legendario");
+  const lg = S.P.filter(p => p.tipo === "legendario" && !cancelado(p));
   const t = S.T; const done = t.filter(x => x.status === "pronto").length;
   const low = S.estoque.filter(e => e.grupo !== "equip" && typeof e.qtd === "number" && e.qtd > 0 && e.qtd <= S.config.alertaBaixo);
   const zero = S.estoque.filter(e => e.grupo !== "equip" && e.qtd === 0);
@@ -381,6 +381,7 @@ function filterPeople() {
   return S.P.filter(p => (tipo === "legendario" ? p.tipo === "legendario" : p.tipo !== "legendario"))
     .filter(p => !nq || norm(p.nome).includes(nq) || norm(p.email).includes(nq) || norm(p.cidade).includes(nq) || (dq.length >= 3 && digits(p.telefone).includes(dq)))
     .filter(p => !adm || (p.adm || "") === adm)
+    .filter(p => status === "canc" ? cancelado(p) : !cancelado(p))
     .filter(p => {
       switch (status) {
         case "atestado": return p.atestado !== "confirmado";
@@ -463,7 +464,8 @@ function dupForm(p) {
 function vPessoas(tipo) {
   const lg = tipo === "legendario";
   const rows = filterPeople();
-  const total = S.P.filter(p => lg ? p.tipo === "legendario" : p.tipo !== "legendario").length;
+  const doTipo = S.P.filter(p => lg ? p.tipo === "legendario" : p.tipo !== "legendario");
+  const total = doTipo.filter(p => !cancelado(p)).length, nCanc = doTipo.length - total;
   const exemplos = S.P.some(p => p.exemplo);
   const fil = lg
     ? [["todos", "Todos"], ["atestado", "Sem atestado"], ["termo", "Sem termo"], ["ok", "Tudo OK"]]
@@ -471,6 +473,7 @@ function vPessoas(tipo) {
   if (S.aviso && S.P.some(p => p.importId === S.aviso.id && (lg ? p.tipo === "legendario" : p.tipo !== "legendario"))) fil.push(["novos", "Novos da última planilha"]);
   const nRep = S.P.filter(p => (lg ? p.tipo === "legendario" : p.tipo !== "legendario") && repetidos().has(p.id)).length;
   if (nRep || S.f.status === "rep") fil.push(["rep", `Repetidos (${nRep})`]);
+  if (nCanc || S.f.status === "canc") fil.push(["canc", `Compra cancelada (${nCanc})`]);
   const tick = (p, k, i, t) => `<button type="button" class="tick ${p[k] ? "on" : ""}" data-tog="${k}" data-id="${p.id}" title="${t}" aria-label="${t}: ${p[k] ? "sim" : "não"}" aria-pressed="${!!p[k]}">${ico(i)}</button>`;
   const ticks = p => lg ? "" : `<div class="ticks">${tick(p, "msgGrupo", "chat", "Mensagem do grupo enviada")}${tick(p, "noGrupo", "group", "Entrou no grupo")}${tick(p, "nfc", "nfc", "NFC registrado")}</div>`;
   const cyc = (list, k, p) => chip(list, p[k], `data-cyc="${k}" data-id="${p.id}" title="Clique para avançar o status"`);
@@ -504,7 +507,7 @@ function vPessoas(tipo) {
       <button class="btn danger" type="button" data-act="apagar-sel" ${nSel ? "" : "disabled"}>Apagar selecionados</button>
       <button class="btn danger" type="button" data-act="apagar-todos">Apagar todos os ${nomeTipo}</button>
     </div></div>` : ""}
-  <div class="hint num">${rows.length} de ${total} ${lg ? "legendários" : "senderistas"}</div>
+  <div class="hint num">${S.f.status === "canc" ? `${rows.length} com compra cancelada (não entram na conta)` : `${rows.length} de ${total} ${lg ? "legendários" : "senderistas"}${nCanc ? ` · ${nCanc} com compra cancelada fora da conta` : ""}`}</div>
   ${rows.length ? `
   <div class="table-wrap people"><table>
     <thead><tr>${sel ? `<th style="width:36px"><input type="checkbox" class="selbox" data-selall="1" ${todos ? "checked" : ""} aria-label="Selecionar todos"></th>` : ""}<th>Nome</th><th>WhatsApp</th>${lg ? "<th>Equipe</th>" : ""}<th>Atestado</th><th>Termo</th>${lg ? "" : "<th>Grupo · NFC</th><th>Família</th>"}<th>Responsável</th><th></th></tr></thead>
@@ -1290,7 +1293,7 @@ function pdfDaTela() {
   const respTxt = p => p.adm ? p.adm + (p.admEm ? " · " + quando(p.admEm) : "") : "";
   if (v === "participantes" || v === "legendarios") {
     const lg = v === "legendarios", rows = filterPeople();
-    const fil = { todos: "", atestado: "sem atestado", termo: "sem termo", grupo: "fora do grupo", 40: "+40", ok: "tudo OK", novos: "novos da última planilha", rep: "repetidos" }[S.f.status];
+    const fil = { todos: "", atestado: "sem atestado", termo: "sem termo", grupo: "fora do grupo", 40: "+40", ok: "tudo OK", novos: "novos da última planilha", rep: "repetidos", canc: "compra cancelada" }[S.f.status];
     const filtro = filtroTxt([fil, S.f.adm && "ADM " + S.f.adm, S.f.q && `busca "${S.f.q}"`]);
     const insc = p => ({ cancelada: "Cancelada", pendente: "Boleto pendente" })[p.inscricao] || "";
     return { titulo: lg ? "Legendários" : "Senderistas", sub: `${topName()} · ${filtro}`, legenda: `${rows.length} ${lg ? "legendário(s)" : "senderista(s)"} · ${filtro}`, orient: "landscape",
@@ -2017,6 +2020,7 @@ function personForm(p, tipo) {
         <label><input type="checkbox" id="f-nfc" name="nfc" ${p.nfc ? "checked" : ""}> NFC registrado</label>
       </div></div>`}
       <div class="field full"><label for="f-obs">Observações</label><textarea id="f-obs" name="obs">${esc(p.obs)}</textarea></div>
+      ${p.id ? `<div class="field full"><label class="selall" style="margin:0"><input type="checkbox" id="f-canc" name="canc" ${cancelado(p) ? "checked" : ""}> Compra cancelada / não está mais na plataforma (sai da contagem, não apaga)</label></div>` : ""}
       ${fichaHtml(p)}
     </div>
     <p class="hint" style="margin:0">${p.adm ? `Responsável atual: <b>${esc(p.adm)}</b>${p.admEm ? " (" + esc(quando(p.admEm)) + ")" : ""}. ` : ""}Ao salvar, você${ME.adm ? ` (${esc(ME.adm)})` : ""} passa a ser o ADM responsável.</p>
@@ -2029,6 +2033,7 @@ function personForm(p, tipo) {
     if (!nome) { const w = $("#dupWarn"); w.hidden = false; w.textContent = "Preencha o nome para salvar."; $("#f-nome").focus(); return; }
     const data = { nome, telefone: String(fd.get("telefone") || "").trim(), email: String(fd.get("email") || "").trim(), obs: String(fd.get("obs") || "").trim(),
       termo: String(fd.get("termo") || "pendente"), atestado: String(fd.get("atestado") || "pendente"), dataAtestado: String(fd.get("dataAtestado") || "").trim() };
+    if (p.id && (fd.get("canc") === "on") !== cancelado(p)) data.inscricao = fd.get("canc") === "on" ? "cancelada" : "ativa";
     if (lg) Object.assign(data, { equipe: String(fd.get("equipe") || "") });
     else Object.assign(data, {
       cidade: String(fd.get("cidade") || "").trim(), idade: fd.get("idade") ? Number(fd.get("idade")) : null,
@@ -2977,8 +2982,15 @@ function analisarImport(lidos) {
     if (a) ja.push({ n, p: a.p, por: a.por }); else novos.push(n);
   });
   const ign = lidos.ignorados || [];
+  // quem está no app (do mesmo tipo que veio no relatório) e não aparece em nenhuma linha: saiu da plataforma ou foi cadastrado à mão
+  const tipos = new Set(lidos.map(n => n.tipo === "legendario" ? "legendario" : "participante"));
+  const achados = new Set([...ja.map(x => x.p.id), ...canc.filter(c => c.p).map(c => c.p.id)]);
+  lidos.forEach(n => { const a = acharNoApp(n); if (a) achados.add(a.p.id); });
+  const comoOutro = new Map(ign.map(x => [norm(x.nome), x.como]));
+  const fora = S.P.filter(p => tipos.has(p.tipo === "legendario" ? "legendario" : "participante") && !cancelado(p) && !achados.has(p.id) && !p.exemplo)
+    .map(p => ({ p, como: comoOutro.get(norm(p.nome)) || "" }));
   novos.forEach(n => { const o = acharNoApp({ ...n, tipo: n.tipo === "legendario" ? "participante" : "legendario" }); if (o) n.outroTipo = o.p; });
-  return { novos, ja, canc, ign, repPlan, total: lidos.length + ign.length };
+  return { novos, ja, canc, ign, repPlan, fora, total: lidos.length + ign.length };
 }
 function importForm(tipoAtual) {
   modal(`
@@ -2993,8 +3005,9 @@ function importForm(tipoAtual) {
     const novos = R.novos.filter((_, i) => marcados.has(i));
     const completar = $("#impCompletar") && $("#impCompletar").checked;
     const marcarCanc = $("#impCanc") && $("#impCanc").checked;
+    const foraSel = new Set([...document.querySelectorAll("[data-imp-fora]:checked")].map(x => x.dataset.impFora));
     closeModal();
-    await importarRelatorio(novos, completar ? R.ja : [], marcarCanc ? R.canc.filter(c => c.p && !cancelado(c.p)) : [], R.arquivo);
+    await importarRelatorio(novos, completar ? R.ja : [], [...(marcarCanc ? R.canc.filter(c => c.p && !cancelado(c.p)) : []), ...R.fora.filter(f => foraSel.has(f.p.id))], R.arquivo);
   });
   let R = null;
   $("#f-arq").addEventListener("change", async e => {
@@ -3006,7 +3019,7 @@ function importForm(tipoAtual) {
       const linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" });
       R = analisarImport(lerRelatorio(linhas)); R.arquivo = f.name;
       prev.innerHTML = previewImport(R);
-      $("#impBtn").disabled = !R.novos.length && !R.ja.length && !R.canc.some(c => c.p);
+      $("#impBtn").disabled = !R.novos.length && !R.ja.length && !R.canc.some(c => c.p) && !R.fora.length;
       $("#impBtn").textContent = R.novos.length ? `Importar ${R.novos.length} novo(s)` : "Aplicar";
       prev.addEventListener("change", ev => {
         if (ev.target.id === "impTodos") document.querySelectorAll("[data-imp-novo]").forEach(x => { x.checked = ev.target.checked; });
@@ -3042,7 +3055,10 @@ function previewImport(R) {
     <label class="selall"><input type="checkbox" id="impCompletar"> Completar os dados de quem já está (idade, cidade, camisa, saúde, contato de emergência). Não muda status, ADM nem nada que já esteja preenchido.</label>` : ""}
   ${cancApp.length ? `<details open><summary class="bad-text">Compra cancelada, mas estão no app (${cancApp.length})</summary>
     <ul class="imp-list">${cancApp.map(c => `<li>${esc(c.p.nome)} <span class="hint">${tl(c.n)}</span></li>`).join("")}</ul></details>
-    <label class="selall"><input type="checkbox" id="impCanc" checked> Marcar essas pessoas como <b>compra cancelada</b> no app (não apaga ninguém)</label>` : ""}`;
+    <label class="selall"><input type="checkbox" id="impCanc" checked> <span>Marcar essas pessoas como <b>compra cancelada</b> no app (não apaga ninguém)</span></label>` : ""}
+  ${R.fora.length ? `<details open><summary class="bad-text">Estão no app, mas não estão neste relatório (${R.fora.length})</summary>
+    <p class="hint" style="margin:6px 0">Por isso o número do app pode ficar maior que o da plataforma. Podem ter saído da plataforma ou ter sido cadastrados à mão. Marque quem deve sair da conta: fica como <b>compra cancelada</b> (não apaga ninguém e dá para desfazer na ficha).</p>
+    <ul class="imp-list">${R.fora.map(({ p, como }) => `<li><label><input type="checkbox" data-imp-fora="${esc(p.id)}"> <b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.telefone ? " · " + esc(p.telefone) : ""}${p.adm ? " · cadastrado/mexido por " + esc(p.adm) : ""}</span>${como ? ` <span class="chip wait">no relatório está como ${esc(como)}</span>` : ""}</label></li>`).join("")}</ul></details>` : ""}`;
 }
 async function importarRelatorio(novos, completar, cancelar, arquivo) {
   if (!novos.length && !completar.length && !cancelar.length) { toast("Nada para importar."); return; }
