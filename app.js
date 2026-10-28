@@ -572,7 +572,9 @@ function vEquipes() {
   const sem = lgs.filter(p => !p.equipe);
   const eqs = equipesUsadas().map(e => ({ e, m: lgs.filter(p => p.equipe === e).sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || norm(a.nome).localeCompare(norm(b.nome))) }));
   const com = eqs.filter(x => x.m.length), vazias = eqs.filter(x => !x.m.length);
-  const pess = p => `<li><button class="linkbtn eq-p" type="button" ${ed ? `data-eq-p="${esc(p.id)}"` : "disabled"}><span>${esc(p.nome)}</span>${p.funcao ? ` <span class="chip ${FUNC_ORDEM(p.funcao) < 2 ? "ok" : ""}">${esc(p.funcao)}</span>` : ""}</button></li>`;
+  const pag = p => pagPendente(p) ? ' <span class="chip wait">Pagamento pendente</span>' : "";
+  const pess = p => `<li><button class="linkbtn eq-p" type="button" ${ed ? `data-eq-p="${esc(p.id)}"` : "disabled"}><span>${esc(p.nome)}</span>${p.funcao ? ` <span class="chip ${FUNC_ORDEM(p.funcao) < 2 ? "ok" : ""}">${esc(p.funcao)}</span>` : ""}${pag(p)}</button></li>`;
+  const nPag = lgs.filter(pagPendente).length;
   return `
   <div class="head"><div><h2>Equipes LGND</h2><p>Em qual área cada legendário vai servir. Vem da planilha de equipes (botão Importar relatório em Legendários)${ed ? " e você pode mudar ou incluir alguém aqui" : ""}.</p></div>
     ${ed ? `<div class="actions"><button class="btn" type="button" data-act="importar-eq">${ico("upload")} Importar planilha de equipes</button><button class="btn primary" type="button" data-eq-add="">${ico("plus")} Colocar em uma equipe</button></div>` : ""}</div>
@@ -580,8 +582,9 @@ function vEquipes() {
     <div class="kpi"><span class="lbl">Com equipe</span><span class="val num">${lgs.length - sem.length}</span><span class="sub">de ${lgs.length} legendários</span></div>
     <div class="kpi"><span class="lbl">Equipes</span><span class="val num">${com.length}</span><span class="sub">com gente</span></div>
     <div class="kpi ${sem.length ? "alert" : ""}"><span class="lbl">Sem equipe</span><span class="val num">${sem.length}</span><span class="sub">${sem.length ? "falta definir a área" : "todos com área"}</span></div>
+    <div class="kpi ${nPag ? "alert" : ""}"><span class="lbl">Pagamento pendente</span><span class="val num">${nPag}</span><span class="sub">${nPag ? "boleto em aberto" : "todos pagos"}</span></div>
   </div>
-  ${sem.length ? `<section class="panel"><h3>Sem equipe <small>${sem.length}</small></h3><div class="list">${sem.map(p => `<div class="li"><span class="grow">${esc(p.nome)}</span>${ed ? `<select class="sel" data-eq-sel="${p.id}" aria-label="Equipe de ${esc(p.nome)}"><option value="">Escolher…</option>${equipesUsadas().map(e => `<option>${esc(e)}</option>`).join("")}</select>` : ""}</div>`).join("")}</div></section>` : ""}
+  ${sem.length ? `<section class="panel"><h3>Sem equipe <small>${sem.length}</small></h3><div class="list">${sem.map(p => `<div class="li"><span class="grow">${esc(p.nome)}${pag(p)}</span>${ed ? `<select class="sel" data-eq-sel="${p.id}" aria-label="Equipe de ${esc(p.nome)}"><option value="">Escolher…</option>${equipesUsadas().map(e => `<option>${esc(e)}</option>`).join("")}</select>` : ""}</div>`).join("")}</div></section>` : ""}
   <div class="fams">${com.map(({ e, m }) => `
     <section class="fam"><header><b>${esc(e)}</b><span class="hint num">${m.length}</span></header>
     <ul class="eq-list">${m.map(pess).join("")}</ul>
@@ -1426,13 +1429,13 @@ function pdfDaTela() {
   if (v === "equipes") {
     const lgs = S.P.filter(p => p.tipo === "legendario" && !cancelado(p)), sem = lgs.filter(p => !p.equipe);
     const ord = m => m.sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || norm(a.nome).localeCompare(norm(b.nome)));
-    const lin = m => ord(m).map((p, i) => n(i, [p.nome, p.funcao || "", opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, p.telefone]));
+    const lin = m => ord(m).map((p, i) => n(i, [p.nome, p.funcao || "", pagPendente(p) ? "Pendente" : "Ok", opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, p.telefone]));
     const linS = m => ord(m).map((p, i) => n(i, [p.nome, p.telefone || "", p.equipe || "Sem equipe"]));
     // quem está sem equipe não vai no PDF (pedido do Vinicius)
     const secs = f => equipesUsadas().map(e => { const m = lgs.filter(p => p.equipe === e); return { titulo: `${e} · ${m.length} pessoa(s)`, linhas: f(m) }; }).filter(x => x.linhas.length);
     return { titulo: "Equipes LGND", legenda: `${lgs.length - sem.length} de ${lgs.length} legendários com equipe`,
       resumo: [["Com equipe", lgs.length - sem.length], ["Equipes", equipesUsadas().filter(e => lgs.some(p => p.equipe === e)).length]],
-      colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Função", w: 28 }, { t: "Atestado", w: 26, status: true }, { t: "Termo", w: 26, status: true }, { t: "Telefone", w: 34 }],
+      colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Função", w: 24 }, { t: "Pagamento", w: 24, status: true }, { t: "Atestado", w: 26, status: true }, { t: "Termo", w: 26, status: true }, { t: "Telefone", w: 34 }],
       secoes: secs(lin),
       simplesTxt: "Simples: nome, telefone e equipe de cada um, separado por equipe.",
       simples: { resumo: [["Total", lgs.length - sem.length]], colunas: [{ t: "#", w: 12, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Telefone", w: 42 }, { t: "Equipe", w: 40 }], secoes: secs(linS) } };
