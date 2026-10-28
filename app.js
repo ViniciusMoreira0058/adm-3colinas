@@ -746,9 +746,193 @@ function vAoVivo() {
       ${prox ? `<p>${prox.hora ? `previsto ${esc(prox.hora)}${prev && prev !== prox.hora ? ` · deve começar ~${esc(prev)}` : ""}` : ""}${prox.local ? " · " + esc(prox.local) : ""}</p>` : ""}</section>
     ${seguintes.length ? `<ul class="av-depois">${seguintes.map(i => `<li><span class="num">${esc(i.hora || "")}</span>${esc(i.atv)}</li>`).join("")}</ul>` : ""}
     <div class="av-barra"><div class="bar good"><i style="width:${pct(nFeito, D.itens.length)}%"></i></div><span class="hint num">${nFeito} de ${D.itens.length} momentos do ${esc(D.nome || "dia")} concluídos · atualiza sozinho</span></div>
+    ${vMapaVivo()}
   </div>`;
 }
 setInterval(() => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) render(); }, 30000);
+
+/* ---------- Mapa da pista ao vivo (em teste: só na demonstração) ----------
+   A linha vem do KMZ/KML da pista (config/pista-mapa). Os ADMs marcam quando a corrente sai e chega em cada trecho
+   (config/pista-vivo-<top>); enquanto o trecho anda, a posição é estimada pelo tempo previsto do trecho. */
+const MAPA_VIVO = () => DEMO;
+const libJs = {};
+function carregarLib(nome, js, css) {
+  return libJs[nome] || (libJs[nome] = new Promise((ok, erro) => {
+    if (css) { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = css; document.head.appendChild(l); }
+    const sc = document.createElement("script"); sc.src = js;
+    sc.onload = () => ok(window[nome]); sc.onerror = () => { delete libJs[nome]; erro(new Error("Não consegui carregar o mapa. Confira a internet.")); };
+    document.head.appendChild(sc);
+  }));
+}
+const carregarMapa = () => carregarLib("L", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
+const carregarZip = () => carregarLib("JSZip", "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
+const pistaMapa = () => (S.cfgDocs || {})["pista-mapa"] || null;
+const vivoId = () => "pista-vivo-" + curTopId();
+const pistaVivo = () => (S.cfgDocs || {})[vivoId()] || { marcas: {} };
+const pistaDias = () => [...(S.pista || [])].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+// "46 minutos", "1 hora e 30 minutos", "1h10" → minutos
+const tempoMin = t => { const x = norm(t); const h = /(\d+)\s*h/.exec(x), m = /(\d+)\s*m/.exec(x.replace(/(\d+)\s*h(ora)?s?/, "")); return (h ? +h[1] * 60 : 0) + (m ? +m[1] : 0) || null; };
+const distM = (a, b) => { const R = 6371000, r = Math.PI / 180, dLa = (b[0] - a[0]) * r, dLo = (b[1] - a[1]) * r;
+  const x = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
+function linhaAte(lin, d) {   // pedaço da linha do começo até d metros, e o ponto final
+  const out = [lin[0]]; let acc = 0;
+  for (let i = 1; i < lin.length; i++) { const s = distM(lin[i - 1], lin[i]);
+    if (acc + s >= d) { const f = s ? (d - acc) / s : 0, pt = [lin[i - 1][0] + (lin[i][0] - lin[i - 1][0]) * f, lin[i - 1][1] + (lin[i][1] - lin[i - 1][1]) * f]; out.push(pt); return { parte: out, pt }; }
+    acc += s; out.push(lin[i]); }
+  return { parte: out, pt: lin[lin.length - 1] };
+}
+const compr = lin => lin.reduce((a, p, i) => i ? a + distM(lin[i - 1], p) : 0, 0);
+// linha do dia: uma por dia quando o KMZ tem uma linha por dia; senão a linha toda serve para o dia
+// linha do dia: pelo nome no KMZ ("D1 - 8,5 km" é do D1); sem nomes, uma por dia na ordem; senão a linha toda
+function idxLinhaDoDia(idx) {
+  const M = pistaMapa(), dia = pistaDias()[idx]; if (!M || !M.linhas || !M.linhas.length || !dia) return -1;
+  const N = (M.nomes || []).map(norm), k = norm(dia.dia);
+  let i = N.findIndex(n => n === k || n.startsWith(k + " ") || n.startsWith(k + "-"));
+  if (i < 0) i = N.findIndex(n => new RegExp("\\b" + k + "\\b").test(n));
+  if (i < 0 && M.linhas.length === pistaDias().length) i = idx;
+  return i;
+}
+function linhaDoDia(idx) { const M = pistaMapa(); if (!M || !M.linhas || !M.linhas.length) return null; const i = idxLinhaDoDia(idx); return i >= 0 ? M.linhas[i] : M.linhas.length === 1 ? M.linhas[0] : null; }
+// momento do cronograma que está acontecendo (ou o último que começou), com a hora marcada
+function momentoAtual() {
+  const plano = cronoPlano(), M = marcasTodas(), dia = cronoDiaAtual(plano, M), D = plano.find(d => d.id === dia) || { itens: [] };
+  const comecou = D.itens.filter(i => M[i.id] && M[i.id].ini), agora = [...comecou].reverse().find(i => !M[i.id].fim);
+  const u = agora || comecou[comecou.length - 1]; if (!u) return null;
+  return { atv: u.atv, ini: M[u.id].ini, fim: M[u.id].fim, andando: !!agora };
+}
+// ponto do KMZ citado no nome do momento ("PREDICA 10: CASA ABANDONADA" → ponto "Casa abandonada")
+const PARADAS_GENERICAS = new Set(["segunda", "pelo", "mundo", "camp", "base", "colinas", "almoco", "entregue", "sustento", "corredor"]);
+function pontoDoMomento(atv) {
+  const M = pistaMapa(); if (!M || !atv) return null; const a = " " + norm(atv).replace(/[^a-z0-9 ]/g, " ") + " ";
+  let melhor = null, nota = 0;
+  (M.pontos || []).forEach(p => { const ws = norm(p.n).replace(/[^a-z0-9 ]/g, " ").split(" ").filter(w => w.length >= 4);
+    const fortes = ws.filter(w => !PARADAS_GENERICAS.has(w)), achou = ws.filter(w => a.includes(" " + w + " ")).length, achouF = fortes.filter(w => a.includes(" " + w + " ")).length;
+    const n = achouF ? achou + achouF : 0; if (n > nota) { nota = n; melhor = p; } });
+  return melhor;
+}
+const pertoNaLinha = (lin, pt) => { let bi = 0, bd = Infinity; lin.forEach((q, i) => { const d = distM(q, pt); if (d < bd) { bd = d; bi = i; } }); return { i: bi, d: bd, m: compr(lin.slice(0, bi + 1)) }; };
+function posicaoCorrente(dia) {
+  const tr = dia.trechos || [], V = pistaVivo().marcas || {}, tot = tr.reduce((a, t) => a + (+t.m || 0), 0) || 1;
+  let feitoM = 0, atual = -1, estimado = false;
+  tr.forEach((t, i) => { const m = V[dia.id + "-" + i] || {};
+    if (m.fim) { feitoM = tr.slice(0, i + 1).reduce((a, x) => a + (+x.m || 0), 0); atual = i; }
+    else if (m.ini) { const prev = tempoMin(t.tempo) || 30, f = Math.min(.95, Math.max(0, (Date.now() - Date.parse(m.ini)) / 6e4 / prev));
+      feitoM = tr.slice(0, i).reduce((a, x) => a + (+x.m || 0), 0) + f * (+t.m || 0); atual = i; estimado = true; } });
+  return { frac: feitoM / tot, feitoM, tot, atual, estimado };
+}
+// onde mostrar a corrente: o momento do cronograma (se cita um ponto do mapa) ou os trechos marcados, o que foi marcado por último
+function estadoMapa() {
+  const dias = pistaDias(), V = pistaVivo(), mom = momentoAtual(), ponto = mom && pontoDoMomento(mom.atv);
+  let idx = dias.findIndex(d => d.id === (S.avDia || ""));
+  if (idx < 0 && ponto) { let bd = Infinity; dias.forEach((d, i) => { const l = linhaDoDia(i); if (l) { const r = pertoNaLinha(l, [ponto.lat, ponto.lng]); if (r.d < bd) { bd = r.d; idx = i; } } }); }
+  if (idx < 0) idx = Math.max(0, dias.findIndex(d => d.id === V.dia));
+  const dia = dias[idx], lin = linhaDoDia(idx), pos = posicaoCorrente(dia), M = V.marcas || {};
+  const tTrecho = Math.max(0, ...Object.entries(M).filter(([k]) => k.startsWith(dia.id + "-")).flatMap(([, m]) => [m.ini, m.fim].filter(Boolean).map(Date.parse)));
+  let tMom = 0; if (mom) { const h = minDe(mom.fim || mom.ini), d = new Date(); d.setHours(Math.floor(h / 60), h % 60, 0, 0); tMom = d.getTime(); if (tMom > Date.now() + 6e4) tMom -= 864e5; }
+  let usaPonto = !!(ponto && lin && pertoNaLinha(lin, [ponto.lat, ponto.lng]).d < 1500 && tMom >= tTrecho);
+  const total = lin ? compr(lin) : 0;
+  const ateM = usaPonto ? pertoNaLinha(lin, [ponto.lat, ponto.lng]).m : pos.frac * total;
+  return { dias, idx, dia, lin, pos, mom, ponto, usaPonto, total, ateM, andou: usaPonto || pos.atual >= 0 };
+}
+function vMapaVivo() {
+  if (!MAPA_VIVO()) return "";
+  const E0 = pistaDias(); if (!E0.length) return "";
+  const E = estadoMapa(), { dias, dia, pos, mom } = E, V = pistaVivo();
+  const tr = dia.trechos || [], M = V.marcas || {}, ed = podeEditar();
+  const hm = iso => iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+  const linha = (t, i) => { const m = M[dia.id + "-" + i] || {}, st = m.fim ? "feito" : m.ini ? "andando" : "";
+    return `<li class="${st}"><span class="av-tr-n num">${i + 1}</span><span class="grow"><b>${esc(t.de)} → ${esc(t.para)}</b><small class="hint">${fmtNum(t.m)} m · ${esc(t.tempo || "")}${m.ini ? ` · saiu ${hm(m.ini)}` : ""}${m.fim ? ` · chegou ${hm(m.fim)}` : ""}</small></span>
+      ${ed ? (m.fim ? `<button class="linkbtn" type="button" data-pv-desf="${i}" title="Desfazer">↺</button>` : m.ini ? `<button class="btn sm primary" type="button" data-pv-fim="${i}">Chegou</button>` : `<button class="btn sm" type="button" data-pv-ini="${i}">Saiu</button>`) : ""}</li>`; };
+  const km = m => (m / 1000).toFixed(1).replace(".", ",");
+  return `<section class="panel av-pista"><div class="av-pista-head"><h3>Onde está a corrente</h3>
+      <div class="actions"><div class="seg" role="group" aria-label="Dia da pista">${dias.map(d => `<button type="button" data-av-dia="${esc(d.id)}" aria-pressed="${d.id === dia.id}">${esc(d.dia)}</button>`).join("")}</div>
+      ${ed ? `<button class="btn" type="button" data-act="kmz">${ico("upload")} Importar KMZ</button>` : ""}</div></div>
+    ${mom ? `<div class="av-momento"><span class="lbl">${mom.andando ? "Acontecendo agora" : "Último momento"}</span><b>${esc(mom.atv)}</b><small class="hint">${mom.andando ? "começou " : "terminou "}${esc(mom.andando ? mom.ini : mom.fim || mom.ini)}${E.ponto ? ` · no mapa: ${esc(E.ponto.n)}` : ""}</small></div>` : ""}
+    <p class="hint" style="margin:0">${!E.andou ? "A corrente ainda não saiu neste dia." : E.lin ? `${km(E.ateM)} de ${km(E.total)} km do ${esc(dia.dia)} (${Math.round(E.ateM / (E.total || 1) * 100)}%)${!E.usaPonto && pos.estimado ? " · posição estimada pelo tempo previsto do trecho" : ""}` : ""}</p>
+    ${E.lin ? `<div id="avMapa" class="av-mapa"></div>` : `<div class="empty">${pistaMapa() ? `O KMZ não tem a linha do ${esc(dia.dia)}.` : ed ? "Importe o KMZ da pista para ver o mapa." : "O mapa da pista ainda não foi enviado."}</div>`}
+    <details ${E.usaPonto ? "" : "open"}><summary>Trechos do ${esc(dia.dia)} (marcar saída e chegada da corrente)</summary><ol class="av-trechos">${tr.map(linha).join("")}</ol></details>
+    ${pistaMapa() ? `<p class="hint" style="margin:0">Mapa: ${esc(pistaMapa().arquivo || "KMZ")}${pistaMapa().por ? " · enviado por " + esc(pistaMapa().por) : ""}</p>` : ""}
+  </section>`;
+}
+let mapaAV = null;
+async function montarMapaVivo() {
+  const el = $("#avMapa"); if (!el) return;
+  const E = estadoMapa(), { dia, lin, mom, ponto } = E;
+  if (!lin || lin.length < 2) return;
+  let L; try { L = await carregarMapa(); } catch (e) { el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  if (!el.isConnected) return;
+  const antes = mapaAV && mapaAV.dia === dia.id ? { c: mapaAV.map.getCenter(), z: mapaAV.map.getZoom(), cam: mapaAV.cam } : null;
+  if (mapaAV) try { mapaAV.map.remove(); } catch (e) {}
+  const map = L.map(el, { zoomControl: true, attributionControl: true });
+  const ruas = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" });
+  const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Esri" });
+  const cam = antes ? antes.cam : (mapaAV && mapaAV.cam) || "sat"; (cam === "sat" ? sat : ruas).addTo(map);
+  L.control.layers({ "Satélite": sat, "Ruas": ruas }, null, { position: "topright" }).addTo(map);
+  map.on("baselayerchange", e => { if (mapaAV) mapaAV.cam = e.name === "Ruas" ? "ruas" : "sat"; });
+  // outras linhas do KMZ (outros dias, acessos) em azul fino
+  const P = pistaMapa(); (P.linhas || []).forEach(l => { if (l !== lin) L.polyline(l, { color: "#7aa7ff", weight: 3, opacity: .55, dashArray: "4 6" }).addTo(map); });
+  L.polyline(lin, { color: "#ffffff", weight: 7, opacity: .55 }).addTo(map);
+  L.polyline(lin, { color: "#26313d", weight: 4, opacity: .9, dashArray: "6 6" }).addTo(map);
+  const feito = linhaAte(lin, E.ateM);
+  if (E.andou) L.polyline(feito.parte, { color: "#ff7a1a", weight: 6 }).addTo(map);
+  // pontos do KMZ (prédicas, camps): o do momento atual acende
+  (P.pontos || []).forEach(p => { const on = ponto && p === ponto;
+    L.circleMarker([p.lat, p.lng], { radius: on ? 9 : 5, color: on ? "#fff" : "#0b1119", weight: 2, fillColor: on ? "#ff7a1a" : "#ffd29a", fillOpacity: 1 }).addTo(map)
+      .bindTooltip(esc(p.n), { direction: "top", permanent: !on && map.getZoom && false }); });
+  if (!(P.pontos || []).length) { let acc = 0; const tr = dia.trechos || [], tot = E.pos.tot;
+    tr.forEach((t, i) => { acc += +t.m || 0; L.circleMarker(linhaAte(lin, acc / tot * E.total).pt, { radius: 6, color: "#0b1119", weight: 2, fillColor: "#ffd29a", fillOpacity: 1 }).addTo(map).bindTooltip(`${i + 1}. ${esc(t.para)}`, { direction: "top" }); }); }
+  L.circleMarker(lin[0], { radius: 7, color: "#0b1119", weight: 2, fillColor: "#46c486", fillOpacity: 1 }).addTo(map).bindTooltip("Saída do " + esc(dia.dia), { direction: "top" });
+  if (E.andou) {
+    const onde = E.usaPonto ? [ponto.lat, ponto.lng] : feito.pt;
+    const rot = mom ? `<small>${mom.andando ? "AGORA" : "ÚLTIMO"}</small>${esc(mom.atv)}` : "Corrente";
+    L.marker(onde, { icon: L.divIcon({ className: "corrente-pin", html: `<i></i><b>${rot}</b>`, iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000 }).addTo(map);
+  }
+  if (antes) map.setView(antes.c, antes.z); else map.fitBounds(L.latLngBounds(lin), { padding: [30, 30] });
+  mapaAV = { map, dia: dia.id, cam };
+}
+function marcarTrecho(i, campo) {
+  const dias = pistaDias(), V = pistaVivo(), diaId = estadoMapa().dia.id, k = diaId + "-" + i;
+  const marcas = { ...(V.marcas || {}) }, m = { ...(marcas[k] || {}) }, agora = new Date().toISOString();
+  if (campo === "desf") delete marcas[k];
+  else { m[campo] = agora; m[campo + "Por"] = ME.adm || ""; if (campo === "fim" && !m.ini) m.ini = agora; marcas[k] = m; }
+  const dia = dias.find(d => d.id === diaId) || {}, t = (dia.trechos || [])[i] || {};
+  save(() => api.set("config", vivoId(), { dia: diaId, marcas }), campo === "ini" ? `Corrente saiu: ${t.de} → ${t.para}` : campo === "fim" ? `Corrente chegou em ${t.para}` : "Marcação desfeita");
+}
+async function lerKmz(f) {
+  let txt;
+  if (/\.kmz$/i.test(f.name)) { const Z = await carregarZip(), zip = await Z.loadAsync(await f.arrayBuffer());
+    const k = Object.keys(zip.files).find(n => /\.kml$/i.test(n)); if (!k) throw new Error("Não achei o mapa (KML) dentro do KMZ."); txt = await zip.files[k].async("string"); }
+  else txt = await textoArquivo(f);
+  const x = new DOMParser().parseFromString(txt, "application/xml"), coords = c => c.trim().split(/\s+/).map(v => v.split(",").map(Number)).filter(v => v.length >= 2 && !isNaN(v[0]) && !isNaN(v[1])).map(([lng, lat]) => [+lat.toFixed(6), +lng.toFixed(6)]);
+  const nomeDe = el => { while (el && el.tagName !== "Placemark") el = el.parentNode; return el ? ((el.getElementsByTagName("name")[0] || {}).textContent || "").trim() : ""; };
+  const nomes = [], linhas = [];
+  [...x.getElementsByTagName("LineString")].forEach(l => { const c = coords((l.getElementsByTagName("coordinates")[0] || {}).textContent || ""); if (c.length > 1) { linhas.push(c); nomes.push(nomeDe(l)); } });
+  // gx:Track (trilha gravada no GPS)
+  [...x.getElementsByTagNameNS("*", "Track")].forEach(t => { const l = [...t.getElementsByTagNameNS("*", "coord")].map(c => c.textContent.trim().split(/\s+/).map(Number)).filter(v => v.length >= 2).map(([lng, lat]) => [+lat.toFixed(6), +lng.toFixed(6)]); if (l.length > 1) { linhas.push(l); nomes.push(nomeDe(t)); } });
+  const pontos = [...x.getElementsByTagName("Placemark")].map(pm => { const pt = pm.getElementsByTagName("Point")[0]; if (!pt) return null; const c = coords((pt.getElementsByTagName("coordinates")[0] || {}).textContent || "")[0];
+    return c && { n: ((pm.getElementsByTagName("name")[0] || {}).textContent || "").trim(), lat: c[0], lng: c[1] }; }).filter(Boolean);
+  if (!linhas.length) throw new Error("Esse arquivo não tem a linha da pista (trajeto).");
+  return { linhas, nomes, pontos };
+}
+function kmzForm() {
+  const dias = pistaDias();
+  modal(`
+    <h3>Mapa da pista</h3>
+    <p class="hint" style="margin:0">Envie o KMZ (ou KML) da pista, exportado do Google Earth, Maps ou do GPS. Cada dia (${dias.map(d => esc(d.dia)).join(", ")}) usa a linha com o nome dele (ex.: "D1 - 8,5 km"). Os pontos com nome (prédicas, camps) aparecem no mapa e acendem quando o ADM inicia o momento no cronograma.</p>
+    <div class="field"><label for="f-kmz">Arquivo</label><input id="f-kmz" type="file" accept=".kmz,.kml"></div>
+    <div id="kmzPrev" class="hint"></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="kmzBtn" disabled>Salvar mapa</button></div></div>`,
+  () => { if (!K) return; closeModal(); save(() => api.set("config", "pista-mapa", { ...K, em: new Date().toISOString(), por: ME.adm || "" }), "Mapa da pista salvo"); });
+  let K = null;
+  $("#f-kmz").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return; const pv = $("#kmzPrev"); pv.textContent = "Lendo " + f.name + "…"; $("#kmzBtn").disabled = true;
+    try { const r = await lerKmz(f); K = { ...r, arquivo: f.name };
+      K.nomes = r.nomes; const M0 = S.cfgDocs["pista-mapa"]; S.cfgDocs["pista-mapa"] = K; const usa = dias.map((d, i) => { const j = idxLinhaDoDia(i); return `${esc(d.dia)}: ${j >= 0 ? esc(r.nomes[j] || "linha " + (j + 1)) : "<span class=\"bad-text\">sem linha</span>"}`; }); S.cfgDocs["pista-mapa"] = M0;
+      pv.innerHTML = `${r.linhas.length} trajeto(s): ${r.linhas.map((l, i) => esc(r.nomes[i] || "linha " + (i + 1)) + " (" + (compr(l) / 1000).toFixed(1).replace(".", ",") + " km)").join(", ")} · ${r.pontos.length} ponto(s).<br>Cada dia vai usar: ${usa.join(" · ")}`;
+      $("#kmzBtn").disabled = false; }
+    catch (err) { console.error(err); pv.innerHTML = `<span class="bad-text">${esc(err.message || "Não consegui ler esse arquivo.")}</span>`; }
+  });
+}
 function vCronograma() {
   const adm = cronoAdm(), meu = adm.id === ME.id, eqAdm = equipeDe(adm.id), E = eqDoc();
   const topo = `<div class="head"><div><h2>Cronograma</h2><p>${esc(topName())} · ${meu ? "<b>Seu cronograma</b>" : `Cronograma de <b>${esc(adm.nome)}</b>`}${eqAdm ? ` · ${esc(eqAdm.nome)}` : ""} · toque em <b>Iniciar</b> quando o momento começar e em <b>Terminar</b> quando acabar. Cada ADM marca o seu e funciona sem internet.</p></div>
@@ -1898,7 +2082,7 @@ function vPista() {
   const dias = [...S.pista].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
   return `
   <div class="head"><div><h2>KM da pista</h2><p>Trechos e tempo de deslocamento de cada dia. Toque em Editar para mudar locais, metros ou tempo.</p></div>
-    <div class="actions"><button class="btn" type="button" data-act="novo-dia">${ico("plus")} Adicionar dia</button></div></div>
+    <div class="actions">${MAPA_VIVO() && podeEditar() ? `<button class="btn" type="button" data-act="kmz">${ico("upload")} ${pistaMapa() ? "Trocar KMZ" : "Enviar KMZ"}</button>` : ""}<button class="btn" type="button" data-act="novo-dia">${ico("plus")} Adicionar dia</button></div></div>
   <div class="kpis">
     ${dias.map(d => { const m = (d.trechos || []).reduce((a, x) => a + (Number(x.m) || 0), 0); return `<div class="kpi"><span class="lbl">${esc(d.dia)}</span><span class="val num">${(m / 1000).toFixed(2).replace(".", ",")} km</span><span class="sub num">${fmtNum(m)} m · ${(d.trechos || []).length} trechos</span></div>`; }).join("")}
     <div class="kpi alert"><span class="lbl">Pista total</span><span class="val num">${(totalM / 1000).toFixed(2).replace(".", ",")} km</span><span class="sub num">${fmtNum(totalM)} m</span></div>
@@ -2163,6 +2347,7 @@ function render() {
   const caret = focusId === "q" || focusId === "hq" ? document.activeElement.selectionStart : null;
   view.innerHTML = html;
   botaoPdf();
+  if (S.view === "aovivo") montarMapaVivo(); else if (mapaAV) { try { mapaAV.map.remove(); } catch (e) {} mapaAV = null; }
   if ((focusId === "q" || focusId === "hq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
 }
 
@@ -2756,6 +2941,11 @@ document.addEventListener("click", e => {
     save(async () => { for (const p of alvo) { const d = {}; ["nome", "cidade"].forEach(k => { if (consertaAcento(p[k]) !== p[k]) d[k] = consertaAcento(p[k]); }); await api.update("pessoas", p.id, d); } }, `${alvo.length} nome(s) corrigido(s)`);
     return;
   }
+  if (d.act === "kmz" && podeEditar()) { kmzForm(); return; }
+  if (d.avDia) { S.avDia = d.avDia; render(); return; }
+  if (d.pvIni != null && podeEditar()) { marcarTrecho(+d.pvIni, "ini"); return; }
+  if (d.pvFim != null && podeEditar()) { marcarTrecho(+d.pvFim, "fim"); return; }
+  if (d.pvDesf != null && podeEditar()) { if (confirm("Desfazer a marcação deste trecho?")) marcarTrecho(+d.pvDesf, "desf"); return; }
   if (d.act === "saude") { saudeBusca(); return; }
   if (d.act === "aovivo-tela") { const el = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen ? el.requestFullscreen() : Promise.resolve()).catch(() => {}); return; }
   if (d.act === "importar-eq") { importForm("legendario"); return; }
@@ -3912,7 +4102,7 @@ function conectarDados() {
     S.cronoCriando = S.cronoCriando || new Set();
     if (ficha && navigator.onLine !== false && !db.estado().offline && !S.cfgDocs[ficha] && !S.cronoCriando.has(ficha)) {
       S.cronoCriando.add(ficha); db.doc("config/" + ficha).set({ _adm: eu() }).catch(() => {}).finally(() => S.cronoCriando.delete(ficha)); }
-    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios"].includes(S.view)) render();
+    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios", "aovivo"].includes(S.view)) render();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });

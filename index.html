@@ -612,6 +612,24 @@ a.btn { text-decoration: none; }
 .av-depois { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: clamp(14px, 1.6vw, 20px); }
 .av-depois li { display: flex; gap: 12px; } .av-depois .num { color: var(--muted); min-width: 52px; }
 .av-barra { display: flex; flex-direction: column; gap: 6px; }
+.av-pista { display: flex; flex-direction: column; gap: 10px; }
+.av-pista-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.av-pista-head h3 { margin: 0; }
+.av-mapa { height: clamp(320px, 55vh, 620px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #0b1119; }
+.av-trechos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.av-trechos li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); }
+.av-trechos li small { display: block; }
+.av-trechos li.feito { opacity: .6; }
+.av-trechos li.andando { border-color: #ff7a1a; background: var(--accent-soft); }
+.av-tr-n { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface2); font-weight: 700; font-size: 13px; flex: none; }
+.av-trechos li.feito .av-tr-n { background: var(--good); color: #062; } .av-trechos li.andando .av-tr-n { background: #ff7a1a; color: #1a0c00; }
+.corrente-pin i { position: absolute; inset: 0; border-radius: 50%; background: #ff7a1a; border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(255,122,26,.7); animation: corrente 1.6s infinite; }
+.corrente-pin b { position: absolute; left: 22px; top: -6px; max-width: 230px; width: max-content; white-space: normal; background: #0b1119; color: #fff; font: 700 12px/1.25 var(--body, system-ui); padding: 5px 8px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.corrente-pin b small { display: block; font-size: 9px; letter-spacing: .08em; color: #ff9b4d; }
+@media (max-width: 600px) { .corrente-pin b { left: 50%; top: 22px; transform: translateX(-50%); max-width: 170px; } }
+.av-momento { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #ff7a1a 12%, transparent); border-left: 4px solid #ff7a1a; }
+.av-momento .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #ff7a1a; font-weight: 700; }
+@keyframes corrente { 0% { box-shadow: 0 0 0 0 rgba(255,122,26,.7); } 100% { box-shadow: 0 0 0 18px rgba(255,122,26,0); } }
 </style>
 
 </head>
