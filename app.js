@@ -334,6 +334,7 @@ function vPainel() {
     ...s.conferir.map(e => ({ t: e.item, d: "Equipamento", c: "sent", l: "Conferir" })),
   ];
   return `
+  ${ME.acesso && ["pedir", "bloqueado", "instalar"].includes(estadoNotif()) ? `<div class="banner aviso"><span>${ico("bell")} <b>Notificações desligadas neste aparelho.</b> Ative para receber os avisos do app no celular.</span><button class="btn primary" type="button" data-act="notif-ajuda">Ativar</button></div>` : ""}
   <section class="hero">
     <img class="hero-logo" src="assets/logo.png" alt="Track 3 Colinas · Franca SP">
     <div class="hero-text">
@@ -1979,7 +1980,7 @@ function render() {
 }
 
 /* ---------- Formulários ---------- */
-function closeModal() { $("#modalRoot").innerHTML = ""; setTimeout(checarNovidade, 300); }
+function closeModal() { $("#modalRoot").innerHTML = ""; setTimeout(checarInicio, 300); }
 function modal(html, onSubmit) {
   $("#modalRoot").innerHTML = `<div class="overlay" data-close><form class="modal" id="mform" novalidate>${html}</form></div>`;
   const f = $("#mform");
@@ -2434,6 +2435,7 @@ function boasVindas() {
     <div class="modal-foot"><div>${podeNotif ? `<button class="btn" type="button" id="bvNotif">${ico("bell")} Ativar notificações</button>` : ""}</div>
       <div class="actions"><button class="btn primary" type="submit">Começar</button></div></div>`,
   () => { store.set("adm3-bemvindo-" + ME.id, "1"); closeModal(); checarAviso(); });
+  if ($("#bvNotif")) try { sessionStorage.setItem("adm3-pediu-notif", "1"); } catch {}   // as boas-vindas já ofereceram
   const nb = $("#bvNotif"); if (nb) nb.onclick = async () => { await pedirNotificacao(); nb.remove(); };
 }
 function sair() {
@@ -2566,6 +2568,7 @@ document.addEventListener("click", e => {
   if (d.act === "csg-unir") { csgUnirForm(); return; }
   if (d.act === "novidade") { novidadeForm(); return; }
   if (d.act === "pdf-tela") { pdfTelaForm(); return; }
+  if (d.act === "notif-ajuda") { if (estadoNotif() === "pedir") pedirNotificacao().then(render); else { try { sessionStorage.removeItem("adm3-pediu-notif"); } catch {} checarAtivarNotif(); } return; }
   if (d.usrAba) { S.usrAba = d.usrAba; render(); return; }
   if (d.act === "ativar-notif") { pedirNotificacao().then(render); return; }
   if (d.act === "pin-importar") { pinImportarForm(); return; }
@@ -3312,6 +3315,34 @@ function novidadeForm() {
   const t = $("#f-todos"), L = $("#f-para");
   t.onchange = () => { L.hidden = t.checked; };
 }
+/* Ao abrir o app: primeiro a novidade (se tiver); depois, para quem ainda não ativou, o pedido para ativar as notificações.
+   "Agora não" esconde só até a próxima vez que a pessoa abrir o app. */
+function checarInicio() { checarNovidade(); if (!$("#modalRoot").innerHTML) checarAtivarNotif(); }
+const ehIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const instalado = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+function estadoNotif() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) return ehIOS() && !instalado() ? "instalar" : "sem-suporte";
+  if (Notification.permission === "granted") return "ok";
+  return Notification.permission === "denied" ? "bloqueado" : "pedir";
+}
+function checarAtivarNotif() {
+  if (!ME.acesso || $("#modalRoot").innerHTML) return;
+  let visto = null; try { visto = sessionStorage.getItem("adm3-pediu-notif"); } catch {}
+  const st = estadoNotif(); if (visto || st === "ok" || st === "sem-suporte") return;
+  try { sessionStorage.setItem("adm3-pediu-notif", "1"); } catch {}
+  const quem = S.isOwner ? "tudo que os ADMs mudarem no app, mensagens e novidades" : "planilhas importadas, mensagens da coordenação e novidades do app";
+  const corpo = st === "instalar" ? `<p style="margin:0">No iPhone, as notificações só funcionam com o app instalado na tela inicial:</p>
+      <ol style="margin:0;padding-left:20px;display:grid;gap:6px"><li>Toque no botão <b>Compartilhar</b> do Safari (quadrado com a seta para cima).</li><li>Escolha <b>Adicionar à Tela de Início</b> e toque em <b>Adicionar</b>.</li><li>Abra o app pelo ícone novo e toque em <b>Ativar notificações</b>.</li></ol>`
+    : st === "bloqueado" ? `<p style="margin:0">As notificações estão bloqueadas neste aparelho. Para liberar:</p>
+      <ol style="margin:0;padding-left:20px;display:grid;gap:6px"><li><b>Android (Chrome):</b> toque no cadeado ao lado do endereço (ou segure o ícone do app → Informações do app) → <b>Notificações</b> → Permitir.</li><li><b>iPhone:</b> Ajustes → Notificações → <b>ADM 3Colinas</b> → Permitir notificações.</li><li>Depois feche e abra o app de novo.</li></ol>`
+    : `<p style="margin:0">Toque em <b>Ativar notificações</b> e depois em <b>Permitir</b>. Leva 5 segundos e você passa a receber avisos no celular, mesmo com o app fechado.</p>`;
+  modal(`
+    <h3>Ative as notificações</h3>
+    <p style="margin:0">Você ainda não está recebendo os avisos do app: ${quem}.</p>
+    ${corpo}
+    <div class="modal-foot"><button class="btn ghost" type="button" data-close-btn>Agora não</button><div class="actions">${st === "pedir" ? `<button class="btn primary" type="submit">${ico("bell")} Ativar notificações</button>` : `<button class="btn primary" type="submit">Entendi</button>`}</div></div>`,
+  async () => { closeModal(); if (st === "pedir") { await pedirNotificacao(); render(); } });
+}
 function checarNovidade() {
   const n = S.novidade;
   if (!n || !n.id || !ME.acesso || n.porId === ME.id || store.get("adm3-novidade-visto") === n.id) return;
@@ -3464,7 +3495,7 @@ function conectarDados() {
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });
-  db.doc("config/novidade").onSnapshot(snap => { S.novidade = snap.exists ? snap.data() : null; setTimeout(checarNovidade, 900); });
+  db.doc("config/novidade").onSnapshot(snap => { S.novidade = snap.exists ? snap.data() : null; setTimeout(checarInicio, 900); });
   render();
   carregarNotifs();
   if (DEMO) return;
