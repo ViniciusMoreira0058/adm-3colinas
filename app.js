@@ -2908,7 +2908,7 @@ document.addEventListener("click", e => {
   if (cob) { const p = S.P.find(x => x.id === cob.dataset.cobrar); if (p) registrarCobranca(p); return; }
   const cobPag = e.target.closest("a[data-cobrar-pag]");
   if (cobPag) { const p = S.P.find(x => x.id === cobPag.dataset.cobrarPag); if (p) registrarAvisoPag(p); return; }
-  const t = e.target.closest("button, [data-close]");
+  const t = e.target.closest("button, [data-close], [data-hist-ver]");
   if (!t) return;
   if (t.matches("[data-close]") && e.target === t) { closeModal(); return; }
   if (t.matches("[data-close-btn]")) { closeModal(); return; }
@@ -2962,9 +2962,11 @@ document.addEventListener("click", e => {
   if (d.act === "importar") { importForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.restaurar && S.isOwner) {
     const h = S.hist.find(x => String(x.id) === d.restaurar);
+    if ($("#mform")) closeModal();
     if (h && h.dados) save(() => api.set(h.col, h.doc_id, h.dados), `${h.nome || "Registro"} restaurado`);
     return;
   }
+  if (d.histVer) { const h = S.hist.find(x => String(x.id) === d.histVer); if (h) histDetalhe(h); return; }
   if (d.act === "colar") { pasteForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.act === "nova-tarefa") { taskForm(); return; }
   if (d.act === "novo-item") { itemForm(); return; }
@@ -3062,6 +3064,7 @@ document.addEventListener("change", e => {
   if (e.target.dataset.fam) { const v = e.target.value; if (v) touch(e.target.dataset.fam, { familia: Number(v) }, `Família ${v.padStart(2, "0")} definida`); }
 });
 document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.target.matches && e.target.matches("[data-hist-ver]")) { e.target.click(); return; }
   if (e.key !== "Escape") return;
   if ($(".login") && precisaLogin()) return;
   if ($("#modalRoot").innerHTML) closeModal();
@@ -3297,6 +3300,66 @@ async function carregarHist() {
   if (!r.error) S.hist = r.data;
   S.histOk = true; if (S.view === "historico") render();
 }
+// Detalhe de uma linha do histórico: tudo o que mudou, sem cortar, e atalho para abrir o registro
+function fmtCheio(k, v) {
+  if (v == null || v === "") return "vazio";
+  if (Array.isArray(v)) return v.every(x => x == null || typeof x !== "object") ? (v.length ? v.join(", ") : "vazio") : `${v.length} item(ns)`;
+  if (typeof v === "object") { const e = Object.entries(v).filter(([, x]) => x != null && x !== ""); return e.length && e.length <= 8 && e.every(([, x]) => typeof x !== "object") ? e.map(([a, x]) => `${chaveNome(a)}: ${typeof x === "boolean" ? (x ? "Sim" : "Não") : fmtCheio(a, x)}`).join(" · ") : `${e.length} campo(s)`; }
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) { const d = new Date(v); if (!isNaN(d)) return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); }
+  const r = fmtValor(k, v); return r.endsWith("…") ? String(v) : r;
+}
+// nomes amigáveis para as chaves internas (trechos da pista, momentos do cronograma) e para os documentos de configuração
+function chaveNome(k) {
+  if (CAMPOS[k]) return CAMPOS[k];
+  const t = /^d(\d+)-(\d+)$/.exec(k); if (t) return `D${t[1]} · trecho ${+t[2] + 1}`;
+  for (const d of cronoPlano()) { const i = (d.itens || []).find(i => i.id === k); if (i) return `${d.nome || ""} ${i.hora || ""} ${i.atv}`.trim(); }
+  return { ini: "Início", fim: "Fim", iniPor: "Início marcado por", fimPor: "Fim marcado por", marcas: "Marcações", linhas: "Linhas do mapa", pontos: "Pontos do mapa", arquivo: "Arquivo" }[k] || k;
+}
+function nomeConfig(id) {
+  const adm = /-adm-(.+)$/.exec(id), m = adm && (S.equipe || []).find(x => String(x.id) === adm[1]);
+  return id === "pista-mapa" ? "Mapa da pista (KMZ)" : id.startsWith("pista-vivo-") ? "Mapa ao vivo (Saiu/Chegou da corrente)"
+    : id.startsWith("cronoplano-") ? "Cronograma (plano)" : id.startsWith("crono-") ? `Cronograma marcado${m ? " por " + (m.nome || m.email) : ""}`
+    : id.startsWith("equipes-") ? "Equipes de ADMs" : id.startsWith("pin-") ? "Pins" : id.startsWith("consagracao") ? "Consagração"
+    : id === "lixeira" ? "Excluídos (lixeira)" : id === "msg-hist" ? "Mensagens enviadas" : id === "novidade" ? "Aviso de novidade" : id === "aviso" ? "Aviso de planilha" : id;
+}
+const rotuloItem = x => x && typeof x === "object" ? x.nome || x.atv || x.titulo || x.item || x.dia || x.de && x.para && `${x.de} → ${x.para}` || "" : String(x);
+function linhasMudanca(k, a, b, pre) {
+  const nome = (pre ? pre + " › " : "") + chaveNome(k);
+  const obj = v => v && typeof v === "object" && !Array.isArray(v);
+  if (obj(a) || obj(b)) {
+    const sub = diffDados(obj(a) ? a : {}, obj(b) ? b : {}), ks = Object.keys(sub);
+    if (ks.length && !pre) return ks.slice(0, 60).flatMap(s => linhasMudanca(s, sub[s][0], sub[s][1], nome)).join("") + (ks.length > 60 ? `<li class="hint">e mais ${ks.length - 60} mudança(s)</li>` : "");
+  }
+  if (Array.isArray(a) && Array.isArray(b) && [...a, ...b].some(x => x && typeof x === "object")) {
+    const ja = a.map(x => JSON.stringify(x)), jb = b.map(x => JSON.stringify(x));
+    const saiu = a.filter((x, i) => !jb.includes(ja[i])), entrou = b.filter((x, i) => !ja.includes(jb[i]));
+    const lista = l => l.map(rotuloItem).filter(Boolean).slice(0, 12).map(esc).join(", ");
+    return `<li><span>${esc(nome)}:</span> ${a.length} → <b>${b.length} item(ns)</b>${entrou.length ? `<br><small>Entrou ou mudou: ${lista(entrou) || entrou.length}</small>` : ""}${saiu.length ? `<br><small>Saiu ou era antes: ${lista(saiu) || saiu.length}</small>` : ""}</li>`;
+  }
+  const fa = fmtCheio(k, a), fb = fmtCheio(k, b);
+  return fa === fb ? "" : `<li><span>${esc(nome)}:</span> ${esc(fa)} → <b>${esc(fb)}</b></li>`;
+}
+function histDetalhe(h) {
+  const x = histLinha(h), d = new Date(x.em);
+  const lista = { pessoas: S.pessoas, tarefas: S.tarefas, estoque: S.estoque, pista: S.pista, tops: S.tops }[x.col];
+  const atual = lista ? lista.find(r => r.id === x.doc_id) : x.col === "config" ? (S.cfgDocs || {})[x.doc_id] : null;
+  const verbo = { criou: "criou", alterou: "alterou", apagou: "apagou" }[x.acao];
+  const campos = r => Object.entries(r || {}).filter(([k, v]) => !IGNORAR.includes(k) && k !== "id" && v != null && v !== "" && !(Array.isArray(v) && !v.length))
+    .map(([k, v]) => v && typeof v === "object" && !Array.isArray(v) && Object.values(v).some(y => y && typeof y === "object")
+      ? Object.entries(v).slice(0, 60).map(([s2, y]) => `<li><span>${esc(chaveNome(k) + " › " + chaveNome(s2))}:</span> <b>${esc(fmtCheio(s2, y))}</b></li>`).join("")
+      : `<li><span>${esc(chaveNome(k))}:</span> <b>${esc(fmtCheio(k, v))}</b></li>`).join("");
+  const mud = x.mudancas ? Object.entries(x.mudancas).filter(([k]) => !IGNORAR.includes(k)).map(([k, [a, b]]) => linhasMudanca(k, a, b)).join("") : "";
+  const corpo = x.acao === "alterou" ? (mud ? `<h4>O que mudou (antes → depois)</h4><ul class="hmud hdet">${mud}</ul>` : `<p class="hint">Sem detalhes da mudança.</p>`)
+    : x.acao === "apagou" ? `<h4>Como estava quando foi apagado</h4><ul class="hmud hdet">${campos(x.dados) || "<li>Sem dados guardados.</li>"}</ul>`
+    : `<h4>${atual ? "Como está agora" : "Este registro não existe mais"}</h4>${atual ? `<ul class="hmud hdet">${campos(atual)}</ul>` : ""}`;
+  const pessoa = x.col === "pessoas" && atual;
+  modal(`<h3>${esc(x.col === "config" ? nomeConfig(x.doc_id) : x.nome || x.doc_id)}</h3>
+    <p class="hint" style="margin:0 0 12px"><b>${esc(x.quem)}</b> ${verbo} em <span class="tag">${esc(x.aba)}</span> · ${esc(d.toLocaleString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }))}</p>
+    ${corpo}
+    <div class="modal-foot"><span>${x.acao === "apagou" && x.dados && !atual ? `<button class="btn" type="button" data-restaurar="${esc(String(x.id))}">Restaurar</button>` : ""}</span>
+      <span style="display:flex;gap:8px">${pessoa ? `<button class="btn" type="button" id="histAbrir">Abrir ficha</button>` : ""}<button class="btn primary" type="button" data-close-btn>Fechar</button></span></div>`, () => {});
+  const ab = $("#histAbrir"); if (ab) ab.onclick = () => { closeModal(); personForm(atual); };
+}
 const histLinha = x => ({ ...x, aba: abaDoRegistro(x.col, x.dados || { tipo: x.tipo || ((S.pessoas.find(p => p.id === x.doc_id) || {}).tipo) }) });
 function histFiltrado() {
   const h = S.hf, nq = norm(h.q);
@@ -3319,10 +3382,10 @@ function vHistorico() {
   const itens = rows.slice(0, 400).map(x => {
     const d = new Date(x.em), dd = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" });
     const cab = dd !== dia ? `<div class="hdia">${esc(dd)}</div>` : ""; dia = dd;
-    const mud = x.mudancas ? Object.entries(x.mudancas).filter(([k]) => !IGNORAR.includes(k)).map(([k, [a, b]]) => `<li><span>${esc(CAMPOS[k] || k)}:</span> ${esc(fmtValor(k, a))} → <b>${esc(fmtValor(k, b))}</b></li>`).join("") : "";
-    return `${cab}<div class="hrow ${x.acao}">
+    const mud = x.mudancas ? Object.entries(x.mudancas).filter(([k]) => !IGNORAR.includes(k)).filter(([k, [a, b]]) => fmtValor(k, a) !== fmtValor(k, b) || (a && typeof a === "object")).map(([k, [a, b]]) => `<li><span>${esc(chaveNome(k))}:</span> ${esc(fmtValor(k, a))} → <b>${esc(fmtValor(k, b))}</b></li>`).join("") : "";
+    return `${cab}<div class="hrow ${x.acao}" data-hist-ver="${esc(String(x.id))}" role="button" tabindex="0" title="Ver detalhes">
       <span class="htime num">${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-      <div class="grow"><div><b>${esc(x.quem)}</b> ${verbo[x.acao]} <span class="tag">${esc(x.aba)}</span> ${esc(x.nome || x.doc_id)}</div>
+      <div class="grow"><div><b>${esc(x.quem)}</b> ${verbo[x.acao]} <span class="tag">${esc(x.aba)}</span> ${esc(x.col === "config" ? nomeConfig(x.doc_id) : x.nome || x.doc_id)}</div>
         ${mud ? `<ul class="hmud">${mud}</ul>` : ""}</div>
       ${x.acao === "apagou" && x.dados ? `<button class="btn" type="button" data-restaurar="${esc(String(x.id))}">Restaurar</button>` : ""}
     </div>`;

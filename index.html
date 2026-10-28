@@ -141,6 +141,8 @@ button { cursor: pointer; }
 .panel.hist { padding: 6px 16px 14px; }
 .hdia { margin: 14px 0 4px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .hrow { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.hrow[data-hist-ver] { cursor: pointer; border-radius: 8px; } .hrow[data-hist-ver]:hover { background: var(--surface2); }
+.modal h4 { margin: 8px 0 4px; font-size: 15px; } .hdet { max-height: 55vh; overflow: auto; margin-bottom: 8px; } .hdet li { overflow-wrap: anywhere; } .hdet small { color: var(--muted); }
 .hdia + .hrow { border-top: 0; }
 .hrow .htime { flex: none; width: 46px; color: var(--muted); font-size: 13px; padding-top: 2px; }
 .hrow.apagou .htime { color: var(--bad); }
