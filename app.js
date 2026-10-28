@@ -772,6 +772,7 @@ const MAPA_VIVO = () => true;
 const MAPA_CHEIO = () => true;
 const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
+const TERMO_LINK = () => DEMO; // link individual do termo (planilha de assinaturas) na cobrança: em teste na demonstração
 const libJs = {};
 function carregarLib(nome, js, css) {
   return libJs[nome] || (libJs[nome] = new Promise((ok, erro) => {
@@ -2562,7 +2563,7 @@ function personForm(p, tipo) {
       ${lg ? `
       <div class="field"><label for="f-equipe">Equipe</label>${sel("equipe", [{ v: "", l: "—" }, ...equipesUsadas().map(e => ({ v: e, l: e }))], p.equipe || "")}</div>
       <div class="field"><label for="f-funcao">Função na equipe</label><input id="f-funcao" name="funcao" list="funcoes" value="${esc(p.funcao)}" placeholder="ex.: Chefe, Subchefe"><datalist id="funcoes"><option value="Chefe"><option value="Subchefe"></datalist></div>
-      <div class="field"><label for="f-termo">Termo LGND</label>${sel("termo", TERMO, p.termo)}</div>
+      <div class="field"><label for="f-termo">Termo LGND</label>${sel("termo", TERMO, p.termo)}${TERMO_LINK() && p.termoLink && p.termo !== "assinado" ? `<a class="hint termo-link" href="${esc(p.termoLink)}" target="_blank" rel="noopener">Abrir link do termo</a>` : ""}</div>
       <div class="field"><label for="f-atestado">Status do atestado</label>${sel("atestado", ATESTADO, p.atestado)}</div>
       <div class="field"><label for="f-dataAtestado">Previsão do atestado</label><input id="f-dataAtestado" name="dataAtestado" value="${esc(p.dataAtestado)}" placeholder="ex.: semana do dia 30/10"></div>
       ` : `
@@ -2571,7 +2572,7 @@ function personForm(p, tipo) {
       <div class="field"><label for="f-familia">Família</label>${sel("familia", [{ v: "", l: "Sem família" }, ...Array.from({ length: 12 }, (_, i) => ({ v: String(i + 1), l: "Família " + String(i + 1).padStart(2, "0") }))], p.familia ? String(p.familia) : "")}</div>
       <div class="field"><label for="f-atestado">Status do atestado</label>${sel("atestado", ATESTADO, p.atestado)}</div>
       <div class="field"><label for="f-dataAtestado">Previsão do atestado</label><input id="f-dataAtestado" name="dataAtestado" value="${esc(p.dataAtestado)}" placeholder="ex.: semana do dia 30/10"></div>
-      <div class="field"><label for="f-termo">Status do termo</label>${sel("termo", TERMO, p.termo)}</div>
+      <div class="field"><label for="f-termo">Status do termo</label>${sel("termo", TERMO, p.termo)}${TERMO_LINK() && p.termoLink && p.termo !== "assinado" ? `<a class="hint termo-link" href="${esc(p.termoLink)}" target="_blank" rel="noopener">Abrir link do termo</a>` : ""}</div>
       `}
       ${lg ? "" : `<div class="field full"><span class="lab">Confirmações</span><div class="checks">
         <label><input type="checkbox" id="f-msgGrupo" name="msgGrupo" ${p.msgGrupo ? "checked" : ""}> Mensagem do grupo enviada</label>
@@ -3298,8 +3299,11 @@ const listaE = a => a.length > 1 ? a.slice(0, -1).join(", ") + " e " + a[a.lengt
 function textoCobranca(p, tpl = msgCobranca()) {
   const first = String(p.nome || "").trim().split(/\s+/)[0] || "";
   return tpl.replace(/\{nome\}/g, first).replace(/\{adm\}/g, (ME.adm || "a equipe").split(" ")[0])
-    .replace(/\{top\}/g, topName()).replace(/\{pendencias\}/g, listaE(pendDe(p).map(k => PEND[k])));
+    .replace(/\{top\}/g, topName()).replace(/\{pendencias\}/g, listaE(pendDe(p).map(k => PEND[k])))
+    .replace(/\{link\}/g, linkTermo(p)) + (linkTermo(p) && !/\{link\}/.test(tpl) ? `\n\nLink para assinar o seu termo: ${linkTermo(p)}` : "");
 }
+// link individual do termo (vem da planilha de assinaturas): só entra na cobrança se o termo ainda falta
+const linkTermo = p => TERMO_LINK() && p.termoLink && pendDe(p).includes("termo") ? p.termoLink : "";
 const waCobrar = (p, txt) => { const n = waNumber(p.telefone); return n ? `https://wa.me/${n}?text=${encodeURIComponent(txt || textoCobranca(p))}` : ""; };
 // busca em Pendências: nome, telefone, e-mail ou ADM
 const pendBusca = p => { const q = PRECO_ESTOQUE() ? norm(S.pf.q || "").trim() : ""; if (!q) return true; const d = q.replace(/\D/g, "");
@@ -3396,7 +3400,7 @@ function vPendencias() {
   <div class="seg" role="group" aria-label="Pendência">${seg("oque", "qualquer", "Qualquer pendência")}${seg("oque", "atestado", "Atestado")}${seg("oque", "termo", "Termo")}${seg("oque", "grupo", "Grupo")}</div>
   ${rows.length ? `<section class="panel"><div class="list pend">${rows.map(p => `<div class="li pendrow">
       <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
-        <div class="pendtags">${tags(p)}${p.dataAtestado && !atOk(p) ? `<span class="hint">previsão: ${esc(p.dataAtestado)}</span>` : ""}</div>
+        <div class="pendtags">${tags(p)}${linkTermo(p) ? `<span class="chip ok" title="A cobrança já leva o link do termo">link do termo</span>` : ""}${p.dataAtestado && !atOk(p) ? `<span class="hint">previsão: ${esc(p.dataAtestado)}</span>` : ""}</div>
         ${obsLinha(p)}<small class="hint">${esc(p.adm || "Sem ADM")}${p.cobradoEm ? ` · cobrado ${esc(quando(p.cobradoEm))}` : " · ainda não cobrado"}</small></div>
       ${waNumber(p.telefone) ? `<a class="wa" href="${waCobrar(p)}" target="_blank" rel="noopener" data-cobrar="${p.id}">${ico("wa")} Cobrar</a>` : `<span class="wa off">${ico("wa")} Sem telefone</span>`}
     </div>`).join("")}</div></section>`
@@ -3416,7 +3420,7 @@ function msgForm() {
   const pag = abaPag(), chave = pag ? "adm3-msg-pagamento" : "adm3-msg-cobranca", PADRAO = pag ? MSG_PAGAMENTO : MSG_COBRANCA;
   modal(`
     <h3>${pag ? "Mensagem do boleto pendente" : "Mensagem de cobrança"}</h3>
-    <p class="hint" style="margin:0">Use <b>{nome}</b>, <b>{adm}</b>${pag ? " e <b>{top}</b>" : ", <b>{top}</b> e <b>{pendencias}</b>"}: o app troca pelo primeiro nome da pessoa, o seu nome${pag ? " e o nome do TOP" : ", o nome do TOP e o que falta"}. Fica salva neste aparelho.</p>
+    <p class="hint" style="margin:0">Use <b>{nome}</b>, <b>{adm}</b>${pag ? " e <b>{top}</b>" : `, <b>{top}</b> e <b>{pendencias}</b>${TERMO_LINK() ? " (e <b>{link}</b> para escolher onde vai o link do termo; sem ele, o link vai no final quando o termo estiver faltando)" : ""}`}: o app troca pelo primeiro nome da pessoa, o seu nome${pag ? " e o nome do TOP" : ", o nome do TOP e o que falta"}. Fica salva neste aparelho.</p>
     <div class="field"><label for="f-msg">Mensagem</label><textarea id="f-msg" name="msg" style="min-height:150px">${esc(pag ? msgPagamento() : msgCobranca())}</textarea></div>
     <div class="modal-foot"><div><button class="btn ghost" type="button" id="msgPadrao">Voltar ao padrão</button></div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
   fd => { store.set(chave, String(fd.get("msg") || "").trim() || PADRAO); closeModal(); toast("Mensagem salva"); render(); });
@@ -3708,17 +3712,20 @@ const ehAssinaturas = linhas => { const h = (linhas[0] || []).map(x => norm(Stri
 function assinaturasForm(pre) {
   modal(`
     <h3>Importar assinaturas do termo</h3>
-    <p class="hint" style="margin:0">Envie a planilha de assinaturas (.csv ou .xlsx, colunas Nome, E-mail, Status e Tipo). Só quem está como <b>Assinado</b> fica com o termo assinado no app. Quem está como Enviado não é alterado.</p>
+    <p class="hint" style="margin:0">Envie a planilha de assinaturas (.csv ou .xlsx, colunas Nome, E-mail, Status e Tipo). Só quem está como <b>Assinado</b> fica com o termo assinado no app. Quem está como Enviado não muda de status${TERMO_LINK() ? ", mas o <b>link do termo</b> de cada pessoa fica guardado para ir junto na cobrança" : ""}.</p>
     ${pre ? `<p class="hint" style="margin:0">Reconheci a planilha como <b>assinaturas do termo</b>.</p>` : ""}
     <div class="field" ${pre ? "hidden" : ""}><label for="f-ass">Planilha</label><input id="f-ass" type="file" accept=".csv,.xlsx,.xls"></div>
     <div id="assPrev" class="imp-prev"></div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="assBtn" disabled>Atualizar</button></div></div>`,
   () => {
-    if (!A || !A.marcar.length) return;
+    if (!A || !(A.marcar.length + A.links.length)) return;
     closeModal();
-    const lista = A.marcar;
-    save(async () => { for (let i = 0; i < lista.length; i += 8) await Promise.all(lista.slice(i, i + 8).map(({ p, data }) => api.update("pessoas", p.id, { termo: "assinado", ...(data ? { termoAssinadoEm: data } : {}) }))); },
-      `Termo assinado: ${lista.length} pessoa(s) atualizada(s)`);
+    const mud = new Map();
+    A.links.forEach(({ p, link }) => mud.set(p.id, { termoLink: link }));
+    A.marcar.forEach(({ p, data }) => mud.set(p.id, { ...(mud.get(p.id) || {}), termo: "assinado", ...(data ? { termoAssinadoEm: data } : {}) }));
+    const lista = [...mud.entries()];
+    save(async () => { for (let i = 0; i < lista.length; i += 8) await Promise.all(lista.slice(i, i + 8).map(([id, d]) => api.update("pessoas", id, d))); },
+      [A.marcar.length && `Termo assinado: ${A.marcar.length}`, A.links.length && `link do termo salvo: ${A.links.length}`].filter(Boolean).join(" · "));
   });
   let A = null;
   const mostrar = linhas => {
@@ -3733,12 +3740,15 @@ function assinaturasForm(pre) {
           <div><b class="num">${A.assinados}</b><span>assinados na planilha</span></div>
           <div><b class="num">${A.enviados}</b><span>só enviados (não mudam)</span></div>
           <div class="bad"><b class="num">${A.nao.length}</b><span>não achei no app</span></div>
+          ${TERMO_LINK() ? `<div class="ok"><b class="num">${A.links.length}</b><span>links do termo novos</span></div>` : ""}
         </div>
+        ${TERMO_LINK() && A.links.length ? `<p class="hint" style="margin:6px 0">O link de cada pessoa fica guardado na ficha e vai junto na mensagem quando você cobrar o termo.</p>` : ""}
         <details open><summary>Vão ficar com termo assinado (${A.marcar.length})</summary><ul class="imp-list">${A.marcar.map(({ p, n }) => li(n, ` · era ${esc((TERMO.find(t => t.v === p.termo) || {}).l || "Pendente")}${norm(p.nome) !== norm(n.nome) ? ` · no app: ${esc(p.nome)}` : ""}`)).join("") || '<li class="hint">Ninguém novo.</li>'}</ul></details>
         ${A.ja.length ? `<details><summary>Já estavam assinados no app (${A.ja.length})</summary><ul class="imp-list">${A.ja.map(x => li(x)).join("")}</ul></details>` : ""}
         ${A.nao.length ? `<details open><summary class="bad-text">Assinaram, mas não achei no app (${A.nao.length})</summary><p class="hint" style="margin:6px 0">Confira se o nome está escrito diferente no app e marque o termo na ficha.</p><ul class="imp-list">${A.nao.map(n => li(n, n.email ? " · " + esc(n.email) : "")).join("")}</ul></details>` : ""}`;
-      $("#assBtn").disabled = !A.marcar.length;
-      $("#assBtn").textContent = A.marcar.length ? `Marcar ${A.marcar.length} como assinado` : "Nada para atualizar";
+      const nL = A.links.length;
+      $("#assBtn").disabled = !(A.marcar.length + nL);
+      $("#assBtn").textContent = A.marcar.length + nL ? [A.marcar.length && `Marcar ${A.marcar.length} como assinado`, nL && `salvar ${nL} link(s)`].filter(Boolean).join(" e ") : "Nada para atualizar";
     } catch (err) { console.error(err); prev.innerHTML = `<div class="bad-text">Não consegui ler esse arquivo.</div>`; }
   };
   if (pre) mostrar(pre);
@@ -3797,16 +3807,18 @@ function avaliacoesForm(linhas) {
 function analisarAssinaturas(linhas) {
   const h = (linhas[0] || []).map(x => norm(String(x)));
   const col = re => h.findIndex(x => re.test(x));
-  const iN = col(/^nome/), iE = col(/mail/), iS = col(/^status/), iT = col(/^tipo/), iD = col(/data assinatura/);
+  const iN = col(/^nome/), iE = col(/mail/), iS = col(/^status/), iT = col(/^tipo/), iD = col(/data assinatura/), iL = col(/^link/);
   if (iN < 0 || iS < 0) return null;
   const rows = linhas.slice(1).filter(r => String(r[iN] || "").trim()).map(r => {
     const st = norm(String(r[iS] || "")), tp = norm(String(iT >= 0 ? r[iT] : ""));
     const dt = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(iD >= 0 ? r[iD] : ""));
     return { nome: String(r[iN]).trim(), email: String(iE >= 0 ? r[iE] : "").trim().toLowerCase(), telefone: "", tipo: /legend/.test(tp) ? "legendario" : "participante",
-      assinado: /assinad/.test(st), enviado: /enviad/.test(st), data: dt ? `${dt[3]}-${dt[2]}-${dt[1]}` : "" };
+      assinado: /assinad/.test(st), enviado: /enviad/.test(st), data: dt ? `${dt[3]}-${dt[2]}-${dt[1]}` : "",
+      link: iL >= 0 && /^https?:\/\//.test(String(r[iL] || "").trim()) ? String(r[iL]).trim() : "" };
   });
-  const out = { assinados: 0, enviados: 0, marcar: [], ja: [], nao: [] }, vistos = new Set();
+  const out = { assinados: 0, enviados: 0, marcar: [], ja: [], nao: [], links: [] }, vistos = new Set(), vistosL = new Set();
   rows.forEach(n => {
+    if (TERMO_LINK() && n.link) { const a = acharNoApp(n); if (a && !vistosL.has(a.p.id)) { vistosL.add(a.p.id); if (a.p.termoLink !== n.link) out.links.push({ p: a.p, link: n.link, assinado: n.assinado }); } }
     if (!n.assinado) { if (n.enviado) out.enviados++; return; }
     out.assinados++;
     // e-mail repetido entre pessoas diferentes: acharNoApp só aceita e-mail se o primeiro nome também bate

@@ -1587,3 +1587,9 @@ window.ADM_DEMO.notifs = [
   ];
   oc.forEach(([k, o]) => D.push({ col: "config", id: "ocorr-top1922-" + k, data: { ...o, nome: o.nome || nome(o.pessoaId), top: "top1922" } }));
 })();
+// links fictícios do termo (como vêm da planilha de assinaturas) para quem ainda não assinou
+(function () {
+  let k = 0;
+  window.ADM_DEMO.docs.forEach(d => { if (d.col !== "pessoas" || d.data.termo === "assinado") return;
+    d.data.termoLink = "https://app.zapsign.com.br/verificar/demo-termo-" + String(++k).padStart(4, "0"); });
+})();
