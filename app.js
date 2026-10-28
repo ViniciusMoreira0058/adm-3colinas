@@ -1133,6 +1133,30 @@ const hashTxt = t => { let h = 2166136261; for (const c of String(t)) { h ^= c.c
 const saudeToken = p => (saudeDoc(p) || {}).token || (hashTxt(p.id + "·3colinas") + hashTxt(p.nome || "")).slice(0, 12);
 const saudeLink = p => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}saude.html?t=${saudeToken(p)}`;
 const tagLink = p => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}?nfc=${saudeToken(p)}`;
+// a tag leva a ficha inteira (cifrada com o código da equipe médica) e abre em e.html, mesmo sem internet
+const nfcCodigo = () => ((S.cfgDocs || {})["nfc-codigo"] || {}).codigo || "";
+const tagDesatualizada = d => !!(d && d.tagEm && d.respondidoEm && d.respondidoEm > d.tagEm);
+function tagDados(p) {
+  const r = saudeResp(p) || {};
+  return { t: saudeToken(p), nome: r.nome || p.nome, nascimento: r.nascimento, sangue: r.sangue, peso: r.peso, altura: r.altura, plano: r.plano,
+    comorb: COMORB.map(([k], i) => r.comorb && r.comorb[k] === "sim" ? i : -1).filter(i => i >= 0),
+    alergias: r.alergias, medicacoes: r.medicacoes, cirurgias: r.cirurgias, outras: String(r.outras || "").slice(0, 160),
+    emergNome: r.emergNome, emergTel: r.emergTel, emergParent: r.emergParent, conjuge: r.conjuge, conjugeTel: r.conjugeTel,
+    top: (S.top || {}).numero || "", demo: DEMO ? 1 : "", em: new Date().toISOString().slice(0, 16) };
+}
+const tagUrl = (p, lacre) => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}e.html?t=${saudeToken(p)}#${lacre}`;
+function codigoForm() {
+  modal(`
+    <h3>Código da equipe médica</h3>
+    <p class="hint" style="margin:0">A tag guarda a ficha de saúde inteira, mas trancada com este código. Quem encostar o celular na tag sem saber o código não vê nada. A equipe médica digita o código uma vez no celular e depois lê todas as tags, até sem internet.</p>
+    <div class="field"><label for="f-cod">Código (4 a 12 letras ou números)</label><input id="f-cod" name="codigo" value="${esc(nfcCodigo())}" maxlength="12" autocomplete="off" style="font-size:22px;letter-spacing:.2em;text-transform:uppercase" required></div>
+    ${nfcCodigo() ? `<div class="banner aviso"><span>Trocar o código não muda as tags já gravadas: elas continuam abrindo com o código antigo. Para usar o novo, regrave as tags.</span></div>` : ""}
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar código</button></div></div>`, fd => {
+    const c = String(fd.get("codigo") || "").trim().toUpperCase();
+    if (!/^[A-Z0-9]{4,12}$/.test(c)) { toast("Use de 4 a 12 letras ou números."); return false; }
+    closeModal(); save(() => api.set("config", "nfc-codigo", { codigo: c, em: new Date().toISOString(), por: ME.adm || "" }), "Código salvo").then(render);
+  });
+}
 const idadeDe = d => { if (!d) return null; const n = new Date(d + "T00:00:00"), h = new Date(); let a = h.getFullYear() - n.getFullYear(); if (h < new Date(h.getFullYear(), n.getMonth(), n.getDate())) a--; return isNaN(a) ? null : a; };
 const imcDe = r => { const kg = Number(String(r.peso || "").replace(",", ".")), cm = Number(r.altura); return kg && cm ? (kg / ((cm / 100) ** 2)).toFixed(1).replace(".", ",") : ""; };
 const nada = v => !v || /^(n[aã]o|nenhum[a]?|-)\b/i.test(String(v).trim());
@@ -1167,8 +1191,8 @@ function vNfc() {
     .filter(p => !q || norm(p.nome).includes(q)).sort((a, b) => (saudeAlertas(saudeResp(b)).length - saudeAlertas(saudeResp(a)).length) || norm(a.nome).localeCompare(norm(b.nome)));
   const seg = (v, l, n) => `<button type="button" data-nfc-f="${v}" aria-pressed="${f === v}">${l} <span class="num" style="opacity:.75">${n}</span></button>`;
   return `
-  <div class="head"><div><h2>NFC 3COLINAS</h2><p>A ficha de saúde de cada participante. Ele responde pelo link, os dados caem aqui, e no check-in a equipe grava a tag NFC que vai no pescoço. Encostou o celular na tag, abre a ficha de emergência.</p></div>
-    <div class="actions"><button class="btn" type="button" data-act="nfc-ler">${ico("search")} Ler tag NFC</button>${podeEditar() ? `<button class="btn primary" type="button" data-act="nfc-seq">${ico("wa")} Enviar link para quem falta (${P.filter(p => !saudeResp(p) && waNumber(p.telefone)).length})</button>` : ""}</div></div>
+  <div class="head"><div><h2>NFC 3COLINAS</h2><p>A ficha de saúde de cada participante. Ele responde pelo link, os dados caem aqui, e no check-in a equipe grava a tag NFC que vai no pescoço. A ficha vai gravada na tag, trancada com o código da equipe médica: encostou o celular, abre a ficha de emergência, mesmo sem internet.</p></div>
+    <div class="actions">${podeEditar() ? `<button class="btn" type="button" data-act="nfc-codigo">${ico("key")} Código da equipe médica${nfcCodigo() ? "" : " (definir)"}</button>` : ""}<button class="btn" type="button" data-act="nfc-ler">${ico("search")} Ler tag NFC</button>${podeEditar() ? `<button class="btn primary" type="button" data-act="nfc-seq">${ico("wa")} Enviar link para quem falta (${P.filter(p => !saudeResp(p) && waNumber(p.telefone)).length})</button>` : ""}</div></div>
   <div class="kpis">
     <div class="kpi"><span class="lbl">Fichas respondidas</span><span class="val num">${resp.length}<small style="font-size:.5em;opacity:.7"> / ${P.length}</small></span><span class="sub">${P.length - resp.length} ainda faltam</span></div>
     <div class="kpi ${alerta.length ? "alert" : ""}"><span class="lbl">Com alerta de saúde</span><span class="val num">${alerta.length}</span><span class="sub">alergia, remédio ou comorbidade</span></div>
@@ -1185,7 +1209,7 @@ function vNfc() {
       ${nivelBadge(r)}
       <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}${p.familia ? ` <span class="tag">F.${esc(p.familia)}</span>` : ""}${r && r.sangue && r.sangue !== "Não sei" ? ` <span class="tag sangue">${esc(r.sangue)}</span>` : ""}
         <div class="pendtags">${r ? (al.length ? al.slice(0, 4).map(a => `<span class="chip bad">${esc(a)}</span>`).join("") + (al.length > 4 ? `<span class="hint">+${al.length - 4}</span>` : "") : '<span class="chip ok">Sem alerta</span>') : '<span class="chip wait">Falta responder</span>'}
-          ${d.tagEm ? '<span class="chip sent">Tag gravada</span>' : ""}</div>
+          ${tagDesatualizada(d) ? '<span class="chip wait">Ficha mudou, regravar tag</span>' : d.tagEm ? '<span class="chip sent">Tag gravada</span>' : ""}</div>
         <small class="hint">${r ? "respondida " + esc(quando(d.respondidoEm)) : d.linkEm ? "link enviado " + esc(quando(d.linkEm)) : "link ainda não enviado"}</small></div>
       <div class="actions">${r ? `<button class="btn sm" type="button" data-nfc-ficha="${p.id}">${ico("heart")} Ficha</button>${podeEditar() ? `<button class="btn sm" type="button" data-nfc-tag="${p.id}">${ico("nfc")} ${d.tagEm ? "Regravar" : "Gravar tag"}</button>` : ""}`
         : `${waNumber(p.telefone) && podeEditar() ? `<a class="wa" href="${waCobrar(p, textoLinkSaude(p))}" target="_blank" rel="noopener" data-nfc-link="${p.id}">${ico("wa")} Enviar link</a>` : ""}<button class="btn sm" type="button" data-nfc-form="${p.id}">Abrir formulário</button>`}</div>
@@ -1341,19 +1365,30 @@ function atendimentoForm(p) {
 }
 // gravar a tag: Android (Chrome) grava direto pelo navegador; iPhone precisa de um app como o NFC Tools
 function tagForm(p) {
-  const pode = "NDEFReader" in window, url = tagLink(p);
-  const marcar = () => { const d = saudeDoc(p) || {}; save(() => api.set("config", saudeId(p), { ...d, token: saudeToken(p), pessoaId: p.id, tagEm: new Date().toISOString(), tagPor: ME.adm || "" }), "Tag gravada").then(render); };
+  if (!saudeResp(p)) { toast("Essa pessoa ainda não respondeu a ficha de saúde."); return; }
+  if (!nfcCodigo()) { toast("Primeiro defina o código da equipe médica."); codigoForm(); return; }
+  const pode = "NDEFReader" in window;
+  let url = "";
+  const marcar = () => { const d = saudeDoc(p) || {}; save(() => api.set("config", saudeId(p), { ...d, token: saudeToken(p), pessoaId: p.id, tagEm: new Date().toISOString(), tagPor: ME.adm || "", tagUrl: url }), "Tag gravada").then(render); };
   modal(`
     <h3>Gravar tag NFC · ${esc(p.nome)}</h3>
-    <p class="hint" style="margin:0">A tag guarda só um link com um código. Os dados de saúde não ficam na tag: a ficha abre no app para quem está logado.</p>
-    <div class="nf-link"><code>${esc(url)}</code><button class="btn sm" type="button" id="tgCopiar">${ico("paste")} Copiar</button></div>
+    <p class="hint" style="margin:0">A tag leva a ficha de saúde que ${esc(String(p.nome).split(" ")[0])} respondeu no formulário, trancada com o código da equipe médica. Na leitura, a ficha abre direto do que está gravado na tag, mesmo sem internet.</p>
+    <div class="nf-link"><code id="tgUrl">Preparando…</code><button class="btn sm" type="button" id="tgCopiar">${ico("paste")} Copiar</button></div>
+    <span class="hint" id="tgTam"></span>
     ${pode ? `<div class="banner"><span>${ico("nfc")} Toque em <b>Gravar agora</b> e encoste a tag nas costas do celular.</span></div>`
       : `<div class="banner aviso"><span>Este aparelho não grava NFC pelo navegador (iPhone ou computador). Use o app <b>NFC Tools</b>: Escrever → Adicionar registro → URL → cole o link acima → Escrever. Depois toque em <b>Já gravei</b>.</span></div>`}
     <span class="hint" id="tgTxt"></span>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button>
-      ${pode ? `<button class="btn primary" type="button" id="tgGravar">${ico("nfc")} Gravar agora</button>` : `<button class="btn primary" type="button" id="tgJa">${ico("check")} Já gravei</button>`}
-      ${DEMO ? `<button class="btn" type="button" id="tgSim">Simular gravação</button>` : ""}</div></div>`, () => {});
-  $("#tgCopiar").onclick = () => copiarTexto(url, "Link da tag copiado");
+      ${pode ? `<button class="btn primary" type="button" id="tgGravar" disabled>${ico("nfc")} Gravar agora</button>` : `<button class="btn primary" type="button" id="tgJa" disabled>${ico("check")} Já gravei</button>`}
+      ${DEMO ? `<button class="btn" type="button" id="tgSim" disabled>Simular gravação</button>` : ""}</div></div>`, () => {});
+  NFC3.selar(tagDados(p), nfcCodigo()).then(lacre => {
+    url = tagUrl(p, lacre); const el = $("#tgUrl"); if (!el) return;
+    el.textContent = url;
+    const { n, tag } = NFC3.tagPara(url);
+    $("#tgTam").innerHTML = tag ? `Ocupa ${n} bytes: precisa de tag <b>${tag}</b> ou maior.` : `<b style="color:var(--danger,#ef4444)">Ocupa ${n} bytes, mais do que cabe numa NTAG216.</b> Encurte "Outras informações" ou medicações na ficha.`;
+    ["#tgGravar", "#tgJa", "#tgSim"].forEach(s => { const b = $(s); if (b) b.disabled = !tag; });
+  }).catch(e => { const el = $("#tgUrl"); if (el) el.textContent = "Não consegui preparar a tag: " + (e.message || e); });
+  $("#tgCopiar").onclick = () => url && copiarTexto(url, "Link da tag copiado");
   const ja = $("#tgJa"); if (ja) ja.onclick = () => { closeModal(); marcar(); };
   const sim = $("#tgSim"); if (sim) sim.onclick = () => { closeModal(); marcar(); };
   const gv = $("#tgGravar"); if (gv) gv.onclick = async () => {
@@ -1369,12 +1404,14 @@ function lerNfc() {
     <h3>Ler tag NFC</h3>
     <p class="hint" style="margin:0">${pode ? "Encoste a tag nas costas do celular." : "No iPhone, com a tela desbloqueada, é só encostar o celular na tag: aparece um aviso para abrir a ficha. No Android, use o botão abaixo."}</p>
     <span class="hint" id="lnTxt"></span>
-    ${DEMO && comTag.length ? `<div class="field"><label for="lnSim">Simular leitura (demonstração)</label><select id="lnSim">${comTag.map(p => `<option value="${p.id}">${esc(p.nome)}</option>`).join("")}</select></div>` : ""}
-    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button>${DEMO && comTag.length ? `<button class="btn" type="button" id="lnSimBtn">Simular</button>` : ""}${pode ? `<button class="btn primary" type="button" id="lnLer">${ico("nfc")} Ler agora</button>` : ""}</div></div>`, () => {});
+    ${DEMO && comTag.length ? `<p class="hint" style="margin:0">Na demonstração, escolha quem "encostou" e veja o que a equipe médica vê ao ler a tag (código da demo: <b>${esc(nfcCodigo())}</b>).</p><div class="field"><label for="lnSim">Simular leitura (demonstração)</label><select id="lnSim">${comTag.map(p => `<option value="${p.id}">${esc(p.nome)}</option>`).join("")}</select></div>` : ""}
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button>${DEMO && comTag.length ? `<button class="btn" type="button" id="lnSimBtn">Ficha no app</button><button class="btn primary" type="button" id="lnSimTag">Ler como a equipe médica</button>` : ""}${pode ? `<button class="btn primary" type="button" id="lnLer">${ico("nfc")} Ler agora</button>` : ""}</div></div>`, () => {});
   const sb = $("#lnSimBtn"); if (sb) sb.onclick = () => fichaNfc(S.P.find(p => p.id === $("#lnSim").value));
+  const st = $("#lnSimTag"); if (st) st.onclick = () => { const p = S.P.find(x => x.id === $("#lnSim").value), u = (saudeDoc(p) || {}).tagUrl;
+    if (u) window.open(u, "_blank", "noopener"); else NFC3.selar(tagDados(p), nfcCodigo()).then(l => window.open(tagUrl(p, l), "_blank", "noopener")); };
   const lb = $("#lnLer"); if (lb) lb.onclick = async () => {
     try { const r = new NDEFReader(); await r.scan(); $("#lnTxt").textContent = "Aguardando a tag…";
-      r.onreading = ev => { const rec = [...ev.message.records].find(x => x.recordType === "url"); const url = rec ? new TextDecoder().decode(rec.data) : ""; abrirPorToken((/[?&]nfc=([\w-]+)/.exec(url) || [])[1]); };
+      r.onreading = ev => { const rec = [...ev.message.records].find(x => x.recordType === "url"); const url = rec ? new TextDecoder().decode(rec.data) : ""; abrirPorToken((/[?&](?:nfc|t)=([\w-]+)/.exec(url) || [])[1]); };
     } catch (e) { $("#lnTxt").textContent = "Não consegui ler: " + (e.message || e); }
   };
 }
@@ -3850,6 +3887,7 @@ document.addEventListener("click", e => {
   if (d.nfcForm) { saudeForm(S.P.find(p => p.id === d.nfcForm)); return; }
   if (d.act === "nfc-ler") { lerNfc(); return; }
   if (d.act === "nfc-seq") { if (podeEditar()) nfcSequencia(); return; }
+  if (d.act === "nfc-codigo") { if (podeEditar()) codigoForm(); return; }
   if (d.act === "guia-ok") { store.set("adm3-guia-visto", "1"); render(); return; }
   if (d.act === "pt-responder") { posTopForm(); return; }
   if (d.act === "pt-licoes") { licoesForm(); return; }

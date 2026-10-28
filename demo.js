@@ -1659,3 +1659,7 @@ window.ADM_DEMO.notifs = [
   D.push({ col: "config", id: "saude-ex07", data: { pessoaId: "ex07", linkEm: h(1200), top: "top1922" } });
   D.push({ col: "config", id: "ocorr-top1922-n1", data: { pessoaId: "ex02", nome: nomeDe("ex02").nome, tipo: "Atendimento médico", medico: true, grav: "moderada", em: h(140), desc: "Tontura e enjoo na subida, suando frio. Diabético: glicemia medida no local.", prov: "Hidratação, 1 sachê de glicose e descanso de 15 min. Liberado para a pista.", sinais: { pa: "100/60", fc: "112", fr: "22", sat: "96", temp: "36,4", glasgow: "15", hgt: "64" }, hakuna: "Seguir com acompanhamento até o camp. Medir glicemia de novo no jantar.", local: "Trecho Desembarque → 2º Revista", lat: -20.2300, lng: -47.3032, status: "resolvida", resolvidaEm: h(125), resolvidaPor: "Thalisson", atendido: "Thalisson", por: "Thalisson", top: "top1922" } });
 })();
+// código da equipe médica na demonstração (tranca a ficha gravada na tag)
+window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "1288", em: new Date().toISOString(), por: "Vinicius" } });
+// uma ficha alterada depois de gravar a tag, para mostrar o aviso "regravar"
+(function () { const d = window.ADM_DEMO.docs.find(x => x.id === "saude-ex03"); if (d) d.data.respondidoEm = new Date(Date.now() - 20 * 6e4).toISOString(); })();
