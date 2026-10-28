@@ -1195,6 +1195,15 @@ const simNao = v => v ? "Sim" : "Não";
 const corStatus = t => /^(confirmado|assinado|sim|ok|pronto|entregue|ativa|pago)/i.test(t) ? PDF_COR.VERDE
   : /^(zerado|não assinou|cancelad|bloquead)/i.test(t) ? PDF_COR.VERMELHO
   : /^(pendente|baixo|aguardando|msg enviada|em andamento|a fazer|não|conferir|boleto)/i.test(t) ? PDF_COR.AMBAR : null;
+// versão "só nomes": fica o # e a coluna do nome (marcada com nome: true ou a primeira em negrito), em retrato
+function pdfSimples(sp) {
+  const ci = Math.max(0, sp.colunas.findIndex(c => c.nome)) || sp.colunas.findIndex(c => c.bold);
+  const k = ci < 0 ? 0 : ci, so = ls => ls.map((l, i) => [String(i + 1), l[k]]);
+  const total = sp.linhas ? sp.linhas.length : sp.secoes.reduce((a, x) => a + x.linhas.length, 0);
+  return { ...sp, titulo: sp.titulo, orient: "portrait", arquivo: (sp.arquivo || sp.titulo) + " nomes", resumo: [["Total", total]],
+    colunas: [{ t: "#", w: 12, al: "center", cinza: true }, { t: sp.colunas[k].t, bold: true }],
+    linhas: sp.linhas && so(sp.linhas), secoes: sp.secoes && sp.secoes.map(x => ({ ...x, linhas: so(x.linhas) })) };
+}
 async function gerarListaPdf(sp, wa) {
   const jsPDF = await carregarPdf();
   const C = PDF_COR, retrato = sp.orient !== "landscape";
@@ -1286,9 +1295,9 @@ function pdfDaTela() {
     return { titulo: lg ? "Legendários" : "Senderistas", sub: `${topName()} · ${filtro}`, legenda: `${rows.length} ${lg ? "legendário(s)" : "senderista(s)"} · ${filtro}`, orient: "landscape",
       resumo: [["Na lista", rows.length], ["Atestado OK", rows.filter(p => p.atestado === "confirmado").length], ["Termo OK", rows.filter(p => p.termo === "assinado").length], ...(lg ? [] : [["+40", rows.filter(is40).length], ["No grupo", rows.filter(p => p.noGrupo).length]])],
       colunas: lg ? [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Telefone", w: 34 }, { t: "Equipe", w: 34 }, { t: "Atestado", w: 26, status: true }, { t: "Termo", w: 26, status: true }, { t: "Inscrição", w: 28, status: true }, { t: "Responsável", w: 40, cinza: true }]
-        : [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Telefone", w: 32 }, { t: "Cidade", w: 28 }, { t: "Atestado", w: 24, status: true }, { t: "Termo", w: 24, status: true }, { t: "Grupo", w: 15, al: "center", status: true }, { t: "NFC", w: 13, al: "center", status: true }, { t: "Fam.", w: 13, al: "center" }, { t: "Responsável", w: 36, cinza: true }],
+        : [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true, nome: true }, { t: "Obs.", w: 26, cinza: true }, { t: "Telefone", w: 32 }, { t: "Cidade", w: 26 }, { t: "Atestado", w: 23, status: true }, { t: "Termo", w: 23, status: true }, { t: "Grupo", w: 14, al: "center", status: true }, { t: "NFC", w: 12, al: "center", status: true }, { t: "Fam.", w: 12, al: "center" }, { t: "Responsável", w: 32, cinza: true }],
       linhas: rows.map((p, i) => n(i, lg ? [p.nome, p.telefone, p.equipe, opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, insc(p) || "Ativa", respTxt(p)]
-        : [p.nome + (is40(p) ? " (+40)" : "") + (insc(p) ? " · " + insc(p) : ""), p.telefone, p.cidade, opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, simNao(p.noGrupo), simNao(p.nfc), p.familia ? String(p.familia).padStart(2, "0") : "", respTxt(p)])) };
+        : [p.nome, [is40(p) ? "+40" : "", insc(p)].filter(Boolean).join(" · "), p.telefone, p.cidade, opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, simNao(p.noGrupo), simNao(p.nfc), p.familia ? String(p.familia).padStart(2, "0") : "", respTxt(p)])) };
   }
   if (v === "pendencias") {
     const quem = { participante: "Senderistas", legendario: "Legendários", todos: "Senderistas e legendários" }[S.pf.quem];
@@ -1335,7 +1344,7 @@ function pdfDaTela() {
   if (v === "pista") {
     const dias = [...S.pista].sort((a, b) => (a.ordem || 0) - (b.ordem || 0)), tot = stats().pistaM;
     const km = m => (m / 1000).toFixed(2).replace(".", ",") + " km";
-    return { titulo: "KM da pista", legenda: `Pista total: ${km(tot)} (${fmtNum(tot)} m)`,
+    return { semSimples: true, titulo: "KM da pista", legenda: `Pista total: ${km(tot)} (${fmtNum(tot)} m)`,
       resumo: [["Pista total", km(tot)], ...dias.slice(0, 3).map(d => [d.dia, km((d.trechos || []).reduce((a, x) => a + (Number(x.m) || 0), 0))])],
       colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "De", bold: true }, { t: "Para", bold: true }, { t: "Metros", w: 24, al: "right" }, { t: "Tempo", w: 30, cinza: true }],
       secoes: dias.map(d => { const tr = d.trechos || []; return { titulo: `${d.dia} · ${fmtNum(tr.reduce((a, x) => a + (Number(x.m) || 0), 0))} m`, linhas: tr.map((x, i) => n(i, [x.de, x.para, fmtNum(x.m) + " m", x.tempo])) }; }) };
@@ -1367,14 +1376,14 @@ function pdfDaTela() {
     const rows = histFiltrado(), h = S.hf, filtro = filtroTxt([h.quem, h.aba, h.acao, h.q && `busca "${h.q}"`]);
     const dt = iso => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
     const mud = x => x.mudancas ? Object.entries(x.mudancas).filter(([k]) => !IGNORAR.includes(k)).map(([k, [a, b]]) => `${CAMPOS[k] || k}: ${fmtValor(k, a)} → ${fmtValor(k, b)}`).join("\n") : "";
-    return { titulo: "Histórico", sub: `Alterações no app · ${filtro}`, legenda: `${rows.length} alteração(ões) · ${filtro}`, orient: "landscape",
+    return { semSimples: true, titulo: "Histórico", sub: `Alterações no app · ${filtro}`, legenda: `${rows.length} alteração(ões) · ${filtro}`, orient: "landscape",
       resumo: [["Alterações", rows.length], ["Pessoas", new Set(rows.map(x => x.quem)).size]],
       colunas: [{ t: "Quando", w: 26, cinza: true }, { t: "Quem", w: 36, bold: true }, { t: "Ação", w: 18 }, { t: "Aba", w: 26 }, { t: "Registro", w: 50 }, { t: "O que mudou" }],
       linhas: rows.slice(0, 1500).map(x => [dt(x.em), x.quem, x.acao, x.aba, x.nome || x.doc_id, mud(x)]) };
   }
   if (v === "notificacoes") {
     const L = notifsVisiveis().map(x => ({ n: x, t: notifTexto(x) })).filter(o => o.t);
-    return { titulo: "Notificações", sub: `Últimos ${NOTIF_DIAS} dias`, legenda: `${L.length} notificação(ões)`,
+    return { semSimples: true, titulo: "Notificações", sub: `Últimos ${NOTIF_DIAS} dias`, legenda: `${L.length} notificação(ões)`,
       resumo: [["Notificações", L.length]],
       colunas: [{ t: "Quando", w: 26, cinza: true }, { t: "Quem / título", w: 50, bold: true }, { t: "O que aconteceu" }],
       linhas: L.map(o => [quando(o.n.em), o.t.t, o.t.c]) };
@@ -1382,7 +1391,7 @@ function pdfDaTela() {
   if (v === "painel") {
     const s = stats(), pins = pinsTodos(), kits = topKits(), meta = S.config.metaMRE || 110;
     const L = (a, b, c) => [a, String(b), c];
-    return { titulo: "Dashboard", sub: `Resumo do ${topName()}`, legenda: "Números do momento em que o PDF foi gerado",
+    return { semSimples: true, titulo: "Dashboard", sub: `Resumo do ${topName()}`, legenda: "Números do momento em que o PDF foi gerado",
       resumo: [["Senderistas", s.n], ["Legendários", s.lg.length], ["Checklist", pct(s.tDone, s.tTotal) + "%"]],
       colunas: [{ t: "Indicador", bold: true }, { t: "Valor", w: 30, al: "center" }, { t: "Detalhe", w: 80, cinza: true }],
       secoes: [
@@ -1402,15 +1411,23 @@ function pdfTelaForm() {
   modal(`
     <h3>Exportar PDF · ${esc(sp.titulo)}</h3>
     <p style="margin:0">${esc(sp.legenda || "")}</p>
+    ${sp.semSimples ? "" : `<div class="seg" role="group" aria-label="Tipo de PDF" id="pdfTipo"><button type="button" data-t="nomes" aria-pressed="false">Só nomes</button><button type="button" data-t="completo" aria-pressed="true">Completo</button></div>
+    <p class="hint" style="margin:0" id="pdfTipoTxt"></p>`}
     <p class="hint" style="margin:0">O PDF sai com a lista do jeito que está na tela${sp.linhas ? " (filtro e busca)" : ""}, ${qtd} linha(s), com o seu nome como ADM responsável. Dá para baixar ou mandar direto no WhatsApp.</p>
     <div class="modal-foot"><button class="btn" type="button" id="pdfWa">${ico("wa")} Enviar no WhatsApp</button><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="pdfBtn">${ico("upload")} Gerar PDF</button></div></div>`,
   () => ir(false));
   async function ir(wa) {
     const b = wa ? $("#pdfWa") : $("#pdfBtn"); b.disabled = true; b.textContent = "Gerando…";
-    try { await gerarListaPdf(sp, wa); closeModal(); }
+    try { await gerarListaPdf(tipo === "nomes" ? pdfSimples(sp) : sp, wa); closeModal(); }
     catch (e) { console.error(e); toast(erroAmigavel(e)); b.disabled = false; b.textContent = "Tentar de novo"; }
   }
   $("#pdfWa").onclick = () => ir(true);
+  let tipo = sp.semSimples ? "completo" : store.get("adm3-pdf-tipo") || "completo";
+  const seg = $("#pdfTipo"), txt = $("#pdfTipoTxt");
+  const pinta = () => { if (!seg) return; seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === tipo));
+    txt.textContent = tipo === "nomes" ? "Só nomes: lista simples numerada, só com o nome de cada um." : "Completo: com telefone, status e todas as colunas da tela."; };
+  if (seg) seg.onclick = e => { const b = e.target.closest("button"); if (!b) return; tipo = b.dataset.t; store.set("adm3-pdf-tipo", tipo); pinta(); };
+  pinta();
 }
 const PDF_TELAS = ["painel", "participantes", "legendarios", "pendencias", "familias", "checklist", "estoque", "pista", "pins", "tops", "usuarios", "historico", "notificacoes"];
 // coloca o botão "Exportar PDF" no topo da página (cronograma e consagração já têm o deles)

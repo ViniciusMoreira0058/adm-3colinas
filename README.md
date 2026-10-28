@@ -74,4 +74,4 @@ A página **Notificações** (sininho no alto, com o número de avisos novos) gu
 
 ## Exportar PDF
 
-As páginas com lista (Dashboard, Senderistas, Legendários, Pendências, Famílias, Checklist, Estoque, Pista, Pins, Tops, Usuários, Histórico e Notificações) têm o botão **Exportar PDF**. O PDF sai no visual do cronograma, com a lista do jeito que está na tela (filtro e busca) e o nome de quem exportou; dá para baixar ou mandar no WhatsApp. Cronograma e Consagração continuam com o PDF próprio.
+As páginas com lista (Dashboard, Senderistas, Legendários, Pendências, Famílias, Checklist, Estoque, Pista, Pins, Tops, Usuários, Histórico e Notificações) têm o botão **Exportar PDF**, com duas opções: **Só nomes** (lista simples numerada) ou **Completo**. O PDF sai no visual do cronograma, com a lista do jeito que está na tela (filtro e busca) e o nome de quem exportou; dá para baixar ou mandar no WhatsApp. Cronograma e Consagração continuam com o PDF próprio.
