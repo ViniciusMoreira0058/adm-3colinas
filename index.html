@@ -783,6 +783,50 @@ body.org .head p { max-width: 70ch; }
 .guia-card .linkbtn { padding-left: 0; }
 .guia-card .guia-sub { margin: 0 0 6px; font-weight: 700; }
 .guia-card ul { margin: 0 0 8px; padding-left: 18px; color: var(--muted); } .guia-card li { margin-bottom: 4px; }
+/* ícone dos avisos (banner) sempre pequeno, também no computador */
+.banner > span > svg { width: 16px; height: 16px; vertical-align: -3px; color: var(--accent); flex: none; }
+/* Visual 2 (demo): telas vazias com ícone */
+body.d2 .empty.e2 { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 26px 16px; margin: 4px 0; border: 1px dashed var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface2) 55%, transparent); font-size: 15px; line-height: 1.45; }
+body.d2 .empty.e2 .e2-t { max-width: 46ch; }
+body.d2 .panel > .empty.e2:only-child, body.d2 section.panel > .empty.e2:last-child:nth-child(2) { border: 0; background: none; margin: 0; }
+body.d2 .e2-ic { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+body.d2 .e2-ic svg { width: 22px; height: 22px; }
+body.d2 .empty.e2.ok { border-style: solid; border-color: color-mix(in srgb, #46c486 35%, transparent); }
+body.d2 .empty.e2.ok .e2-ic { background: rgba(70,196,134,.16); color: #46c486; }
+body.d2 .empty.e2.busca .e2-ic { background: var(--surface2); color: var(--muted); }
+/* Visual 2 (demo): esqueleto enquanto carrega */
+.sk { display: block; height: 12px; border-radius: 6px; margin: 6px 0; background: linear-gradient(90deg, var(--surface2) 0%, color-mix(in srgb, var(--surface2) 55%, var(--fg) 12%) 50%, var(--surface2) 100%); background-size: 200% 100%; }
+@media (prefers-reduced-motion: no-preference) { .sk { animation: sk 1.3s ease-in-out infinite; } @keyframes sk { from { background-position: 100% 0; } to { background-position: -100% 0; } } }
+.sk-eb { width: 90px; height: 10px; } .sk-h { width: min(320px, 70%); height: 30px; border-radius: 8px; } .sk-p { width: min(520px, 90%); }
+.sk-sm { height: 9px; } .sk-big { width: 40%; height: 34px; border-radius: 8px; margin: 10px 0; }
+.sk-li { display: flex; gap: 12px; align-items: center; padding: 12px 4px; border-bottom: 1px solid var(--line); }
+.sk-li:last-child { border-bottom: 0; } .sk-li > div { flex: 1; }
+.sk-av { width: 38px; height: 38px; border-radius: 50%; flex: none; margin: 0; }
+/* Visual 2 (demo): computador */
+@media (min-width: 1024px) {
+  body.d2 #menuClose { display: none; }
+  body.d2 .mtop .avatar, body.d2 .mtop .appname { display: none; }
+  body.d2 .mtop-title b { font-size: 22px; }
+  body.d2 .backbtn span { display: none; }
+  body.d2 .nav button { padding: 10px 12px; white-space: nowrap; }
+  body.d2 .side .brand h1, body.d2 .nav-grp { white-space: nowrap; }
+  body.d2 .nav button:hover { transform: translateX(2px); }
+  body.d2 #view, body.d2 .mtop { max-width: 1480px; margin-left: auto; margin-right: auto; }
+  body.d2 .kpis { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  body.d2 .modal { width: min(760px, calc(100vw - 48px)); }
+  body.d2 tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  /* menu recolhido vira uma faixa só de ícones, em vez de sumir */
+  body.d2 .app.side-off .side { transform: none; visibility: visible; box-shadow: none; width: 76px; padding-inline: 8px; overflow-x: hidden; }
+  body.d2 .app.side-off .main { margin-left: 76px; }
+  body.d2 .app.side-off .side .brand > div, body.d2 .app.side-off .side-foot, body.d2 .app.side-off .nav button > span { display: none; }
+  body.d2 .app.side-off .side .brand { justify-content: center; } body.d2 .app.side-off .side-logo { width: 44px; }
+  body.d2 .app.side-off .side-head { justify-content: center; }
+  body.d2 .app.side-off .nav button { justify-content: center; padding: 11px 0; position: relative; }
+  body.d2 .app.side-off .nav button svg { width: 21px; height: 21px; }
+  body.d2 .app.side-off .nav-grp { font-size: 0; height: 1px; background: var(--line); margin: 10px 8px; opacity: 1; }
+  body.d2 .app.side-off .nav-grp:first-child { display: none; }
+}
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) { body.d2 .side { transition: width .22s ease, transform .22s ease; } body.d2 .nav button { transition: transform .12s ease, background .12s; } }
 /* NFC 3COLINAS */
 .nfc-row { display: flex; align-items: center; gap: 12px; }
 .nfc-row .actions { flex-wrap: wrap; justify-content: flex-end; }

@@ -255,9 +255,10 @@ function renderNav() {
   const online = onlineAdms().length;
   counts.usuarios = online ? `${online} on` : null;
   const novas = ME.acesso ? notifNovas() : 0;
-  const navBtn = v => `<button type="button" data-go="${v.id}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : v.id === "importacao" && impFaltam() ? `<span class="badge num">${impFaltam()}</span>` : ""}</button>`;
+  const navBtn = v => `<button type="button" data-go="${v.id}" title="${esc(v.l)}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : v.id === "importacao" && impFaltam() ? `<span class="badge num">${impFaltam()}</span>` : ""}</button>`;
   const vis = VIEWS.filter(v => canSee(v) && (!v.all || v.menu));
   document.body.classList.toggle("org", ORG());
+  document.body.classList.toggle("d2", D2());
   $("#nav").innerHTML = !ORG() ? vis.map(navBtn).join("")
     : MENU_GRUPOS.map(([g, ids]) => { const b = vis.filter(v => ids.includes(v.id)); return b.length ? (g ? `<div class="nav-grp">${g}</div>` : "") + b.map(navBtn).join("") : ""; }).join("")
       + vis.filter(v => !MENU_GRUPOS.some(([, ids]) => ids.includes(v.id))).map(navBtn).join("");
@@ -1119,6 +1120,26 @@ function vGuia() {
    Dados em config/saude-<pessoaId> {token, r:{...respostas}, respondidoEm, tagEm, tagPor}. A tag guarda só um link com o código (token),
    nunca os dados: a ficha abre no app para quem está logado. Atendimento vira uma ocorrência (tipo "Atendimento médico") com sinais vitais. */
 const NFC = () => DEMO;
+/* Visual 2 (só na demo por enquanto): telas de carregamento com esqueleto, telas vazias com ícone e versão de computador mais larga */
+const D2 = () => DEMO;
+// o que cada tela precisa já ter carregado para aparecer (enquanto não chega, mostra o esqueleto)
+const PRECISA = { painel: ["pessoas", "tarefas", "estoque"], participantes: ["pessoas"], legendarios: ["pessoas"], pendencias: ["pessoas"], nfc: ["pessoas", "config"],
+  familias: ["pessoas"], equipes: ["pessoas"], consagracao: ["pessoas"], checklist: ["tarefas"], estoque: ["estoque"], pista: ["pista"], aovivo: ["pista", "config"],
+  ocorrencias: ["config"], cronograma: ["config"], pins: ["config"], postop: ["config"], importacao: ["config"] };
+const carregando = v => (PRECISA[v] || []).some(c => !S.loaded[c]);
+function esqueleto(v) {
+  const l = n => Array.from({ length: n }, (_, i) => `<div class="sk-li"><i class="sk sk-av"></i><div><i class="sk" style="width:${[62, 48, 70, 55, 40][i % 5]}%"></i><i class="sk sk-sm" style="width:${[35, 28, 42, 30, 25][i % 5]}%"></i></div></div>`).join("");
+  return `<div class="sk-wrap" aria-busy="true" aria-label="Carregando">
+    <div class="head"><div><i class="sk sk-eb"></i><i class="sk sk-h"></i><i class="sk sk-p"></i></div></div>
+    <div class="kpis">${'<div class="kpi"><i class="sk sk-sm" style="width:50%"></i><i class="sk sk-big"></i><i class="sk sk-sm" style="width:70%"></i></div>'.repeat(4)}</div>
+    <section class="panel">${l(v === "painel" ? 4 : 6)}</section></div>`;
+}
+// telas vazias: ícone, texto centralizado e cor de "tudo certo" quando a mensagem é boa
+const VAZIO_OK = /em dia|bom trabalho|nada pendente|nenhuma pend|todas as suas|todo mundo|👏/i, VAZIO_BUSCA = /nenhum resultado|nada encontrado|neste filtro|para esse filtro/i;
+const vazios = html => html.replace(/<div class="empty">([\s\S]*?)<\/div>/g, (m, txt) => {
+  const ok = VAZIO_OK.test(txt), busca = !ok && VAZIO_BUSCA.test(txt);
+  return `<div class="empty e2${ok ? " ok" : busca ? " busca" : ""}"><span class="e2-ic">${ico(ok ? "check" : busca ? "search" : "box")}</span><span class="e2-t">${txt}</span></div>`;
+});
 const COMORB = [["bariatrico", "Bariátrico"], ["diabetico", "Diabético"], ["convulsoes", "Tem convulsões"], ["desmaios", "Tem desmaios"],
   ["alimentares", "Prob. alimentares"], ["depressao", "Tem depressão"], ["psiquiatrico", "Cuidados psiquiátricos"], ["respiratorio", "Prob. respiratórios"],
   ["musculo", "Prob. musculoesqueléticos"], ["cardiaco", "Cardíaco"], ["renal", "Problemas renais"], ["morteSubita", "Morte súbita na família"],
@@ -2525,7 +2546,7 @@ function pdfTelaForm() {
 const PDF_TELAS = ["painel", "participantes", "legendarios", "equipes", "pendencias", "familias", "checklist", "estoque", "pista", "pins", "tops", "usuarios", "historico", "notificacoes"];
 // coloca o botão "Exportar PDF" no topo da página (cronograma e consagração já têm o deles)
 function botaoPdf() {
-  if (!ME.acesso || !PDF_TELAS.includes(S.view) || (S.view === "usuarios" && S.usrAba === "notif")) return;
+  if (!ME.acesso || $("#view .sk-wrap") || !PDF_TELAS.includes(S.view) || (S.view === "usuarios" && S.usrAba === "notif")) return;
   const head = $("#view .head") || $("#view .hero-text"); if (!head || head.querySelector("[data-act=pdf-tela]")) return;
   let act = head.querySelector(":scope > .actions");
   if (!act) { act = document.createElement("div"); act.className = "actions"; head.appendChild(act); }
@@ -3260,6 +3281,7 @@ function render() {
     : v === "nfc" ? vNfc()
     : v === "guia" ? vGuia()
     : vPista());
+  if (D2()) { if (carregando(v)) html = faixa + other + esqueleto(v); else html = vazios(html); }
   // padrão das telas: o nome do grupo do menu aparece em cima do título de cada tela
   if (ORG()) { const g = (MENU_GRUPOS.find(([, ids]) => ids.includes(v)) || [])[0]; if (g) html = html.replace('<div class="head"><div><h2>', `<div class="head"><div><span class="eyebrow">${g}</span><h2>`); }
   const view = $("#view");
@@ -5172,9 +5194,10 @@ function conectarDados() {
     S.loaded[col] = true; render();
     if (S.loaded.pessoas && S.loaded.tops) hideSplash();
   }, e => { console.error(e); toast("Não foi possível carregar os dados. " + erroAmigavel(e)); hideSplash(); });
-  ["pessoas", "tarefas", "estoque", "pista", "tops"].forEach(sub);
+  if (DEMO && D2()) { ["pessoas", "tops"].forEach(sub); setTimeout(() => ["tarefas", "estoque", "pista"].forEach(sub), Math.max(0, 2800 - (Date.now() - splashStart)) + 1400); }   // demonstração: mostra o esqueleto de carregamento por um instante
+  else ["pessoas", "tarefas", "estoque", "pista", "tops"].forEach(sub);
   db.collection("config").onSnapshot(snap => {
-    S.cfgDocs = Object.fromEntries(snap.docs.map(d => [d.id, d.data()]));
+    S.cfgDocs = Object.fromEntries(snap.docs.map(d => [d.id, d.data()])); S.loaded.config = true;
     // cria a ficha de horários do TOP enquanto tem internet: assim, sem internet, cada ADM só acrescenta o seu horário (não sobrescreve o dos outros)
     const ficha = podeEditar() && ME.id ? cronoDocId(eu()) : null;
     S.cronoCriando = S.cronoCriando || new Set();
