@@ -183,7 +183,12 @@ const NIVEIS = [
   { v: "edita", l: "Edita as abas escolhidas", d: "Vê e altera só as abas marcadas abaixo." },
   { v: "leitura", l: "Somente leitura", d: "Vê as abas marcadas abaixo, sem poder alterar nada." },
 ];
-const ABAS = () => VIEWS.filter(v => !v.owner && !v.need && !v.all && !v.org && v.id !== "painel" && (!v.demo || DEMO));
+// todas as páginas podem ser liberadas por usuário (menos Dashboard, que todos veem, e Usuários/Histórico, que são só do dono)
+const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && (!v.demo || DEMO) && (!v.org || ORG()));
+// "_v2" marca o cadastro salvo já com a escolha página por página; cadastros antigos seguem a regra antiga (página que usa dados de outra aparece junto)
+const ABA_V2 = "_v2";
+const temAba = (abas, v) => { abas = abas || []; const base = !v.need || v.need.some(a => abas.includes(a));
+  return v.need && !abas.includes(ABA_V2) ? base : abas.includes(v.id) && base; };
 const precisaLogin = () => !ME.acesso;
 const canSee = v => {
   if (ORG()) v = VIEWS.find(x => x.id === v.id) || v;   // {id} sozinho também respeita need/owner da aba
@@ -193,8 +198,7 @@ const canSee = v => {
   if (S.isOwner || (VIEWS.find(x => x.id === v.id) || v).all) return true;
   if (v.owner) return false;
   if (v.id === "painel" || ME.acesso.nivel === "total") return true;
-  if (v.need) return v.need.some(a => (ME.acesso.abas || []).includes(a));   // aba que usa os dados de outras
-  return (ME.acesso.abas || []).includes(v.id);
+  return temAba(ME.acesso.abas, v);   // página que usa dados de outra (ex.: Pendências) também precisa de Senderistas ou Legendários
 };
 const podeEditar = () => S.isOwner || (!!ME.acesso && ME.acesso.nivel !== "leitura");
 const podeTops = () => S.isOwner || (!!ME.acesso && ME.acesso.nivel === "total");
@@ -2020,7 +2024,7 @@ function pdfDaTela() {
       linhas: list.map(t => { const s = topStats(t.id); return [t.nome, t.status === "finalizado" ? "Finalizado" : "Em andamento", t.local, t.inicio ? fmtDate(t.inicio) + (t.fim ? " a " + fmtDate(t.fim) : "") : "", s.n, s.at, s.te, s.lg]; }) };
   }
   if (v === "usuarios") {
-    const nivel = e => e.dono ? "Dono · acesso total" : e.ativo === false ? "Bloqueado" : e.nivel === "total" ? "Acesso total" : (e.nivel === "leitura" ? "Somente leitura: " : "Edita: ") + (ABAS().filter(x => (e.abas || []).includes(x.id)).map(x => x.l).join(", ") || "só o Dashboard");
+    const nivel = e => e.dono ? "Dono · acesso total" : e.ativo === false ? "Bloqueado" : e.nivel === "total" ? "Acesso total" : (e.nivel === "leitura" ? "Somente leitura: " : "Edita: ") + (ABAS().filter(x => temAba(e.abas, x)).map(x => x.l).join(", ") || "só o Dashboard");
     const rows = [...(S.equipe || [])].sort((a, b) => (b.dono ? 1 : 0) - (a.dono ? 1 : 0) || norm(a.nome).localeCompare(norm(b.nome)));
     return { titulo: "Usuários", sub: "Equipe ADM com acesso ao app", legenda: `${rows.length} usuário(s) cadastrado(s)`, orient: "landscape",
       resumo: [["Cadastrados", rows.length], ["Com acesso", rows.filter(e => e.ativo !== false).length], ["Sem senha", rows.filter(e => !e.user_id && e.ativo !== false).length]],
@@ -2637,7 +2641,7 @@ function nivelTxt(e) {
   if (e.dono) return `<span class="chip ok">Dono · acesso total</span>`;
   if (e.ativo === false) return `<span class="chip bad">Bloqueado</span>`;
   if (e.nivel === "total") return `<span class="chip ok">Acesso total</span>`;
-  const abas = ABAS().filter(v => (e.abas || []).includes(v.id)).map(v => v.l);
+  const abas = ABAS().filter(v => temAba(e.abas, v)).map(v => v.l);
   return `<span class="chip ${e.nivel === "leitura" ? "" : "sent"}">${e.nivel === "leitura" ? "Somente leitura" : "Edita"}</span><div class="hint" style="font-size:12px;margin-top:3px">${esc(abas.length ? "Dashboard, " + abas.join(", ") : "só o Dashboard")}</div>`;
 }
 function vUsuarios() {
@@ -2679,7 +2683,7 @@ function vUsuarios() {
 const isEmail = v => /^[^@\s]+@[^@\s]+\.[a-z0-9-]{2,}$/i.test(v);
 function admCadForm(e) {
   const novo = !e;
-  e = e || { funcao: "ADM", ativo: true, nome: "", email: "", nivel: "edita", abas: ABAS().map(v => v.id) };
+  e = e || { funcao: "ADM", ativo: true, nome: "", email: "", nivel: "edita", abas: [...ABAS().map(v => v.id), ABA_V2] };
   const dono = !!e.dono;
   modal(`
     <h3>${novo ? "Cadastrar usuário" : "Editar " + esc(e.nome)}</h3>
@@ -2690,7 +2694,8 @@ function admCadForm(e) {
       <div class="field"><label for="f-afun">Função</label>${sel("funcao", FUNCOES.map(x => ({ v: x, l: x })), e.funcao || "ADM")}</div>
       ${dono ? `<div class="field full"><p class="hint" style="margin:0">Esta é a conta do dono: sempre tem acesso total e não pode ser bloqueada.</p></div>` : `
       <div class="field full"><span class="lab">O que pode acessar</span><div class="nivel-opts">${NIVEIS.map(n => `<label><input type="radio" name="nivel" value="${n.v}" ${e.nivel === n.v ? "checked" : ""}><span>${n.l}<small>${n.d}</small></span></label>`).join("")}</div></div>
-      <div class="field full"><span class="lab">Abas liberadas (o Dashboard sempre aparece)</span><div class="abas ${e.nivel === "total" ? "off" : ""}" id="abasBox">${ABAS().map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || (e.abas || []).includes(v.id) ? "checked" : ""}> ${v.l}</label>`).join("")}</div></div>`}
+      <div class="field full"><span class="lab">Páginas que pode ver (o Dashboard sempre aparece)</span><div class="abas ${e.nivel === "total" ? "off" : ""}" id="abasBox">${MENU_GRUPOS.map(([g, ids]) => { const vs = ABAS().filter(v => ids.includes(v.id)); return vs.length ? `<div class="abas-grp">${g}</div>` + vs.map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("") : ""; }).join("")}${ABAS().filter(v => !MENU_GRUPOS.some(([, ids]) => ids.includes(v.id))).map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("")}</div>
+        <p class="hint" style="margin:6px 0 0">Equipes LGND, Pendências, Ao vivo, Ocorrências e Importação do dia usam os dados de Senderistas, Legendários ou Cronograma: marque também a página de onde vêm os dados. Usuários e Histórico são só seus.</p></div>`}
       <div class="field full"><label for="f-aobs">Observações</label><input id="f-aobs" name="obs" value="${esc(e.obs)}"></div>
       ${dono ? "" : `<div class="field full"><div class="checks"><label><input type="checkbox" id="f-aativo" name="ativo" ${e.ativo !== false ? "checked" : ""}> Acesso liberado (desmarque para bloquear a entrada)</label></div></div>`}
       ${!novo && e.email && !e.user_id ? `<p class="hint field full" style="margin:0">${esc(e.nome.split(" ")[0])} ainda não criou a senha. <button class="link" type="button" id="reenviar" style="color:var(--accent);background:none;border:0;padding:0;font-weight:700">Enviar o convite de novo</button></p>` : ""}
@@ -2706,7 +2711,7 @@ function admCadForm(e) {
     if (S.equipe.some(x => x.email === email && x.id !== e.id)) { err(`O e-mail ${email} já está cadastrado para outra pessoa.`); $("#f-aemail").focus(); return; }
     const nivel = dono ? "total" : (fd.get("nivel") || "edita");
     const row = { nome, email, telefone: String(fd.get("telefone") || "").trim(), funcao: fd.get("funcao"), obs: String(fd.get("obs") || "").trim(),
-      nivel, abas: nivel === "total" ? ABAS().map(v => v.id) : fd.getAll("abas"), ativo: dono ? true : fd.get("ativo") === "on" };
+      nivel, abas: [...(nivel === "total" ? ABAS().map(v => v.id) : fd.getAll("abas")), ABA_V2], ativo: dono ? true : fd.get("ativo") === "on" };
     if (!novo && e.email && e.email !== email && e.user_id && !confirm(`Trocar o e-mail desliga o login atual de ${nome}. A pessoa vai precisar criar a senha de novo com o e-mail novo. Continuar?`)) return;
     closeModal();
     try {
@@ -2728,7 +2733,7 @@ function admCadForm(e) {
 const APP_URL = location.origin + location.pathname.replace(/index\.html$/, "");
 function conviteModal(e) {
   const nivel = e.nivel, abas = e.abas || [];
-  const oq = nivel === "total" ? "acesso total" : (nivel === "leitura" ? "somente leitura" : "edição") + " em: Dashboard" + ABAS().filter(v => abas.includes(v.id)).map(v => ", " + v.l).join("");
+  const oq = nivel === "total" ? "acesso total" : (nivel === "leitura" ? "somente leitura" : "edição") + " em: Dashboard" + ABAS().filter(v => temAba(abas, v)).map(v => ", " + v.l).join("");
   const msg = `Olá ${e.nome.split(" ")[0]}! Seu acesso ao app ADM 3Colinas está liberado.\n\n1. Abra: ${APP_URL}\n2. Toque em "Primeiro acesso? Criar minha senha"\n3. Use este e-mail: ${e.email}\n4. Crie sua senha e confirme pelo link que chega no e-mail.\n\nDepois é só entrar com o e-mail e a senha. Dica: no celular, use "Adicionar à tela inicial" para ficar como app.\n\nAcesso: ${oq}.`;
   const n = waNumber(e.telefone);
   modal(`
@@ -3223,7 +3228,7 @@ function loginForm(aviso, erro) {
 /* Aplica o perfil (nível e abas) que o banco devolveu. */
 function aplicarPerfil(p) {
   ME.id = p.id; ME.adm = p.nome; ME.dono = !!p.dono; S.isOwner = ME.dono;
-  ME.acesso = { nivel: p.dono ? "total" : (p.nivel || "leitura"), abas: p.dono || p.nivel === "total" ? ABAS().map(v => v.id) : (p.abas || []) };
+  ME.acesso = { nivel: p.dono ? "total" : (p.nivel || "leitura"), abas: p.dono || p.nivel === "total" ? [...ABAS().map(v => v.id), ABA_V2] : (p.abas || []) };
   document.body.classList.toggle("ro", ME.acesso.nivel === "leitura" && !ME.dono);
 }
 let sessaoOk = false;
