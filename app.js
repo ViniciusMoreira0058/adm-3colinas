@@ -66,7 +66,12 @@ const TASK = [
   { v: "afazer", l: "A fazer" }, { v: "andamento", l: "Em andamento" }, { v: "pronto", l: "Pronto" },
 ];
 const FASES = [ { v: "pre", l: "Pré TOP" }, { v: "checkin", l: "Check-in" }, { v: "pos", l: "Pós TOP" } ];
-const EQUIPES = ["ADM", "Logística", "Mídia", "Segurança", "Voz", "Hakunas", "Intercessão", "Eventos", "Base", "Coordenação"];
+const EQUIPES = ["ADM", "Logística", "Mídia", "Segurança", "Voz", "Hakunas", "Intercessão", "Eventos", "Produção", "Base", "Coordenação"];
+// nome da equipe da planilha → nome usado no app ("Hakuna" → "Hakunas"); equipe nova entra como veio
+const equipeCanon = x => { const k = norm(x); if (!k) return ""; return EQUIPES.find(e => norm(e) === k || norm(e).startsWith(k) || k.startsWith(norm(e))) || String(x).trim(); };
+const equipesUsadas = () => [...new Set([...EQUIPES, ...S.P.filter(p => p.tipo === "legendario" && p.equipe).map(p => p.equipe)])];
+const FUNC_ORDEM = f => /^chefe/i.test(f || "") ? 0 : /^sub/i.test(f || "") ? 1 : f ? 2 : 3;
+const equipeTxt = p => p.equipe ? p.equipe + (p.funcao ? " · " + p.funcao : "") : "";
 const ADMS = ["Thalisson", "Vinicius", "Gustavo Arantes", "Henrique"];
 const GRUPOS = [ { v: "armario", l: "Armário LGND" }, { v: "mre", l: "Itens do MRE" }, { v: "equip", l: "Equipamentos" } ];
 const opt = (list, v) => list.find(o => o.v === v) || list[0];
@@ -156,6 +161,7 @@ const VIEWS = [
   { id: "notificacoes", l: "Notificações", i: "bell", all: true },   // todos que entram no app
   { id: "participantes", l: "Senderistas", i: "users" },
   { id: "legendarios", l: "Legendários", i: "shield" },
+  { id: "equipes", l: "Equipes LGND", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
@@ -526,7 +532,7 @@ function vPessoas(tipo) {
       ${sel ? `<td>${caixa(p)}</td>` : ""}
       <td><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}${tagRep(p)}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div>${obsLinha(p)}</td>
       <td class="num" style="white-space:nowrap"><div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">${waBtn(p)}<span class="hint" style="font-size:12px">${esc(p.telefone || "sem telefone")}</span></div></td>
-      ${lg ? `<td>${esc(p.equipe || "—")}</td>` : ""}
+      ${lg ? `<td>${p.equipe ? `${esc(p.equipe)}${p.funcao ? `<div class="hint" style="font-size:12px">${esc(p.funcao)}</div>` : ""}` : "—"}</td>` : ""}
       <td>${atest(p)}</td>
       <td>${cyc(TERMO, "termo", p)}</td>
       ${lg ? "" : `<td>${ticks(p)}</td><td class="num">${p.familia ? "F" + String(p.familia).padStart(2, "0") : "—"}</td>`}
@@ -534,7 +540,7 @@ function vPessoas(tipo) {
       <td style="white-space:nowrap">${obsBtn(p)}<button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></td>
     </tr>`).join("")}</tbody></table></div>
   <div class="cards">${rows.map(p => `<article class="pcard ${S.sel.ids.has(p.id) ? "picked" : ""}">
-      <div class="top">${caixa(p)}<div class="pname" style="flex:1">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}${tagRep(p)}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(p.equipe) : ""}</small></div>
+      <div class="top">${caixa(p)}<div class="pname" style="flex:1">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}${tagRep(p)}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(equipeTxt(p)) : ""}</small></div>
         <div style="display:flex;gap:2px">${obsBtn(p)}<button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></div></div>
       ${obsLinha(p)}
       <div class="row"><span class="lbl">Atestado</span>${cyc(ATESTADO, "atestado", p)}<span class="lbl">Termo</span>${cyc(TERMO, "termo", p)}</div>
@@ -558,6 +564,78 @@ function vFamilias() {
   <div class="fams">${fams.map(f => { const m = parts.filter(p => Number(p.familia) === f); return `
     <section class="fam"><header><b>Família ${String(f).padStart(2, "0")}</b><span class="hint num">${m.length} · ${m.filter(is40).length} +40</span></header>
     ${m.length ? `<ul>${m.map(p => `<li><span>${esc(p.nome)}</span>${atOk(p) && p.termo === "assinado" ? '<span class="chip ok">OK</span>' : '<span class="chip wait">Pend.</span>'}</li>`).join("")}</ul>` : `<div class="empty">Ninguém ainda.</div>`}</section>`; }).join("")}</div>`;
+}
+
+/* ---------- Equipes LGND: em qual área cada legendário vai servir (campos equipe e funcao do legendário) ---------- */
+function vEquipes() {
+  const lgs = S.P.filter(p => p.tipo === "legendario" && !cancelado(p)), ed = podeEditar();
+  const sem = lgs.filter(p => !p.equipe);
+  const eqs = equipesUsadas().map(e => ({ e, m: lgs.filter(p => p.equipe === e).sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || norm(a.nome).localeCompare(norm(b.nome))) }));
+  const com = eqs.filter(x => x.m.length), vazias = eqs.filter(x => !x.m.length);
+  const pess = p => `<li><button class="linkbtn eq-p" type="button" ${ed ? `data-eq-p="${esc(p.id)}"` : "disabled"}><span>${esc(p.nome)}</span>${p.funcao ? ` <span class="chip ${FUNC_ORDEM(p.funcao) < 2 ? "ok" : ""}">${esc(p.funcao)}</span>` : ""}</button></li>`;
+  return `
+  <div class="head"><div><h2>Equipes LGND</h2><p>Em qual área cada legendário vai servir. Vem da planilha de equipes (botão Importar relatório em Legendários)${ed ? " e você pode mudar ou incluir alguém aqui" : ""}.</p></div>
+    ${ed ? `<div class="actions"><button class="btn" type="button" data-act="importar-eq">${ico("upload")} Importar planilha de equipes</button><button class="btn primary" type="button" data-eq-add="">${ico("plus")} Colocar em uma equipe</button></div>` : ""}</div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Com equipe</span><span class="val num">${lgs.length - sem.length}</span><span class="sub">de ${lgs.length} legendários</span></div>
+    <div class="kpi"><span class="lbl">Equipes</span><span class="val num">${com.length}</span><span class="sub">com gente</span></div>
+    <div class="kpi ${sem.length ? "alert" : ""}"><span class="lbl">Sem equipe</span><span class="val num">${sem.length}</span><span class="sub">${sem.length ? "falta definir a área" : "todos com área"}</span></div>
+  </div>
+  ${sem.length ? `<section class="panel"><h3>Sem equipe <small>${sem.length}</small></h3><div class="list">${sem.map(p => `<div class="li"><span class="grow">${esc(p.nome)}</span>${ed ? `<select class="sel" data-eq-sel="${p.id}" aria-label="Equipe de ${esc(p.nome)}"><option value="">Escolher…</option>${equipesUsadas().map(e => `<option>${esc(e)}</option>`).join("")}</select>` : ""}</div>`).join("")}</div></section>` : ""}
+  <div class="fams">${com.map(({ e, m }) => `
+    <section class="fam"><header><b>${esc(e)}</b><span class="hint num">${m.length}</span></header>
+    <ul class="eq-list">${m.map(pess).join("")}</ul>
+    ${ed ? `<button class="btn ghost" type="button" data-eq-add="${esc(e)}" style="margin-top:6px">${ico("plus")} Adicionar</button>` : ""}</section>`).join("") || `<div class="empty">Nenhum legendário em equipe ainda. Importe a planilha de equipes.</div>`}</div>
+  ${vazias.length && com.length ? `<p class="hint">Sem ninguém: ${vazias.map(x => esc(x.e)).join(", ")}.</p>` : ""}`;
+}
+function equipePessoaForm(p, equipePre) {
+  const lgs = S.P.filter(x => x.tipo === "legendario" && !cancelado(x)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+  modal(`
+    <h3>${p ? esc(p.nome) : "Colocar em uma equipe"}</h3>
+    <div class="form">
+      ${p ? "" : `<div class="field full"><label for="f-eqp">Legendário</label><select id="f-eqp" name="pid" required><option value="">Escolher…</option>${lgs.map(x => `<option value="${x.id}">${esc(x.nome)}${x.equipe ? ` (hoje: ${esc(equipeTxt(x))})` : ""}</option>`).join("")}</select></div>`}
+      <div class="field"><label for="f-eqe">Equipe</label><select id="f-eqe" name="equipe"><option value="">Sem equipe</option>${equipesUsadas().map(e => `<option ${(p ? p.equipe : equipePre) === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-eqf">Função</label><input id="f-eqf" name="funcao" list="funcoes2" value="${esc(p ? p.funcao : "")}" placeholder="ex.: Chefe, Subchefe"><datalist id="funcoes2"><option value="Chefe"><option value="Subchefe"></datalist></div>
+    </div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => {
+    const alvo = p || S.P.find(x => x.id === fd.get("pid")); if (!alvo) { toast("Escolha o legendário."); return; }
+    const equipe = String(fd.get("equipe") || ""), funcao = equipe ? String(fd.get("funcao") || "").trim() : "";
+    closeModal(); touch(alvo.id, { equipe, funcao }, equipe ? `${alvo.nome.split(" ")[0]} na equipe ${equipe}` : `${alvo.nome.split(" ")[0]} sem equipe`);
+  });
+}
+/* Planilha de equipes da plataforma (Nome, Equipe, Função, Número) */
+const ehEquipes = linhas => { const h = (linhas[0] || []).map(x => norm(String(x))); return h.includes("nome") && h.includes("equipe") && h.some(x => /^funcao/.test(x)) && !h.some(x => /^top para quem|status/.test(x)); };
+function equipesImportForm(linhas) {
+  const h = (linhas[0] || []).map(x => norm(String(x))), iN = h.indexOf("nome"), iE = h.indexOf("equipe"), iF = h.findIndex(x => /^funcao/.test(x));
+  const marcar = [], ja = [], nao = [], vistos = new Set();
+  linhas.slice(1).filter(r => String(r[iN] || "").trim() && String(r[iE] || "").trim()).forEach(r => {
+    const nome = String(r[iN]).trim(), equipe = equipeCanon(r[iE]), f = String(r[iF] || "").trim();
+    const funcao = norm(f) && norm(f) !== norm(r[iE]) && norm(f) !== norm(equipe) ? f : "";   // função igual ao nome da equipe = membro
+    const a = acharNoApp({ nome, email: "", telefone: "", tipo: "legendario" });
+    if (!a) { nao.push({ nome, equipe, funcao }); return; }
+    if (vistos.has(a.p.id)) return; vistos.add(a.p.id);
+    if (a.p.equipe === equipe && (a.p.funcao || "") === funcao) ja.push(a.p); else marcar.push({ p: a.p, equipe, funcao });
+  });
+  const li = (nome, txt) => `<li><b>${esc(nome)}</b> <span class="hint">${txt}</span></li>`;
+  modal(`
+    <h3>Importar equipes LGND</h3>
+    <p class="hint" style="margin:0">Reconheci a planilha como <b>equipes dos legendários</b>. Cada legendário fica na área (e função) que está na planilha. Quem não está na planilha não muda.</p>
+    <div class="imp-kpis">
+      <div class="ok"><b class="num">${marcar.length}</b><span>vão ser atualizados</span></div>
+      <div><b class="num">${ja.length}</b><span>já estavam assim</span></div>
+      <div class="bad"><b class="num">${nao.length}</b><span>não achei em Legendários</span></div>
+    </div>
+    <details open><summary>Vão ser atualizados (${marcar.length})</summary><ul class="imp-list">${marcar.map(({ p, equipe, funcao }) => li(p.nome, `${p.equipe ? esc(equipeTxt(p)) + " → " : ""}<b>${esc(equipe)}</b>${funcao ? " · " + esc(funcao) : ""}`)).join("") || '<li class="hint">Ninguém novo.</li>'}</ul></details>
+    ${ja.length ? `<details><summary>Já estavam assim (${ja.length})</summary><ul class="imp-list">${ja.map(p => li(p.nome, esc(equipeTxt(p)))).join("")}</ul></details>` : ""}
+    ${nao.length ? `<details open><summary class="bad-text">Não achei em Legendários (${nao.length})</summary><p class="hint" style="margin:6px 0">Confira se o nome está diferente no app ou se a pessoa ainda não foi importada como legendário.</p><ul class="imp-list">${nao.map(n => li(n.nome, esc(n.equipe) + (n.funcao ? " · " + esc(n.funcao) : ""))).join("")}</ul></details>` : ""}
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" ${marcar.length ? "" : "disabled"}>${marcar.length ? `Atualizar ${marcar.length}` : "Nada para atualizar"}</button></div></div>`,
+  () => {
+    if (!marcar.length) return;
+    closeModal();
+    save(async () => { for (let i = 0; i < marcar.length; i += 8) await Promise.all(marcar.slice(i, i + 8).map(({ p, equipe, funcao }) => api.update("pessoas", p.id, { equipe, funcao }))); },
+      `Equipes: ${marcar.length} legendário(s) atualizado(s)`);
+  });
 }
 
 /* ---------- Cronograma ----------
@@ -1325,7 +1403,7 @@ function pdfDaTela() {
       resumo: [["Na lista", rows.length], ["Atestado OK", rows.filter(p => atOk(p)).length], ["Termo OK", rows.filter(p => p.termo === "assinado").length], ...(lg ? [] : [["+40", rows.filter(is40).length], ["No grupo", rows.filter(p => p.noGrupo).length]])],
       colunas: lg ? [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Telefone", w: 34 }, { t: "Equipe", w: 34 }, { t: "Atestado", w: 26, status: true }, { t: "Termo", w: 26, status: true }, { t: "Inscrição", w: 28, status: true }, { t: "Responsável", w: 40, cinza: true }]
         : [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true, nome: true }, { t: "Obs.", w: 26, cinza: true }, { t: "Telefone", w: 32 }, { t: "Cidade", w: 26 }, { t: "Atestado", w: 23, status: true }, { t: "Termo", w: 23, status: true }, { t: "Grupo", w: 14, al: "center", status: true }, { t: "NFC", w: 12, al: "center", status: true }, { t: "Fam.", w: 12, al: "center" }, { t: "Responsável", w: 32, cinza: true }],
-      linhas: rows.map((p, i) => n(i, lg ? [p.nome, p.telefone, p.equipe, opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, insc(p) || "Ativa", respTxt(p)]
+      linhas: rows.map((p, i) => n(i, lg ? [p.nome, p.telefone, equipeTxt(p), opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, insc(p) || "Ativa", respTxt(p)]
         : [p.nome, [is40(p) ? "+40" : "", insc(p)].filter(Boolean).join(" · "), p.telefone, p.cidade, opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, simNao(p.noGrupo), simNao(p.nfc), p.familia ? String(p.familia).padStart(2, "0") : "", respTxt(p)])) };
   }
   if (v === "pendencias") {
@@ -1343,6 +1421,15 @@ function pdfDaTela() {
       resumo: [["Na lista", rows.length], ["Sem atestado", rows.filter(p => pendDe(p).includes("atestado")).length], ["Sem termo", rows.filter(p => pendDe(p).includes("termo")).length]],
       colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Tipo", w: 22 }, { t: "Telefone", w: 30 }, { t: "Falta", w: 38, status: true }, { t: "Responsável", w: 28, cinza: true }, { t: "Cobrado", w: 22, cinza: true }],
       linhas: rows.map((p, i) => n(i, [p.nome, p.tipo === "legendario" ? "Legendário" : "Senderista", p.telefone, "Pendente: " + listaE(pendDe(p).map(k => PEND[k])), p.adm, p.cobradoEm ? quando(p.cobradoEm) : "Não"])) };
+  }
+  if (v === "equipes") {
+    const lgs = S.P.filter(p => p.tipo === "legendario" && !cancelado(p)), sem = lgs.filter(p => !p.equipe);
+    const lin = m => m.sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || norm(a.nome).localeCompare(norm(b.nome))).map((p, i) => n(i, [p.nome, p.funcao || "", opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, p.telefone]));
+    return { titulo: "Equipes LGND", legenda: `${lgs.length - sem.length} de ${lgs.length} legendários com equipe`,
+      resumo: [["Com equipe", lgs.length - sem.length], ["Sem equipe", sem.length], ["Equipes", equipesUsadas().filter(e => lgs.some(p => p.equipe === e)).length]],
+      colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Função", w: 28 }, { t: "Atestado", w: 26, status: true }, { t: "Termo", w: 26, status: true }, { t: "Telefone", w: 34 }],
+      secoes: [...equipesUsadas().map(e => { const m = lgs.filter(p => p.equipe === e); return { titulo: `${e} · ${m.length} pessoa(s)`, linhas: lin(m) }; }).filter(x => x.linhas.length),
+        ...(sem.length ? [{ titulo: `Sem equipe · ${sem.length}`, linhas: lin(sem) }] : [])] };
   }
   if (v === "familias") {
     const parts = S.P.filter(p => p.tipo !== "legendario"), sem = parts.filter(p => !p.familia);
@@ -1458,7 +1545,7 @@ function pdfTelaForm() {
   if (seg) seg.onclick = e => { const b = e.target.closest("button"); if (!b) return; tipo = b.dataset.t; store.set("adm3-pdf-tipo", tipo); pinta(); };
   pinta();
 }
-const PDF_TELAS = ["painel", "participantes", "legendarios", "pendencias", "familias", "checklist", "estoque", "pista", "pins", "tops", "usuarios", "historico", "notificacoes"];
+const PDF_TELAS = ["painel", "participantes", "legendarios", "equipes", "pendencias", "familias", "checklist", "estoque", "pista", "pins", "tops", "usuarios", "historico", "notificacoes"];
 // coloca o botão "Exportar PDF" no topo da página (cronograma e consagração já têm o deles)
 function botaoPdf() {
   if (!ME.acesso || !PDF_TELAS.includes(S.view) || (S.view === "usuarios" && S.usrAba === "notif")) return;
@@ -2004,6 +2091,7 @@ function render() {
     : v === "participantes" ? vPessoas("participante")
     : v === "legendarios" ? vPessoas("legendario")
     : v === "familias" ? vFamilias()
+    : v === "equipes" ? vEquipes()
     : v === "checklist" ? vChecklist()
     : v === "cronograma" ? vCronograma()
     : v === "consagracao" ? vConsagracao()
@@ -2039,7 +2127,8 @@ function personForm(p, tipo) {
       <div class="field"><label for="f-telefone">Telefone / WhatsApp</label><input id="f-telefone" name="telefone" inputmode="tel" value="${esc(p.telefone)}" placeholder="+55 16 99999-0000"></div>
       <div class="field"><label for="f-email">E-mail</label><input id="f-email" name="email" type="email" value="${esc(p.email)}"></div>
       ${lg ? `
-      <div class="field"><label for="f-equipe">Equipe</label>${sel("equipe", [{ v: "", l: "—" }, ...EQUIPES.map(e => ({ v: e, l: e }))], p.equipe || "")}</div>
+      <div class="field"><label for="f-equipe">Equipe</label>${sel("equipe", [{ v: "", l: "—" }, ...equipesUsadas().map(e => ({ v: e, l: e }))], p.equipe || "")}</div>
+      <div class="field"><label for="f-funcao">Função na equipe</label><input id="f-funcao" name="funcao" list="funcoes" value="${esc(p.funcao)}" placeholder="ex.: Chefe, Subchefe"><datalist id="funcoes"><option value="Chefe"><option value="Subchefe"></datalist></div>
       <div class="field"><label for="f-termo">Termo LGND</label>${sel("termo", TERMO, p.termo)}</div>
       <div class="field"><label for="f-atestado">Status do atestado</label>${sel("atestado", ATESTADO, p.atestado)}</div>
       <div class="field"><label for="f-dataAtestado">Previsão do atestado</label><input id="f-dataAtestado" name="dataAtestado" value="${esc(p.dataAtestado)}" placeholder="ex.: semana do dia 30/10"></div>
@@ -2071,7 +2160,7 @@ function personForm(p, tipo) {
     const data = { nome, telefone: String(fd.get("telefone") || "").trim(), email: String(fd.get("email") || "").trim(), obs: String(fd.get("obs") || "").trim(),
       termo: String(fd.get("termo") || "pendente"), atestado: String(fd.get("atestado") || "pendente"), dataAtestado: String(fd.get("dataAtestado") || "").trim() };
     if (p.id && (fd.get("canc") === "on") !== cancelado(p)) data.inscricao = fd.get("canc") === "on" ? "cancelada" : "ativa";
-    if (lg) Object.assign(data, { equipe: String(fd.get("equipe") || "") });
+    if (lg) Object.assign(data, { equipe: String(fd.get("equipe") || ""), funcao: String(fd.get("funcao") || "").trim() });
     else Object.assign(data, {
       cidade: String(fd.get("cidade") || "").trim(), idade: fd.get("idade") ? Number(fd.get("idade")) : null,
       familia: fd.get("familia") ? Number(fd.get("familia")) : null, nfc: fd.get("nfc") === "on",
@@ -2606,6 +2695,9 @@ document.addEventListener("click", e => {
     save(async () => { for (const p of alvo) { const d = {}; ["nome", "cidade"].forEach(k => { if (consertaAcento(p[k]) !== p[k]) d[k] = consertaAcento(p[k]); }); await api.update("pessoas", p.id, d); } }, `${alvo.length} nome(s) corrigido(s)`);
     return;
   }
+  if (d.act === "importar-eq") { importForm("legendario"); return; }
+  if (d.eqAdd !== undefined && podeEditar()) { equipePessoaForm(null, d.eqAdd); return; }
+  if (d.eqP && podeEditar()) { const p = S.P.find(x => x.id === d.eqP); if (p) equipePessoaForm(p); return; }
   if (d.act === "assinaturas") { assinaturasForm(); return; }
   if (d.act === "lixeira") { lixeiraForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.act === "importar") { importForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
@@ -2706,6 +2798,7 @@ document.addEventListener("change", e => {
   if (e.target.id === "csgDe" || e.target.id === "csgAte") { S.csg[e.target.id === "csgDe" ? "de" : "ate"] = e.target.value; render(); }
   const hk = { hQuem: "quem", hAba: "aba", hAcao: "acao" }[e.target.id];
   if (hk) { S.hf[hk] = e.target.value; render(); }
+  if (e.target.dataset.eqSel && podeEditar()) { const v = e.target.value; if (v) touch(e.target.dataset.eqSel, { equipe: v }, `Equipe ${v} definida`); return; }
   if (e.target.dataset.fam && !podeEditar()) { toast("Seu acesso é somente leitura."); render(); return; }
   if (e.target.dataset.fam) { const v = e.target.value; if (v) touch(e.target.dataset.fam, { familia: Number(v) }, `Família ${v.padStart(2, "0")} definida`); }
 });
@@ -3189,7 +3282,7 @@ function analisarAssinaturas(linhas) {
 function importForm(tipoAtual) {
   modal(`
     <h3>Importar relatório de inscrições</h3>
-    <p class="hint" style="margin:0">Envie a planilha de inscritos, a de assinaturas do termo ou a de avaliações (atestados), em .xlsx ou .csv: o app reconhece qual é. O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Só entram os que estão como Senderista ou Legendário. Inscrições canceladas são ignoradas. O CPF não é importado.</p>
+    <p class="hint" style="margin:0">Envie a planilha de inscritos, a de assinaturas do termo, a de avaliações (atestados) ou a de equipes dos legendários, em .xlsx ou .csv: o app reconhece qual é. O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Só entram os que estão como Senderista ou Legendário. Inscrições canceladas são ignoradas. O CPF não é importado.</p>
     <div class="field"><label for="f-arq">Planilha</label><input id="f-arq" type="file" accept=".xlsx,.xls,.csv"></div>
     <div id="impPrev" class="imp-prev"></div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="impBtn" disabled>Importar</button></div></div>`,
@@ -3211,6 +3304,7 @@ function importForm(tipoAtual) {
       const linhas = await lerPlanilha(f);
       if (ehAssinaturas(linhas)) { closeModal(); assinaturasForm(linhas); return; }
       if (ehAvaliacoes(linhas)) { closeModal(); avaliacoesForm(linhas); return; }
+      if (ehEquipes(linhas)) { closeModal(); equipesImportForm(linhas); return; }
       R = analisarImport(lerRelatorio(linhas)); R.arquivo = f.name;
       prev.innerHTML = previewImport(R);
       $("#impBtn").disabled = !R.novos.length && !R.ja.length && !R.canc.some(c => c.p) && !R.fora.length;

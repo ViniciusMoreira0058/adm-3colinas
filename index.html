@@ -333,6 +333,10 @@ tbody tr:hover td { background: var(--accent-soft); }
 .fam { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .fam header { display: flex; justify-content: space-between; align-items: baseline; }
 .fam header b { font-family: var(--display); font-size: 24px; font-weight: 700; text-transform: uppercase; }
+.eq-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.eq-p { display: flex; flex-wrap: wrap; white-space: normal; gap: 6px; align-items: center; width: 100%; text-align: left; padding: 6px 4px; border-radius: 8px; color: inherit; font-weight: 600; }
+.eq-p > span:first-child { white-space: normal; overflow: visible; text-overflow: clip; min-width: 0; }
+.eq-p:not(:disabled):hover { background: var(--surface2); }
 .fam ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 .fam li { display: flex; justify-content: space-between; gap: 6px; }
 .fam li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
