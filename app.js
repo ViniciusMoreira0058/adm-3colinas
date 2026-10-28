@@ -166,7 +166,7 @@ const VIEWS = [
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
   { id: "aovivo", l: "Ao vivo", i: "flag", need: ["cronograma"] },   // painel para TV/celular
-  { id: "ocorrencias", l: "Ocorrências", i: "heart", need: ["participantes", "legendarios", "cronograma"], demo: true },   // registro durante o TOP
+  { id: "ocorrencias", l: "Ocorrências", i: "heart", need: ["participantes", "legendarios", "cronograma"] },   // registro durante o TOP
   { id: "consagracao", l: "Consagração", i: "group" },
   { id: "pins", l: "Pins", i: "check" },
   { id: "checklist", l: "Checklist", i: "list" },
@@ -771,7 +771,7 @@ paisagem.addEventListener("change", () => { if (S.view === "aovivo" && !$("#moda
 const MAPA_VIVO = () => true;
 const MAPA_CHEIO = () => true;
 const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências
-const RELATORIO_FINAL = () => DEMO; // ocorrências e relatório final do TOP: em teste na demonstração
+const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const libJs = {};
 function carregarLib(nome, js, css) {
   return libJs[nome] || (libJs[nome] = new Promise((ok, erro) => {
