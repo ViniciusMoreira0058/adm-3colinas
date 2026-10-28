@@ -1593,3 +1593,22 @@ window.ADM_DEMO.notifs = [
   window.ADM_DEMO.docs.forEach(d => { if (d.col !== "pessoas" || d.data.termo === "assinado") return;
     d.data.termoLink = "https://app.zapsign.com.br/verificar/demo-termo-" + String(++k).padStart(4, "0"); });
 })();
+// histórico fictício do Dashboard (um retrato por dia) para o gráfico de evolução e as tendências
+(function () {
+  const P = window.ADM_DEMO.docs.filter(d => d.col === "pessoas" && d.data.top === "top1922" && d.data.inscricao !== "cancelada").map(d => d.data);
+  const sen = P.filter(p => p.tipo !== "legendario");
+  const at = sen.filter(p => p.atestado === "confirmado" || p.atestado === "apto").length, te = sen.filter(p => p.termo === "assinado").length, gr = sen.filter(p => p.noGrupo).length;
+  const pr = P.filter(p => p.inscricao !== "pendente" && p.termo === "assinado" && p.atestado === "apto").length;
+  const dias = {}, N = 14;
+  for (let i = N; i >= 1; i--) {
+    const f = (N - i) / N, d = new Date(Date.now() - i * 864e5).toLocaleDateString("sv"), q = v => Math.max(0, Math.round(v * (0.25 + 0.75 * f)) - (i === 1 ? 1 : 0));
+    dias[d] = { n: sen.length - (i > 10 ? 2 : i > 5 ? 1 : 0), lg: P.length - sen.length, atestado: q(at), termo: q(te), grupo: q(gr), prontos: Math.max(0, Math.round(pr * f) - (i === 1 ? 1 : 0)), total: P.length };
+  }
+  window.ADM_DEMO.docs.push({ col: "config", id: "dash-hist-top1922", data: { dias, top: "top1922" } });
+})();
+// data do TOP na demonstração (para a contagem regressiva do Dashboard)
+(function () {
+  const t = window.ADM_DEMO.docs.find(d => d.col === "tops" && d.id === "top1922"); if (!t) return;
+  const dia = n => new Date(Date.now() + n * 864e5).toLocaleDateString("sv");
+  if (!t.data.inicio) { t.data.inicio = dia(9); t.data.fim = dia(12); }
+})();

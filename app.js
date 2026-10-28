@@ -335,6 +335,139 @@ function painelInscricao() {
       </div>
     </section>`;
 }
+/* ---------- Dashboard novo ----------
+   Topo com contagem regressiva e % de prontos, "O que fazer hoje" com atalhos, e os números em 3 blocos (Pessoas, Documentos, Logística). */
+function anel(pc, cor, tam = 92, txt) {
+  const r = tam / 2 - 7, c = 2 * Math.PI * r, v = Math.max(0, Math.min(100, pc || 0));
+  return `<svg class="anel" width="${tam}" height="${tam}" viewBox="0 0 ${tam} ${tam}" role="img" aria-label="${v}%">
+    <circle cx="${tam / 2}" cy="${tam / 2}" r="${r}" fill="none" stroke="var(--line)" stroke-width="8"/>
+    <circle cx="${tam / 2}" cy="${tam / 2}" r="${r}" fill="none" stroke="${cor}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(c * v / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${tam / 2} ${tam / 2})"/>
+    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" class="anel-t" style="font-size:${Math.round(tam / 4.2)}px">${txt != null ? txt : v + "%"}</text></svg>`;
+}
+// histórico do dashboard: um retrato por dia (config/dash-hist-<top>), gravado quando alguém que edita abre o Dashboard
+const diaHoje = () => new Date().toLocaleDateString("sv");
+const dashHistId = () => "dash-hist-" + curTopId();
+const dashHist = () => ((S.cfgDocs || {})[dashHistId()] || {}).dias || {};
+function retratoHoje() {
+  const s = stats(), P = S.P.filter(p => !cancelado(p));
+  return { n: s.n, lg: s.lg.length, atestado: s.atestado, termo: s.termo, grupo: s.grupo, prontos: P.filter(prontoTop).length, total: P.length };
+}
+let dashGravando = false;
+function registrarDia() {
+  if (!DASH_NOVO() || !podeEditar() || dashGravando) return;
+  const H = dashHist(), r = retratoHoje(), d = diaHoje();
+  if (JSON.stringify(H[d]) === JSON.stringify(r)) return;
+  const dias = { ...H, [d]: r }; Object.keys(dias).sort().slice(0, -90).forEach(k => delete dias[k]);   // guarda 90 dias
+  dashGravando = true; api.set("config", dashHistId(), { dias, top: curTopId() }).catch(() => {}).finally(() => { dashGravando = false; });
+}
+// variação de um número: compara com ontem (ou o dia anterior com dado) e com 7 dias atrás
+function tendencia(k, atual) {
+  const H = dashHist(), hoje = diaHoje(), dias = Object.keys(H).filter(d => d < hoje).sort();
+  if (!dias.length) return "";
+  const ont = H[dias[dias.length - 1]][k], d7 = dias.filter(d => d <= new Date(Date.now() - 7 * 864e5).toLocaleDateString("sv")).pop();
+  const a = atual - (ont ?? atual), b = d7 ? atual - (H[d7][k] ?? atual) : null;
+  const t = (v, l) => v > 0 ? `<span class="tend up">▲ ${v} ${l}</span>` : v < 0 ? `<span class="tend down">▼ ${-v} ${l}</span>` : "";
+  return t(a, "hoje") || (b ? t(b, "na semana") : `<span class="tend">sem mudança hoje</span>`);
+}
+function graficoEvolucao() {
+  const H = { ...dashHist(), [diaHoje()]: retratoHoje() }, dias = Object.keys(H).sort().slice(-21);
+  if (dias.length < 2) return `<div class="empty">O gráfico começa a aparecer a partir de amanhã: o app guarda um retrato por dia.</div>`;
+  const W = 640, Ht = 200, pl = 34, pr = 10, pt = 12, pb = 26, max = Math.max(1, ...dias.map(d => H[d].total || H[d].n || 0));
+  const x = i => pl + i * (W - pl - pr) / (dias.length - 1), y = v => pt + (Ht - pt - pb) * (1 - v / max);
+  const serie = [["atestado", "#ff7a1a", "Atestado OK"], ["termo", "#f2b233", "Termo assinado"], ["prontos", "#46c486", "Prontos p/ o TOP"]];
+  const linhas = serie.map(([k, c]) => `<polyline fill="none" stroke="${c}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="${dias.map((d, i) => `${x(i).toFixed(1)},${y(H[d][k] || 0).toFixed(1)}`).join(" ")}"/>
+    <circle cx="${x(dias.length - 1)}" cy="${y(H[dias[dias.length - 1]][k] || 0)}" r="4.5" fill="${c}"/>`).join("");
+  const grade = [0, .5, 1].map(f => { const v = Math.round(max * f); return `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="3 4"/><text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end" class="g-t">${v}</text>`; }).join("");
+  const passo = Math.ceil(dias.length / 7), rot = dias.map((d, i) => i % passo && i !== dias.length - 1 ? "" : `<text x="${x(i)}" y="${Ht - 6}" text-anchor="${i === dias.length - 1 ? "end" : i === 0 ? "start" : "middle"}" class="g-t">${d.slice(8, 10)}/${d.slice(5, 7)}</text>`).join("");
+  return `<svg class="grafico" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Evolução de atestados, termos e prontos por dia">${grade}${rot}${linhas}</svg>
+    <div class="g-leg">${serie.map(([k, c, l]) => `<span><i style="background:${c}"></i>${l} <b class="num">${H[dias[dias.length - 1]][k] || 0}</b></span>`).join("")}<span class="hint">de ${max} pessoas · últimos ${dias.length} dias</span></div>`;
+}
+// visão do ADM: as pessoas que estão com ele e o que falta de cada uma
+function painelMeu() {
+  const eu = ME.adm; if (!eu) return "";
+  const pn = x => norm(x || "").split(" ")[0], meus = S.P.filter(p => !cancelado(p) && p.adm && (norm(p.adm) === norm(eu) || pn(p.adm) === pn(eu))), pend = meus.filter(p => pendDe(p).length)
+    .sort((a, b) => (a.cobradoEm || "").localeCompare(b.cobradoEm || "") || pendDe(b).length - pendDe(a).length);
+  const primeiro = eu.split(" ")[0];
+  return `<section class="panel dash-meu"><h3>${ico("users")} Suas pessoas, ${esc(primeiro)} <small>${meus.length} com você · ${pend.length} com pendência</small></h3>
+    ${!meus.length ? `<div class="empty">Ninguém está com você ainda. Quem você atualizar na lista passa a ficar com você.</div>`
+      : !pend.length ? `<div class="empty">Todas as suas pessoas estão em dia. 👏</div>`
+      : `<div class="list">${pend.slice(0, 6).map(p => `<div class="li"><span class="grow"><b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.cobradoEm ? " · cobrado " + esc(quando(p.cobradoEm)) : " · ainda não cobrado"}</span><br>${pendDe(p).map(k => `<span class="chip wait">${{ pagamento: "Pagamento", atestado: "Atestado", termo: "Termo", grupo: "Grupo" }[k] || k}</span>`).join(" ")}</span>
+        ${waNumber(p.telefone) ? `<a class="wa" href="${waCobrar(p)}" target="_blank" rel="noopener" data-cobrar="${p.id}">${ico("wa")} Cobrar</a>` : ""}</div>`).join("")}</div>
+        ${pend.length > 6 ? `<button class="btn" type="button" data-go="pendencias" data-pf-set="aba:doc;oque:qualquer;quem:todos;adm:${esc(eu)}" style="margin-top:8px">Ver as ${pend.length} em Pendências</button>` : ""}`}
+  </section>`;
+}
+function vPainelNovo() {
+  const s = stats(), td = topDoc() || {}, kits = topKits(), meta = S.config.metaMRE || 110, dias = diasParaTop();
+  const P = S.P.filter(p => !cancelado(p)), prontos = P.filter(prontoTop).length;
+  const conta = k => P.filter(p => pendDe(p).includes(k)).length;
+  const pagPend = S.P.filter(pagPendente).length, oc = RELATORIO_FINAL() ? ocorrAbertas().length : 0;
+  const valor = S.estoque.reduce((a, e) => a + valorItem(e), 0);
+  const pins = canSee({ id: "pins" }) ? pinsTodos() : [], pinsOk = pins.filter(p => p.status === "entregue").length;
+  const per = [td.inicio && fmtDate(td.inicio), td.fim && fmtDate(td.fim)].filter(Boolean).join(" a ");
+  const cont = dias == null ? `<span class="cd-n">—</span><span class="cd-l">defina a data do TOP em Tops</span>`
+    : dias > 1 ? `<span class="cd-n num">${dias}</span><span class="cd-l">dias para o TOP</span>`
+    : dias === 1 ? `<span class="cd-n">Amanhã</span><span class="cd-l">começa o TOP</span>`
+    : dias === 0 ? `<span class="cd-n">Hoje</span><span class="cd-l">começa o TOP</span>`
+    : `<span class="cd-n">Em andamento</span><span class="cd-l">${td.status === "finalizado" ? "TOP finalizado" : "bom TOP!"}</span>`;
+  // o que fazer hoje: só o que tem pendência, com atalho para a tela certa
+  const tarefas = [
+    [conta("termo"), "termo(s) para cobrar", "pendencias", "aba:doc;oque:termo;quem:todos", "wait"],
+    [conta("atestado"), "atestado(s) faltando", "pendencias", "aba:doc;oque:atestado;quem:todos", "wait"],
+    [pagPend, "boleto(s) pendente(s)", "pendencias", "aba:pag;quem:todos", "bad"],
+    [conta("grupo"), "fora do grupo", "pendencias", "aba:doc;oque:grupo;quem:participante", "sent"],
+    [oc, "ocorrência(s) aberta(s)", "ocorrencias", "", "bad"],
+    [s.zero.length, "item(ns) zerado(s) no estoque", "estoque", "", "bad"],
+    [s.low.length, "item(ns) com estoque baixo", "estoque", "", "wait"],
+    [Math.max(0, meta - kits), "kits MRE para lacrar", "estoque", "", "sent"],
+    [s.tTotal - s.tDone, "tarefa(s) do checklist abertas", "checklist", "", "sent"],
+  ].filter(t => t[0] > 0 && canSee({ id: t[2] }));
+  const bloco = (titulo, ico_, corpo, go_) => `<section class="panel dash-bloco"><h3>${ico(ico_)} ${titulo}${go_ ? `<button class="linkbtn" type="button" data-go="${go_}">ver ›</button>` : ""}</h3>${corpo}</section>`;
+  const mini = (l, v, sub, go_, extra = "") => `<${go_ ? `button type="button" data-go="${go_}"${extra}` : "div"} class="dmini"><span class="lbl">${l}</span><b class="num">${v}</b>${sub ? `<small>${sub}</small>` : ""}</${go_ ? "button" : "div"}>`;
+  return `
+  ${ME.acesso && ["pedir", "bloqueado", "instalar"].includes(estadoNotif()) ? `<div class="banner aviso"><span>${ico("bell")} <b>Notificações desligadas neste aparelho.</b> Ative para receber os avisos do app no celular.</span><button class="btn primary" type="button" data-act="notif-ajuda">Ativar</button></div>` : ""}
+  <section class="dash-topo">
+    <div class="dash-id"><img class="dash-logo" src="assets/logo.png" alt="Track 3 Colinas · Franca SP">
+      <div><span class="eyebrow">ADM 3Colinas · Legendários</span><h2>${esc(topName())}</h2><p>${esc([td.local || "Franca - SP", per].filter(Boolean).join(" · "))}</p>
+        <div class="actions"><button class="btn primary" type="button" data-act="novo">${ico("plus")} Novo senderista</button><button class="btn glass" type="button" data-go="tops">${ico("flag")} Tops</button>${RELATORIO_FINAL() ? `<button class="btn glass" type="button" data-act="relatorio">${ico("list")} Relatório final</button>` : ""}</div></div></div>
+    <div class="dash-cd">${cont}</div>
+    <div class="dash-pronto">${anel(pct(prontos, P.length), "var(--good)", 112)}<div><b class="num">${prontos} de ${P.length}</b><span>prontos para o TOP</span><small>pago, termo e atestado Apto</small>${tendencia("prontos", prontos)}</div></div>
+  </section>
+  <section class="panel dash-hoje"><h3>${ico("check")} O que fazer hoje <small>${tarefas.length ? tarefas.length + " frente(s) em aberto" : "tudo em dia"}</small></h3>
+    ${tarefas.length ? `<div class="hoje-lista">${tarefas.map(([n, l, v, pf, c]) => `<button class="hoje-item ${c}" type="button" data-go="${v}" ${pf ? `data-pf-set="${pf}"` : ""}><b class="num">${n}</b><span>${l}</span><i aria-hidden="true">›</i></button>`).join("")}</div>`
+      : `<div class="empty">Nada pendente agora. Bom trabalho!</div>`}
+  </section>
+  <div class="dash-blocos">
+    ${bloco("Pessoas", "users", `<div class="dminis">
+      ${mini("Senderistas", s.n, `${tendencia("n", s.n)}${s.mais40.length} com +40${s.dup ? ` · ${s.dup} repetido(s)` : ""}`, "participantes")}
+      ${mini("Legendários", s.lg.length, `${s.lgAssinado} termos · ${s.lgAtest} atestados`, "legendarios")}
+      ${mini("Boleto pendente", pagPend, "pagamento em aberto", "pendencias", ` data-pf-set="aba:pag;quem:todos"`)}
+      ${mini("Canceladas", S.P.filter(cancelado).length, "fora da contagem", "")}</div>`, "participantes")}
+    ${bloco("Documentos", "check", `<div class="aneis">
+      <div>${anel(pct(s.atestado, s.n), "#ff7a1a")}<span>Atestado</span><small class="num">${s.atestado} de ${s.n}</small>${tendencia("atestado", s.atestado)}</div>
+      <div>${anel(pct(s.termo, s.n), "#ff7a1a")}<span>Termo</span><small class="num">${s.termo} de ${s.n}</small>${tendencia("termo", s.termo)}</div>
+      <div>${anel(pct(s.grupo, s.n), "var(--good)")}<span>Grupo</span><small class="num">${s.grupo} de ${s.n}</small>${tendencia("grupo", s.grupo)}</div></div>`, "pendencias")}
+    ${bloco("Logística", "box", `<div class="dminis">
+      ${mini("Kits MRE", `${kits}<small>/${meta}</small>`, `<span class="bar ${kits >= meta ? "good" : ""}"><i style="width:${Math.min(100, pct(kits, meta))}%"></i></span>`, "estoque")}
+      ${PRECO_ESTOQUE() ? mini("Valor em estoque", `<span class="dinheiro">${brl(valor)}</span>`, `${s.zero.length + s.low.length} item(ns) em alerta`, "estoque") : mini("Estoque em alerta", s.zero.length + s.low.length, `${s.zero.length} zerados`, "estoque")}
+      ${mini("Checklist", pct(s.tDone, s.tTotal) + "%", `${s.tDone} de ${s.tTotal} prontas`, "checklist")}
+      ${pins.length ? mini("Pins", `${pinsOk}<small>/${pins.length}</small>`, `${pins.length - pinsOk} pendentes`, "pins", ` data-pin-ir="pendente"`) : mini("Pista", (s.pistaM / 1000).toFixed(1).replace(".", ",") + " km", "3 dias", "pista")}</div>`, "estoque")}
+  </div>
+  <div class="dash-meio">
+    <section class="panel"><h3>${ico("chart")} Evolução até o TOP <small>atestados, termos e prontos por dia</small></h3>${graficoEvolucao()}</section>
+    ${painelMeu()}
+  </div>
+  ${NOVO() ? painelPronto() : ""}
+  <div class="grid2">
+    <section class="panel"><h3>Pendências por ADM <small>atestado ou termo em aberto</small></h3>
+      <div class="list">${(() => { const pa = {}; s.all.filter(p => !atOk(p) || p.termo !== "assinado").forEach(p => { const k = p.adm || "Sem ADM"; pa[k] = (pa[k] || 0) + 1; });
+        return Object.keys(pa).length ? Object.entries(pa).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="li"><span class="grow">${esc(k)}</span><b class="num">${v}</b></div>`).join("") : `<div class="empty">Nenhuma pendência.</div>`; })()}</div>
+    </section>
+    <section class="panel"><h3>Em andamento <small>checklist</small></h3>
+      <div class="list">${s.tAnd.length ? s.tAnd.map(t => `<div class="li"><span class="grow">${esc(t.titulo)}</span><span class="tag">${esc(t.responsavel || "sem resp.")}</span></div>`).join("") : `<div class="empty">Nenhuma tarefa em andamento.</div>`}</div>
+    </section>
+    ${painelInscricao()}
+  </div>`;
+}
 function painelPronto() {
   const P = S.P.filter(p => !cancelado(p)), sen = P.filter(p => p.tipo !== "legendario"), lg = P.filter(p => p.tipo === "legendario");
   const ok = a => a.filter(prontoTop).length, falta = P.filter(p => !prontoTop(p)).sort((a, b) => faltaTop(b).length - faltaTop(a).length || norm(a.nome).localeCompare(norm(b.nome)));
@@ -352,6 +485,7 @@ function painelPronto() {
   </section>`;
 }
 function vPainel() {
+  if (DASH_NOVO()) return vPainelNovo();
   const s = stats();
   const kits = topKits(), meta = S.config.metaMRE || 110;
   const fun = [
@@ -772,6 +906,7 @@ const MAPA_VIVO = () => true;
 const MAPA_CHEIO = () => true;
 const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
+const DASH_NOVO = () => DEMO; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje): em teste na demonstração
 const TERMO_LINK = () => true; // link individual do termo (planilha de assinaturas) na cobrança
 const libJs = {};
 function carregarLib(nome, js, css) {
@@ -2539,6 +2674,7 @@ function render() {
   const caret = focusId === "q" || focusId === "hq" || focusId === "pq" ? document.activeElement.selectionStart : null;
   view.innerHTML = html;
   botaoPdf();
+  if (S.view === "painel") setTimeout(registrarDia, 0);
   document.body.classList.toggle("av-tv", modoTv());
   if (S.view !== "aovivo") S.mapaCheio = false;
   document.body.classList.toggle("av-mapa-cheio", !!S.mapaCheio);
@@ -3106,7 +3242,9 @@ document.addEventListener("click", e => {
   if (t.matches("[data-close]") && e.target === t) { closeModal(); return; }
   if (t.matches("[data-close-btn]")) { closeModal(); return; }
   const d = t.dataset;
-  if (d.go) { if (d.pinIr) S.pinf = { lote: "", q: "", ...(S.pinf || {}), st: d.pinIr }; go(d.go); return; }
+  if (d.go) { if (d.pinIr) S.pinf = { lote: "", q: "", ...(S.pinf || {}), st: d.pinIr };
+    if (d.pfSet) d.pfSet.split(";").forEach(x => { const [k, v] = x.split(":"); S.pf[k] = v; if (k === "aba") store.set("pend-aba", v); });
+    go(d.go); return; }
   if (d.pf) { S.pf[d.pf] = d.v; if (d.pf === "aba") store.set("pend-aba", d.v); render(); return; }
   if (d.aviso) {
     if (d.aviso === "abrir") { avisoModal(); return; }
