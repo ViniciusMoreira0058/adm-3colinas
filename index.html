@@ -205,7 +205,8 @@ tr.picked td, .pcard.picked { background: var(--accent-soft); }
 
 /* Dashboard */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; text-align: left; min-width: 0; container-type: inline-size; }
+.kpi .val.dinheiro { font-size: clamp(18px, 11cqi, 40px); white-space: nowrap; letter-spacing: -.02em; }
 button.kpi:hover { border-color: var(--accent); }
 .kpi .lbl { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .kpi .val { font-family: var(--display); font-size: 40px; font-weight: 700; line-height: 1; }

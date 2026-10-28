@@ -386,7 +386,7 @@ function vPainel() {
     <button class="kpi ${kits < meta ? "alert" : ""}" type="button" data-go="estoque"><span class="lbl">Kits MRE lacrados</span><span class="val num">${kits}</span><span class="sub">meta ${meta} · faltam ${Math.max(0, meta - kits)}</span></button>
     <button class="kpi ${s.zero.length ? "alert" : ""}" type="button" data-go="estoque"><span class="lbl">Estoque em alerta</span><span class="val num">${s.zero.length + s.low.length}</span><span class="sub">${s.zero.length} zerados · ${s.low.length} baixos (até ${S.config.alertaBaixo})</span></button>
     ${PRECO_ESTOQUE() ? (() => { const v = S.estoque.reduce((a, e) => a + valorItem(e), 0), sp = S.estoque.filter(e => e.preco == null).length, mre = S.estoque.filter(ehMre), c = mre.reduce((a, e) => a + (Number(e.preco) || 0) * porMre(e), 0);
-      return `<button class="kpi" type="button" data-go="estoque"><span class="lbl">Valor em estoque</span><span class="val num">${brl(v)}</span><span class="sub">${c ? `1 MRE custa ${brl(c)}` : ""}${c && sp ? " · " : ""}${sp ? `${sp} item(ns) sem preço` : ""}</span></button>`; })() : ""}
+      return `<button class="kpi" type="button" data-go="estoque"><span class="lbl">Valor em estoque</span><span class="val num dinheiro">${brl(v)}</span><span class="sub">${c ? `1 MRE custa ${brl(c)}` : ""}${c && sp ? " · " : ""}${sp ? `${sp} item(ns) sem preço` : ""}</span></button>`; })() : ""}
     ${canSee({ id: "pins" }) && pinsTodos().length ? (() => { const P = pinsTodos(), e = P.filter(p => p.status === "entregue").length;
       return `<button class="kpi" type="button" data-go="pins" data-pin-ir="entregue"><span class="lbl">Pins entregues</span><span class="val num">${e}<small style="font-size:18px;color:var(--muted)"> / ${P.length}</small></span><div class="bar good"><i style="width:${pct(e, P.length)}%"></i></div></button>
     <button class="kpi ${P.length - e ? "alert" : ""}" type="button" data-go="pins" data-pin-ir="pendente"><span class="lbl">Pins pendentes</span><span class="val num">${P.length - e}</span><span class="sub">bonés ainda sem pin</span></button>`; })() : ""}
@@ -2115,9 +2115,9 @@ function vValoresEstoque(kits, meta) {
   const kitsDoEstoque = mre.length ? Math.min(...mre.map(e => Math.floor((Number(e.qtd) || 0) / porMre(e)))) : 0;
   const limita = mre.find(e => Math.floor((Number(e.qtd) || 0) / porMre(e)) === kitsDoEstoque);
   return `<div class="kpis">
-    <div class="kpi"><span class="lbl">Valor em estoque</span><span class="val num">${brl(total)}</span><span class="sub">${semPreco ? `${semPreco} item(ns) sem preço` : "todos os itens com preço"}</span></div>
-    <div class="kpi alert"><span class="lbl">Custo de 1 MRE</span><span class="val num">${brl(custo)}</span><span class="sub">${mre.length} item(ns) no MRE${mre.some(e => e.preco == null) ? " · falta preço em " + mre.filter(e => e.preco == null).length : ""}</span></div>
-    <div class="kpi"><span class="lbl">Meta de ${meta} MREs</span><span class="val num">${brl(custo * meta)}</span><span class="sub">${kits} lacrados = ${brl(custo * kits)}</span></div>
+    <div class="kpi"><span class="lbl">Valor em estoque</span><span class="val num dinheiro">${brl(total)}</span><span class="sub">${semPreco ? `${semPreco} item(ns) sem preço` : "todos os itens com preço"}</span></div>
+    <div class="kpi alert"><span class="lbl">Custo de 1 MRE</span><span class="val num dinheiro">${brl(custo)}</span><span class="sub">${mre.length} item(ns) no MRE${mre.some(e => e.preco == null) ? " · falta preço em " + mre.filter(e => e.preco == null).length : ""}</span></div>
+    <div class="kpi"><span class="lbl">Meta de ${meta} MREs</span><span class="val num dinheiro">${brl(custo * meta)}</span><span class="sub">${kits} lacrados = ${brl(custo * kits)}</span></div>
     <div class="kpi"><span class="lbl">Dá para montar</span><span class="val num">${kitsDoEstoque}</span><span class="sub">${limita ? `com o estoque atual · limitado por ${esc(limita.item)}` : "MREs com o estoque atual"}</span></div>
   </div>
   <section class="panel mre-box"><h3>MRE <small>o que vai em cada kit · marque o quadradinho MRE no item para incluir</small></h3>
