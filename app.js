@@ -1187,6 +1187,241 @@ async function gerarCsgPdf(modo, de, ate, wa) {
   const nome = `Lista consagracao ${doDia ? dd(de) : dd(de) + " a " + dd(ate)}.pdf`;
   await entregarPdf(doc.output("blob"), nome, `Lista Consagração ${doDia ? fmtDia(de, true) : fmtDia(de, true) + " a " + fmtDia(ate, true)}`, wa);
 }
+/* ---------- Exportar PDF de qualquer página ----------
+   Cada página monta a lista do jeito que está na tela (com o filtro e a busca) e o PDF sai no visual do cronograma:
+   faixa azul-marinho com a montanha, título, cartões de resumo e tabela. */
+const PDF_COR = { NAVY: [11, 17, 25], LARANJA: [255, 122, 26], TINTA: [30, 20, 11], CINZA: [123, 101, 83], LINHA: [241, 220, 199], CREME: [255, 248, 242], VERDE: [29, 138, 85], AMBAR: [168, 111, 0], VERMELHO: [192, 57, 43] };
+const simNao = v => v ? "Sim" : "Não";
+const corStatus = t => /^(confirmado|assinado|sim|ok|pronto|entregue|ativa|pago)/i.test(t) ? PDF_COR.VERDE
+  : /^(zerado|não assinou|cancelad|bloquead)/i.test(t) ? PDF_COR.VERMELHO
+  : /^(pendente|baixo|aguardando|msg enviada|em andamento|a fazer|não|conferir|boleto)/i.test(t) ? PDF_COR.AMBAR : null;
+async function gerarListaPdf(sp, wa) {
+  const jsPDF = await carregarPdf();
+  const C = PDF_COR, retrato = sp.orient !== "landscape";
+  const [logo, faixa] = await Promise.all([imagemDataUrl("assets/logo.png"), faixaPdf()]);
+  const doc = new jsPDF({ orientation: retrato ? "portrait" : "landscape", unit: "mm", format: "a4" });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const adm = ME.adm || "-", gerado = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const titulo = sp.titulo.toUpperCase(), sub = (sp.sub || topName()).toUpperCase();
+  const resumo = [["ADM responsável", adm, true], ...(sp.resumo || [])].slice(0, retrato ? 4 : 6);
+  const cabecalho = primeira => {
+    const alt = primeira ? 44 : 16;
+    doc.setFillColor(...C.NAVY); doc.rect(0, 0, W, alt, "F");
+    if (faixa) { doc.saveGraphicsState(); doc.rect(0, 0, W, alt, null); doc.clip(); doc.discardPath();
+      const h = W * 330 / 2400 * 1.6; doc.addImage(faixa, "JPEG", W - h * 2400 / 330, primeira ? 0 : -6, h * 2400 / 330, h, "faixa", "FAST"); doc.restoreGraphicsState(); }
+    doc.setFillColor(...C.LARANJA); doc.rect(0, alt, W, 1.2, "F");
+    if (primeira) {
+      if (logo) try { doc.addImage(logo, "PNG", 12, 7, 18.2, 23, "logo"); } catch (e) {}
+      doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5);
+      doc.text("ADM 3COLINAS  ·  LEGENDÁRIOS BASE 3 COLINAS", 35, 12, { charSpace: 0.5 });
+      doc.setTextColor(255, 255, 255); doc.setFontSize(21); doc.text(titulo, 35, 22, { maxWidth: W - 47 });
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(220, 210, 200); doc.text(sub, 35, 28.5, { maxWidth: W - 47 });
+      doc.setFontSize(7.5); doc.setTextColor(170, 160, 150); doc.text(`${topName()} · ADM responsável: ${adm}`, 35, 33);
+      const wc = (W - 24 - (resumo.length - 1) * 4) / resumo.length;
+      resumo.forEach(([lbl, val, destaque], k) => {
+        const x = 12 + k * (wc + 4);
+        doc.setFillColor(...C.CREME); doc.setDrawColor(...C.LINHA); doc.setLineWidth(0.3); doc.roundedRect(x, 50, wc, 16, 2, 2, "FD");
+        doc.setFillColor(...(destaque ? C.LARANJA : C.NAVY)); doc.rect(x, 52, 1.2, 12, "F");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); doc.setTextColor(...C.CINZA); doc.text(String(lbl).toUpperCase(), x + 5, 55.5, { charSpace: 0.3, maxWidth: wc - 7 });
+        doc.setFontSize(13); doc.setTextColor(...C.TINTA); doc.text(String(val), x + 5, 62.5, { maxWidth: wc - 7 });
+      });
+    } else {
+      if (logo) try { doc.addImage(logo, "PNG", 10, 2.2, 9.1, 11.5, "logo"); } catch (e) {}
+      doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.text(titulo, 23, 9.6);
+      const xt = 23 + doc.getTextWidth(titulo) + 4;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(220, 210, 200); doc.text(`${sub} · continuação`, xt, 9.6);
+    }
+  };
+  cabecalho(true);
+  doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor(...C.CINZA);
+  doc.text(sp.legenda || "", 12, 73, { maxWidth: W / 2 });
+  doc.text(`Gerado em ${gerado} por ${adm}`, W - 12, 73, { align: "right" });
+  const cols = sp.colunas, nc = cols.length;
+  // seções (ex.: Família 01, Pré TOP): viram uma linha de título dentro da tabela
+  const body = [];
+  (sp.secoes || [{ linhas: sp.linhas }]).forEach(s => {
+    if (s.titulo) body.push([{ content: s.titulo.toUpperCase(), colSpan: nc, styles: { fillColor: [40, 24, 10], textColor: [255, 200, 150], fontStyle: "bold", fontSize: 8 } }]);
+    if (!s.linhas.length && s.titulo) body.push([{ content: "Nada aqui.", colSpan: nc, styles: { textColor: C.CINZA, fontStyle: "italic" } }]);
+    s.linhas.forEach(l => body.push(l.map(v => v == null || v === "" ? "-" : String(v))));
+  });
+  if (!body.length) body.push([{ content: "Nada nesta lista.", colSpan: nc, styles: { textColor: C.CINZA, fontStyle: "italic", halign: "center" } }]);
+  const colStyles = {};
+  cols.forEach((c, i) => { colStyles[i] = { cellWidth: c.w || "auto", halign: c.al || "left", fontStyle: c.bold ? "bold" : "normal", textColor: c.cinza ? C.CINZA : C.TINTA }; });
+  doc.autoTable({
+    startY: 76, margin: { left: 12, right: 12, top: 22, bottom: 14 }, theme: "plain",
+    head: [cols.map(c => c.t.toUpperCase())], body,
+    styles: { font: "helvetica", fontSize: retrato ? 8.5 : 8, cellPadding: { top: 2, bottom: 2, left: 2.2, right: 2.2 }, textColor: C.TINTA, valign: "middle", lineColor: C.LINHA, lineWidth: { bottom: 0.2 }, overflow: "linebreak" },
+    headStyles: { fillColor: C.NAVY, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7, cellPadding: { top: 2.6, bottom: 2.6, left: 2.2, right: 2.2 }, lineWidth: 0 },
+    alternateRowStyles: { fillColor: C.CREME },
+    columnStyles: colStyles,
+    didParseCell: c => {
+      if (c.section === "head") { c.cell.styles.halign = (cols[c.column.index] || {}).al || "left"; return; }
+      const col = cols[c.column.index]; if (!col || !col.status || c.cell.colSpan > 1) return;
+      const cor = corStatus(String(c.cell.raw || "")); if (cor) { c.cell.styles.textColor = cor; c.cell.styles.fontStyle = "bold"; }
+    },
+    didDrawPage: () => { if (doc.internal.getCurrentPageInfo().pageNumber > 1) cabecalho(false); },
+  });
+  const pg = doc.getNumberOfPages();
+  for (let i = 1; i <= pg; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...C.LARANJA); doc.setLineWidth(0.5); doc.line(12, H - 9.5, W - 12, H - 9.5);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...C.TINTA); doc.text("ADM 3COLINAS", 12, H - 5.5);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(...C.CINZA); doc.text(`${sp.titulo} · ${topName()} · ADM ${adm}`, 12 + doc.getTextWidth("ADM 3COLINAS") + 3, H - 5.5);
+    doc.text(`Página ${i} de ${pg}`, W - 12, H - 5.5, { align: "right" });
+  }
+  const hoje = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
+  const arq = `${sp.arquivo || sp.titulo} ${hoje}.pdf`.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w .-]/g, "");
+  await entregarPdf(doc.output("blob"), arq, `${sp.titulo} · ${topName()}`, wa);
+}
+// o que cada página exporta (a lista como está na tela)
+const filtroTxt = partes => partes.filter(Boolean).join(" · ") || "lista completa";
+function pdfDaTela() {
+  const v = S.view, n = (i, x) => [String(i + 1), ...x];
+  const respTxt = p => p.adm ? p.adm + (p.admEm ? " · " + quando(p.admEm) : "") : "";
+  if (v === "participantes" || v === "legendarios") {
+    const lg = v === "legendarios", rows = filterPeople();
+    const fil = { todos: "", atestado: "sem atestado", termo: "sem termo", grupo: "fora do grupo", 40: "+40", ok: "tudo OK", novos: "novos da última planilha", rep: "repetidos" }[S.f.status];
+    const filtro = filtroTxt([fil, S.f.adm && "ADM " + S.f.adm, S.f.q && `busca "${S.f.q}"`]);
+    const insc = p => ({ cancelada: "Cancelada", pendente: "Boleto pendente" })[p.inscricao] || "";
+    return { titulo: lg ? "Legendários" : "Senderistas", sub: `${topName()} · ${filtro}`, legenda: `${rows.length} ${lg ? "legendário(s)" : "senderista(s)"} · ${filtro}`, orient: "landscape",
+      resumo: [["Na lista", rows.length], ["Atestado OK", rows.filter(p => p.atestado === "confirmado").length], ["Termo OK", rows.filter(p => p.termo === "assinado").length], ...(lg ? [] : [["+40", rows.filter(is40).length], ["No grupo", rows.filter(p => p.noGrupo).length]])],
+      colunas: lg ? [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Telefone", w: 34 }, { t: "Equipe", w: 34 }, { t: "Atestado", w: 26, status: true }, { t: "Termo", w: 26, status: true }, { t: "Inscrição", w: 28, status: true }, { t: "Responsável", w: 40, cinza: true }]
+        : [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Telefone", w: 32 }, { t: "Cidade", w: 28 }, { t: "Atestado", w: 24, status: true }, { t: "Termo", w: 24, status: true }, { t: "Grupo", w: 15, al: "center", status: true }, { t: "NFC", w: 13, al: "center", status: true }, { t: "Fam.", w: 13, al: "center" }, { t: "Responsável", w: 36, cinza: true }],
+      linhas: rows.map((p, i) => n(i, lg ? [p.nome, p.telefone, p.equipe, opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, insc(p) || "Ativa", respTxt(p)]
+        : [p.nome + (is40(p) ? " (+40)" : "") + (insc(p) ? " · " + insc(p) : ""), p.telefone, p.cidade, opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, simNao(p.noGrupo), simNao(p.nfc), p.familia ? String(p.familia).padStart(2, "0") : "", respTxt(p)])) };
+  }
+  if (v === "pendencias") {
+    const quem = { participante: "Senderistas", legendario: "Legendários", todos: "Senderistas e legendários" }[S.pf.quem];
+    if (abaPag()) {
+      const rows = pagLista(), filtro = filtroTxt([quem, S.pf.adm && "ADM " + S.pf.adm]);
+      return { titulo: "Pagamentos pendentes", sub: `${topName()} · ${filtro}`, legenda: `${rows.length} pessoa(s) com boleto pendente · ${filtro}`,
+        resumo: [["Na lista", rows.length], ["Já avisados", rows.filter(p => p.cobradoPagEm).length], ["Sem telefone", rows.filter(p => !waNumber(p.telefone)).length]],
+        colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Tipo", w: 22 }, { t: "Telefone", w: 32 }, { t: "Responsável", w: 32, cinza: true }, { t: "Avisado", w: 26, status: true }],
+        linhas: rows.map((p, i) => n(i, [p.nome, p.tipo === "legendario" ? "Legendário" : "Senderista", p.telefone, p.adm, p.cobradoPagEm ? quando(p.cobradoPagEm) : "Não"])) };
+    }
+    const rows = pendLista(), oq = { qualquer: "", atestado: "atestado", termo: "termo", grupo: "grupo" }[S.pf.oque];
+    const filtro = filtroTxt([quem, oq && "só " + oq, S.pf.adm && "ADM " + S.pf.adm]);
+    return { titulo: "Pendências", sub: `${topName()} · ${filtro}`, legenda: `${rows.length} pessoa(s) com pendência · ${filtro}`,
+      resumo: [["Na lista", rows.length], ["Sem atestado", rows.filter(p => pendDe(p).includes("atestado")).length], ["Sem termo", rows.filter(p => pendDe(p).includes("termo")).length]],
+      colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Tipo", w: 22 }, { t: "Telefone", w: 30 }, { t: "Falta", w: 38, status: true }, { t: "Responsável", w: 28, cinza: true }, { t: "Cobrado", w: 22, cinza: true }],
+      linhas: rows.map((p, i) => n(i, [p.nome, p.tipo === "legendario" ? "Legendário" : "Senderista", p.telefone, "Pendente: " + listaE(pendDe(p).map(k => PEND[k])), p.adm, p.cobradoEm ? quando(p.cobradoEm) : "Não"])) };
+  }
+  if (v === "familias") {
+    const parts = S.P.filter(p => p.tipo !== "legendario"), sem = parts.filter(p => !p.familia);
+    const lin = m => m.map((p, i) => n(i, [p.nome, is40(p) ? "Sim" : "", opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, p.telefone]));
+    return { titulo: "Famílias", legenda: `${parts.length - sem.length} de ${parts.length} senderistas distribuídos nas 12 famílias`,
+      resumo: [["Distribuídos", parts.length - sem.length], ["Sem família", sem.length], ["+40", parts.filter(is40).length]],
+      colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "+40", w: 12, al: "center" }, { t: "Atestado", w: 26, status: true }, { t: "Termo", w: 26, status: true }, { t: "Telefone", w: 34 }],
+      secoes: [...Array.from({ length: 12 }, (_, k) => { const m = parts.filter(p => Number(p.familia) === k + 1); return { titulo: `Família ${String(k + 1).padStart(2, "0")} · ${m.length} pessoa(s)`, linhas: lin(m) }; }).filter(x => x.linhas.length),
+        ...(sem.length ? [{ titulo: `Sem família · ${sem.length}`, linhas: lin(sem) }] : [])] };
+  }
+  if (v === "checklist") {
+    const s = stats();
+    return { titulo: "Checklist ADM", legenda: `${s.tDone} de ${s.tTotal} tarefas prontas`,
+      resumo: [["Prontas", `${s.tDone}/${s.tTotal}`], ["Em andamento", s.tAnd.length], ["A fazer", s.tTotal - s.tDone - s.tAnd.length]],
+      colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Tarefa", bold: true }, { t: "Status", w: 28, status: true }, { t: "Responsável", w: 32 }, { t: "Fornecedor / obs.", w: 48, cinza: true }],
+      secoes: FASES.map(f => { const ts = S.T.filter(t => t.fase === f.v).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+        return { titulo: `${f.l} · ${ts.filter(t => t.status === "pronto").length}/${ts.length}`, linhas: ts.map((t, i) => n(i, [t.titulo, opt(TASK, t.status).l, t.responsavel, [t.fornecedor, t.obs].filter(Boolean).join(" · ")])) }; }) };
+  }
+  if (v === "estoque") {
+    const s = stats(), kits = topKits(), meta = S.config.metaMRE || 110;
+    const sit = e => e.grupo === "equip" ? (e.conferir ? "Conferir" : "OK") : e.qtd === 0 ? "Zerado" : e.qtd <= S.config.alertaBaixo ? "Baixo" : "OK";
+    return { titulo: "Estoque e compras", legenda: `Alerta de estoque baixo em até ${S.config.alertaBaixo} unidades`,
+      resumo: [["Kits MRE", `${kits}/${meta}`], ["Zerados", s.zero.length], ["Baixos", s.low.length]],
+      colunas: [{ t: "Item", bold: true }, { t: "Qtd.", w: 16, al: "center" }, { t: "Situação", w: 24, status: true }, { t: "Local", w: 36 }, { t: "Compra / obs.", w: 50, cinza: true }],
+      secoes: GRUPOS.map(g => ({ titulo: g.l, linhas: S.estoque.filter(e => e.grupo === g.v).sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+        .map(e => [e.item, e.qtd != null ? e.qtd : "", sit(e), e.local, [e.resp ? "compra: " + e.resp : "", e.obs].filter(Boolean).join(" · ")]) })) };
+  }
+  if (v === "pista") {
+    const dias = [...S.pista].sort((a, b) => (a.ordem || 0) - (b.ordem || 0)), tot = stats().pistaM;
+    const km = m => (m / 1000).toFixed(2).replace(".", ",") + " km";
+    return { titulo: "KM da pista", legenda: `Pista total: ${km(tot)} (${fmtNum(tot)} m)`,
+      resumo: [["Pista total", km(tot)], ...dias.slice(0, 3).map(d => [d.dia, km((d.trechos || []).reduce((a, x) => a + (Number(x.m) || 0), 0))])],
+      colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "De", bold: true }, { t: "Para", bold: true }, { t: "Metros", w: 24, al: "right" }, { t: "Tempo", w: 30, cinza: true }],
+      secoes: dias.map(d => { const tr = d.trechos || []; return { titulo: `${d.dia} · ${fmtNum(tr.reduce((a, x) => a + (Number(x.m) || 0), 0))} m`, linhas: tr.map((x, i) => n(i, [x.de, x.para, fmtNum(x.m) + " m", x.tempo])) }; }) };
+  }
+  if (v === "pins") {
+    const F = S.pinf || {}, rows = pinsFiltrados(), st = { pendente: "pendentes", entregue: "entregues", hoje: "entregues hoje", todos: "todos" }[F.st];
+    const filtro = filtroTxt([st, F.lote && "lote " + F.lote, F.q && `busca "${F.q}"`]);
+    return { titulo: "Pins", sub: `Pins dos bonés · ${filtro}`, legenda: `${rows.length} pessoa(s) · ${filtro}`, orient: "landscape",
+      resumo: [["Na lista", rows.length], ["Entregues", rows.filter(p => p.status === "entregue").length], ["Pendentes", rows.filter(p => p.status !== "entregue").length]],
+      colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Telefone", w: 34 }, { t: "E-mail", w: 58, cinza: true }, { t: "Lote", w: 16, al: "center" }, { t: "Concluiu", w: 22, al: "center" }, { t: "Status", w: 22, status: true }, { t: "Entregue em", w: 24, al: "center" }, { t: "Por", w: 30, cinza: true }],
+      linhas: rows.map((p, i) => n(i, [p.nome, p.telefone, p.email, p.lote, dataBr(p.conclusao), p.status === "entregue" ? "Entregue" : "Pendente", dataBr(p.entregueEm), p.entreguePor])) };
+  }
+  if (v === "tops") {
+    const list = S.tops.length ? [...S.tops] : [{ id: LEGACY_TOP, nome: "TOP 1922", status: "ativo", local: "Franca - SP" }];
+    return { titulo: "Tops", sub: "Histórico dos TOPs da base 3 Colinas", legenda: `${list.length} TOP(s)`, orient: "landscape",
+      resumo: [["TOPs", list.length], ["Finalizados", list.filter(t => t.status === "finalizado").length]],
+      colunas: [{ t: "TOP", bold: true }, { t: "Status", w: 28, status: true }, { t: "Local", w: 40 }, { t: "Datas", w: 46 }, { t: "Senderistas", w: 24, al: "center" }, { t: "Atestados", w: 22, al: "center" }, { t: "Termos", w: 20, al: "center" }, { t: "Legendários", w: 24, al: "center" }],
+      linhas: list.map(t => { const s = topStats(t.id); return [t.nome, t.status === "finalizado" ? "Finalizado" : "Em andamento", t.local, t.inicio ? fmtDate(t.inicio) + (t.fim ? " a " + fmtDate(t.fim) : "") : "", s.n, s.at, s.te, s.lg]; }) };
+  }
+  if (v === "usuarios") {
+    const nivel = e => e.dono ? "Dono · acesso total" : e.ativo === false ? "Bloqueado" : e.nivel === "total" ? "Acesso total" : (e.nivel === "leitura" ? "Somente leitura: " : "Edita: ") + (ABAS().filter(x => (e.abas || []).includes(x.id)).map(x => x.l).join(", ") || "só o Dashboard");
+    const rows = [...(S.equipe || [])].sort((a, b) => (b.dono ? 1 : 0) - (a.dono ? 1 : 0) || norm(a.nome).localeCompare(norm(b.nome)));
+    return { titulo: "Usuários", sub: "Equipe ADM com acesso ao app", legenda: `${rows.length} usuário(s) cadastrado(s)`, orient: "landscape",
+      resumo: [["Cadastrados", rows.length], ["Com acesso", rows.filter(e => e.ativo !== false).length], ["Sem senha", rows.filter(e => !e.user_id && e.ativo !== false).length]],
+      colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", w: 50, bold: true }, { t: "Função", w: 28 }, { t: "E-mail", w: 62 }, { t: "Acesso" }, { t: "Último acesso", w: 32, cinza: true }],
+      linhas: rows.map((e, i) => n(i, [e.nome, e.funcao || "ADM", e.email, nivel(e), e.visto_em ? quando(e.visto_em) : e.user_id ? "Nunca acessou" : "Ainda não criou a senha"])) };
+  }
+  if (v === "historico") {
+    const rows = histFiltrado(), h = S.hf, filtro = filtroTxt([h.quem, h.aba, h.acao, h.q && `busca "${h.q}"`]);
+    const dt = iso => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const mud = x => x.mudancas ? Object.entries(x.mudancas).filter(([k]) => !IGNORAR.includes(k)).map(([k, [a, b]]) => `${CAMPOS[k] || k}: ${fmtValor(k, a)} → ${fmtValor(k, b)}`).join("\n") : "";
+    return { titulo: "Histórico", sub: `Alterações no app · ${filtro}`, legenda: `${rows.length} alteração(ões) · ${filtro}`, orient: "landscape",
+      resumo: [["Alterações", rows.length], ["Pessoas", new Set(rows.map(x => x.quem)).size]],
+      colunas: [{ t: "Quando", w: 26, cinza: true }, { t: "Quem", w: 36, bold: true }, { t: "Ação", w: 18 }, { t: "Aba", w: 26 }, { t: "Registro", w: 50 }, { t: "O que mudou" }],
+      linhas: rows.slice(0, 1500).map(x => [dt(x.em), x.quem, x.acao, x.aba, x.nome || x.doc_id, mud(x)]) };
+  }
+  if (v === "notificacoes") {
+    const L = notifsVisiveis().map(x => ({ n: x, t: notifTexto(x) })).filter(o => o.t);
+    return { titulo: "Notificações", sub: `Últimos ${NOTIF_DIAS} dias`, legenda: `${L.length} notificação(ões)`,
+      resumo: [["Notificações", L.length]],
+      colunas: [{ t: "Quando", w: 26, cinza: true }, { t: "Quem / título", w: 50, bold: true }, { t: "O que aconteceu" }],
+      linhas: L.map(o => [quando(o.n.em), o.t.t, o.t.c]) };
+  }
+  if (v === "painel") {
+    const s = stats(), pins = pinsTodos(), kits = topKits(), meta = S.config.metaMRE || 110;
+    const L = (a, b, c) => [a, String(b), c];
+    return { titulo: "Dashboard", sub: `Resumo do ${topName()}`, legenda: "Números do momento em que o PDF foi gerado",
+      resumo: [["Senderistas", s.n], ["Legendários", s.lg.length], ["Checklist", pct(s.tDone, s.tTotal) + "%"]],
+      colunas: [{ t: "Indicador", bold: true }, { t: "Valor", w: 30, al: "center" }, { t: "Detalhe", w: 80, cinza: true }],
+      secoes: [
+        { titulo: "Senderistas", linhas: [L("Cadastrados", s.n, `${s.mais40.length} com +40 · ${s.semFamilia} sem família`), L("Atestado confirmado", s.atestado, pct(s.atestado, s.n) + "%"), L("Termo assinado", s.termo, pct(s.termo, s.n) + "%"),
+          L("Mensagem do grupo", s.msg, pct(s.msg, s.n) + "%"), L("Entraram no grupo", s.grupo, pct(s.grupo, s.n) + "%"), L("NFC registrado", s.nfc, pct(s.nfc, s.n) + "%"), L("Pagamento pendente", S.P.filter(pagPendente).length, "boleto em aberto")] },
+        { titulo: "Legendários", linhas: [L("Cadastrados", s.lg.length, ""), L("Atestado confirmado", s.lgAtest, pct(s.lgAtest, s.lg.length) + "%"), L("Termo assinado", s.lgAssinado, pct(s.lgAssinado, s.lg.length) + "%")] },
+        { titulo: "Operação", linhas: [L("Checklist pronto", `${s.tDone}/${s.tTotal}`, `${s.tAnd.length} em andamento`), L("Kits MRE lacrados", `${kits}/${meta}`, `faltam ${Math.max(0, meta - kits)}`),
+          L("Estoque", `${s.zero.length} zerado(s)`, `${s.low.length} baixo(s) · ${s.conferir.length} para conferir`), L("Pista", (s.pistaM / 1000).toFixed(2).replace(".", ",") + " km", fmtNum(s.pistaM) + " m"),
+          ...(pins.length ? [L("Pins entregues", `${pins.filter(p => p.status === "entregue").length}/${pins.length}`, `${pins.filter(p => p.status !== "entregue").length} pendente(s)`)] : [])] },
+      ] };
+  }
+  return null;
+}
+function pdfTelaForm() {
+  const sp = pdfDaTela(); if (!sp) return;
+  const qtd = sp.linhas ? sp.linhas.length : (sp.secoes || []).reduce((a, s) => a + s.linhas.length, 0);
+  modal(`
+    <h3>Exportar PDF · ${esc(sp.titulo)}</h3>
+    <p style="margin:0">${esc(sp.legenda || "")}</p>
+    <p class="hint" style="margin:0">O PDF sai com a lista do jeito que está na tela${sp.linhas ? " (filtro e busca)" : ""}, ${qtd} linha(s), com o seu nome como ADM responsável. Dá para baixar ou mandar direto no WhatsApp.</p>
+    <div class="modal-foot"><button class="btn" type="button" id="pdfWa">${ico("wa")} Enviar no WhatsApp</button><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="pdfBtn">${ico("upload")} Gerar PDF</button></div></div>`,
+  () => ir(false));
+  async function ir(wa) {
+    const b = wa ? $("#pdfWa") : $("#pdfBtn"); b.disabled = true; b.textContent = "Gerando…";
+    try { await gerarListaPdf(sp, wa); closeModal(); }
+    catch (e) { console.error(e); toast(erroAmigavel(e)); b.disabled = false; b.textContent = "Tentar de novo"; }
+  }
+  $("#pdfWa").onclick = () => ir(true);
+}
+const PDF_TELAS = ["painel", "participantes", "legendarios", "pendencias", "familias", "checklist", "estoque", "pista", "pins", "tops", "usuarios", "historico", "notificacoes"];
+// coloca o botão "Exportar PDF" no topo da página (cronograma e consagração já têm o deles)
+function botaoPdf() {
+  if (!ME.acesso || !PDF_TELAS.includes(S.view) || (S.view === "usuarios" && S.usrAba === "notif")) return;
+  const head = $("#view .head") || $("#view .hero-text"); if (!head || head.querySelector("[data-act=pdf-tela]")) return;
+  let act = head.querySelector(":scope > .actions");
+  if (!act) { act = document.createElement("div"); act.className = "actions"; head.appendChild(act); }
+  const hero = head.classList.contains("hero-text");
+  act.insertAdjacentHTML(hero ? "beforeend" : "afterbegin", `<button class="btn${hero ? " glass" : ""}" type="button" data-act="pdf-tela">${ico("upload")} Exportar PDF</button>`);
+}
 /* ---------- Pins (pins dos bonés: entregues ou pendentes) ----------
    Cada pessoa fica em config/pin-<id> { nome, telefone, email, conclusao, lote, status: entregue|pendente, entregueEm, entreguePor }.
    Os dados vêm da planilha "alunos do lote" da plataforma (.csv) e o ADM marca a entrega no app. */
@@ -1203,16 +1438,19 @@ function pinChave(nome, tel, email) {
   let h = 5381; for (const c of base) h = (h * 33 ^ c.charCodeAt(0)) >>> 0;
   return "pin-" + h.toString(36);
 }
+function pinsFiltrados() {
+  const F = S.pinf || (S.pinf = { st: "pendente", lote: "", q: "" }), q = norm(F.q), hoje = hojeISO();
+  return pinsTodos().filter(p => F.st === "todos" || (F.st === "hoje" ? p.status === "entregue" && p.entregueEm === hoje : (F.st === "entregue") === (p.status === "entregue")))
+    .filter(p => !F.lote || (p.lote || "sem lote") === F.lote)
+    .filter(p => !q || norm(p.nome).includes(q) || digits(p.telefone).includes(digits(F.q) || "§") || norm(p.email).includes(q));
+}
 function vPins() {
   const F = S.pinf || (S.pinf = { st: "pendente", lote: "", q: "" });
   const todos = pinsTodos(), ed = podeEditar();
   const ent = todos.filter(p => p.status === "entregue"), pend = todos.filter(p => p.status !== "entregue");
   const lotes = [...new Set(todos.map(p => p.lote || "sem lote"))].sort((a, b) => todos.filter(p => (p.lote || "sem lote") === b).length - todos.filter(p => (p.lote || "sem lote") === a).length);
-  const q = norm(F.q);
   const hoje = hojeISO(), entHoje = ent.filter(p => p.entregueEm === hoje);
-  const rows = todos.filter(p => F.st === "todos" || (F.st === "hoje" ? p.status === "entregue" && p.entregueEm === hoje : (F.st === "entregue") === (p.status === "entregue")))
-    .filter(p => !F.lote || (p.lote || "sem lote") === F.lote)
-    .filter(p => !q || norm(p.nome).includes(q) || digits(p.telefone).includes(digits(F.q) || "§") || norm(p.email).includes(q));
+  const rows = pinsFiltrados();
   const seg = (v, l, n) => `<button type="button" data-pin-st="${v}" aria-pressed="${F.st === v}">${l} <span class="num" style="opacity:.75">${n}</span></button>`;
   return `
   <div class="head"><div><h2>Pins</h2><p>Pins dos bonés de quem concluiu a pista: quem já recebeu e quem ainda está pendente. Toque em <b>Entregar</b> quando a pessoa receber.</p></div>
@@ -1719,6 +1957,7 @@ function render() {
   const focusId = document.activeElement && document.activeElement.id;
   const caret = focusId === "q" || focusId === "hq" ? document.activeElement.selectionStart : null;
   view.innerHTML = html;
+  botaoPdf();
   if ((focusId === "q" || focusId === "hq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
 }
 
@@ -2309,6 +2548,7 @@ document.addEventListener("click", e => {
   if (d.act === "csg-cfg") { csgCfgForm(); return; }
   if (d.act === "csg-unir") { csgUnirForm(); return; }
   if (d.act === "novidade") { novidadeForm(); return; }
+  if (d.act === "pdf-tela") { pdfTelaForm(); return; }
   if (d.usrAba) { S.usrAba = d.usrAba; render(); return; }
   if (d.act === "ativar-notif") { pedirNotificacao().then(render); return; }
   if (d.act === "pin-importar") { pinImportarForm(); return; }
@@ -2592,6 +2832,12 @@ async function carregarHist() {
   if (!r.error) S.hist = r.data;
   S.histOk = true; if (S.view === "historico") render();
 }
+const histLinha = x => ({ ...x, aba: abaDoRegistro(x.col, x.dados || { tipo: x.tipo || ((S.pessoas.find(p => p.id === x.doc_id) || {}).tipo) }) });
+function histFiltrado() {
+  const h = S.hf, nq = norm(h.q);
+  return S.hist.map(histLinha).filter(x => (!h.quem || x.quem === h.quem) && (!h.aba || x.aba === h.aba) && (!h.acao || x.acao === h.acao)
+    && (!nq || norm(x.nome).includes(nq) || norm(x.quem).includes(nq)));
+}
 function vHistorico() {
   if (!DEMO && !S.histOk) { carregarHist(); return `<div class="head"><div><h2>Histórico</h2><p>Carregando…</p></div></div>`; }
   if (S.histErro === "sem-tabela") return `
@@ -2599,12 +2845,10 @@ function vHistorico() {
     <section class="panel"><div class="empty">Falta criar o histórico no banco. No Supabase, abra <b>SQL Editor → New query</b>, cole o arquivo <b>supabase/historico.sql</b> e clique em <b>Run</b>. Depois toque em <b>Tentar de novo</b>.
       <div style="margin-top:12px"><button class="btn primary" type="button" data-hist-act="atualizar">Tentar de novo</button></div>
       ${S.histDetalhe ? `<p class="hint" style="margin-top:10px;font-size:12px">Detalhe: ${esc(S.histDetalhe)}</p>` : ""}</div></section>`;
-  const h = S.hf, nq = norm(h.q);
+  const h = S.hf;
   const quem = [...new Set(S.hist.map(x => x.quem))].sort();
-  const linha = x => ({ ...x, aba: abaDoRegistro(x.col, x.dados || { tipo: x.tipo || ((S.pessoas.find(p => p.id === x.doc_id) || {}).tipo) }) });
-  const rows = S.hist.map(linha).filter(x => (!h.quem || x.quem === h.quem) && (!h.aba || x.aba === h.aba) && (!h.acao || x.acao === h.acao)
-    && (!nq || norm(x.nome).includes(nq) || norm(x.quem).includes(nq)));
-  const abas = [...new Set(S.hist.map(linha).map(x => x.aba))].sort();
+  const rows = histFiltrado();
+  const abas = [...new Set(S.hist.map(histLinha).map(x => x.aba))].sort();
   const verbo = { criou: "criou", alterou: "alterou", apagou: "apagou" };
   let dia = "";
   const itens = rows.slice(0, 400).map(x => {

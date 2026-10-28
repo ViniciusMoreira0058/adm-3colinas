@@ -71,3 +71,7 @@ A aba **Consagração** acompanha os 40 dias de consagração. Todo dia um ADM t
 Quem toca em **Ativar notificações** recebe aviso no celular mesmo com o app fechado (no iPhone, só com o app instalado na tela inicial, iOS 16.4 ou mais novo). O dono recebe tudo que os outros ADMs mudam (cadastros, cronograma, consagração, pins), agrupado quando muda muita coisa de uma vez; os ADMs recebem só **planilha importada** e **novidade do app** (Usuários → Avisar novidade, que também aparece como explicação quando o ADM abre o app). Funciona assim: o banco (gatilho em `adm_docs`, `supabase/push.sql`) chama `https://adm-3colinas.vercel.app/api/push`, que envia pelo Web Push. Para ligar, rode `supabase/push.sql` no SQL Editor com a chave privada VAPID no lugar indicado (a chave pública está em `app.js` e `api/push.js`). A chave privada nunca vai para o GitHub.
 
 A página **Notificações** (sininho no alto, com o número de avisos novos) guarda os avisos por 10 dias, com a mesma regra de quem recebe o quê. Eles ficam na tabela `adm_notif`, preenchida por um gatilho em `adm_docs` (também em `supabase/push.sql`). O que cada pessoa já viu fica em `adm_notif_lido`.
+
+## Exportar PDF
+
+As páginas com lista (Dashboard, Senderistas, Legendários, Pendências, Famílias, Checklist, Estoque, Pista, Pins, Tops, Usuários, Histórico e Notificações) têm o botão **Exportar PDF**. O PDF sai no visual do cronograma, com a lista do jeito que está na tela (filtro e busca) e o nome de quem exportou; dá para baixar ou mandar no WhatsApp. Cronograma e Consagração continuam com o PDF próprio.
