@@ -466,6 +466,7 @@ function vPessoas(tipo) {
   const rows = filterPeople();
   const doTipo = S.P.filter(p => lg ? p.tipo === "legendario" : p.tipo !== "legendario");
   const total = doTipo.filter(p => !cancelado(p)).length, nCanc = doTipo.length - total;
+  const nLix = lixeira().filter(x => (x.data.tipo === "legendario") === lg && (x.data.top || atualId()) === curTopId()).length;
   const exemplos = S.P.some(p => p.exemplo);
   const fil = lg
     ? [["todos", "Todos"], ["atestado", "Sem atestado"], ["termo", "Sem termo"], ["ok", "Tudo OK"]]
@@ -491,6 +492,7 @@ function vPessoas(tipo) {
       ${S.isOwner && total ? `<button class="btn ${sel ? "primary" : ""}" type="button" data-act="selecionar" aria-pressed="${sel}">${ico("check")} ${sel ? "Concluir seleção" : "Selecionar"}</button>` : ""}
       <button class="btn" type="button" data-act="importar">${ico("upload")} Importar relatório</button>
       <button class="btn" type="button" data-act="colar">${ico("paste")} Colar lista</button>
+      ${nLix ? `<button class="btn" type="button" data-act="lixeira">${ico("trash")} Excluídos (${nLix})</button>` : ""}
       <button class="btn primary" type="button" data-act="novo">${ico("plus")} ${lg ? "Novo legendário" : "Novo senderista"}</button>
     </div></div>
   ${nRep && S.f.status !== "rep" ? `<div class="banner"><span><b>${nRep}</b> ${nRep > 1 ? "cadastros parecem repetidos" : "cadastro parece repetido"} (mesmo nome, telefone ou e-mail).</span><button class="btn" type="button" data-fil="rep">Ver repetidos</button></div>` : ""}
@@ -2052,11 +2054,49 @@ function personForm(p, tipo) {
   const del = $("#delBtn");
   if (del) del.onclick = () => {
     if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; }
-    closeModal(); save(() => api.remove("pessoas", p.id), "Cadastro excluído");
+    closeModal(); save(() => excluirPessoas([p], "Excluído pela ficha"), "Cadastro excluído (dá para restaurar em Excluídos)");
   };
 }
 
 /* Só o dono: apaga os selecionados ou todos do tipo (no TOP aberto), com confirmação digitada. */
+/* Lixeira: quem é excluído fica guardado em config/lixeira por 60 dias e pode ser restaurado */
+const LIX_DIAS = 60;
+const lixeira = () => (((S.cfgDocs || {}).lixeira || {}).lista || []).filter(x => Date.now() - new Date(x.em).getTime() < LIX_DIAS * 864e5);
+async function guardarNaLixeira(pessoas, motivo, arquivo) {
+  const em = new Date().toISOString(), lote = "lx" + Date.now().toString(36);
+  const novos = pessoas.map(p => { const { id, ...data } = p; return { id, lote, em, por: ME.adm || "", motivo, arquivo: arquivo || "", data }; });
+  const ids = new Set(novos.map(x => x.id));
+  await api.set("config", "lixeira", { lista: [...novos, ...lixeira().filter(x => !ids.has(x.id))].slice(0, 400) });
+}
+async function excluirPessoas(pessoas, motivo, arquivo) {
+  await guardarNaLixeira(pessoas, motivo, arquivo);
+  for (let i = 0; i < pessoas.length; i += 8) await Promise.all(pessoas.slice(i, i + 8).map(p => api.remove("pessoas", p.id)));
+}
+function lixeiraForm(tipo) {
+  const lg = tipo === "legendario";
+  const itens = lixeira().filter(x => (x.data.tipo === "legendario") === lg && (x.data.top || atualId()) === curTopId());
+  const lotes = [...new Set(itens.map(x => x.lote))];
+  modal(`
+    <h3>Excluídos (${itens.length})</h3>
+    <p class="hint" style="margin:0">Quem foi excluído fica guardado aqui por ${LIX_DIAS} dias. Restaurar devolve a pessoa com todos os dados (atestado, termo, família, observações).</p>
+    ${itens.length ? lotes.map(l => { const g = itens.filter(x => x.lote === l), a = g[0];
+      return `<div class="lix-grupo"><div class="lix-head"><span><b>${esc(a.motivo)}</b><br><span class="hint">${esc(quando(a.em))}${a.por ? " · por " + esc(a.por) : ""}${a.arquivo ? " · " + esc(a.arquivo) : ""}</span></span>
+        ${g.length > 1 ? `<button class="btn" type="button" data-lix-lote="${esc(l)}">Restaurar os ${g.length}</button>` : ""}</div>
+        <ul class="imp-list">${g.map(x => `<li style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><b>${esc(x.data.nome)}</b> <span class="hint">${esc(x.data.telefone || "")}</span></span><button class="btn" type="button" data-lix-id="${esc(x.id)}">Restaurar</button></li>`).join("")}</ul></div>`; }).join("")
+      : `<div class="empty">Ninguém excluído nos últimos ${LIX_DIAS} dias.</div>`}
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`);
+  const restaurar = async lista => {
+    closeModal();
+    const ids = new Set(lista.map(x => x.id));
+    await save(async () => {
+      for (const x of lista) await api.set("pessoas", x.id, x.data);
+      await api.set("config", "lixeira", { lista: lixeira().filter(x => !ids.has(x.id)) });
+    }, lista.length > 1 ? `${lista.length} restaurados` : `${lista[0].data.nome.split(" ")[0]} restaurado`);
+  };
+  document.querySelectorAll("[data-lix-id]").forEach(b => b.onclick = () => restaurar(itens.filter(x => x.id === b.dataset.lixId)));
+  document.querySelectorAll("[data-lix-lote]").forEach(b => b.onclick = () => restaurar(itens.filter(x => x.lote === b.dataset.lixLote)));
+}
+
 function apagarEmMassa(todos) {
   const tipo = S.view === "legendarios" ? "legendario" : "participante";
   const lg = tipo === "legendario";
@@ -2065,7 +2105,7 @@ function apagarEmMassa(todos) {
   const nome = lg ? (alvo.length > 1 ? "legendários" : "legendário") : (alvo.length > 1 ? "senderistas" : "senderista");
   modal(`
     <h3>Apagar ${alvo.length} ${nome}?</h3>
-    <p class="hint" style="margin:0">${todos ? `Isso apaga <b>todos os ${lg ? "legendários" : "senderistas"}</b> do ${esc(topName())}` : `Isso apaga os <b>${alvo.length} selecionados</b>`}, para todos da equipe. <b>Não dá para desfazer.</b></p>
+    <p class="hint" style="margin:0">${todos ? `Isso apaga <b>todos os ${lg ? "legendários" : "senderistas"}</b> do ${esc(topName())}` : `Isso apaga os <b>${alvo.length} selecionados</b>`}, para todos da equipe. Ficam no botão <b>Excluídos</b> por ${LIX_DIAS} dias e dá para restaurar.</p>
     <ul class="hint" style="margin:0;max-height:140px;overflow:auto;padding-left:18px">${alvo.slice(0, 12).map(p => `<li>${esc(p.nome)}</li>`).join("")}${alvo.length > 12 ? `<li>e mais ${alvo.length - 12}…</li>` : ""}</ul>
     <div class="field"><label for="f-conf">Para confirmar, digite <b>APAGAR</b></label><input id="f-conf" name="conf" autocomplete="off" autocapitalize="characters"></div>
     <div class="warn-text" id="confWarn" hidden></div>
@@ -2075,9 +2115,7 @@ function apagarEmMassa(todos) {
     closeModal();
     S.sel = { on: false, tipo: "", ids: new Set() };
     toast(`Apagando ${alvo.length}…`);
-    await save(async () => {
-      for (let i = 0; i < alvo.length; i += 8) await Promise.all(alvo.slice(i, i + 8).map(p => api.remove("pessoas", p.id)));
-    }, `${alvo.length} ${nome} apagado(s)`);
+    await save(() => excluirPessoas(alvo, todos ? `Apagar todos os ${lg ? "legendários" : "senderistas"}` : "Apagados pela seleção"), `${alvo.length} ${nome} apagado(s)`);
   });
 }
 
@@ -2528,6 +2566,7 @@ document.addEventListener("click", e => {
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
   if (d.act === "novo") { personForm(null, S.view === "legendarios" ? "legendario" : "participante"); return; }
+  if (d.act === "lixeira") { lixeiraForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.act === "importar") { importForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.restaurar && S.isOwner) {
     const h = S.hist.find(x => String(x.id) === d.restaurar);
@@ -3007,7 +3046,7 @@ function importForm(tipoAtual) {
     const marcarCanc = $("#impCanc") && $("#impCanc").checked;
     const foraSel = new Set([...document.querySelectorAll("[data-imp-fora]:checked")].map(x => x.dataset.impFora));
     closeModal();
-    await importarRelatorio(novos, completar ? R.ja : [], [...(marcarCanc ? R.canc.filter(c => c.p && !cancelado(c.p)) : []), ...R.fora.filter(f => foraSel.has(f.p.id))], R.arquivo);
+    await importarRelatorio(novos, completar ? R.ja : [], marcarCanc ? R.canc.filter(c => c.p && !cancelado(c.p)) : [], R.arquivo, R.fora.filter(f => foraSel.has(f.p.id)).map(f => f.p));
   });
   let R = null;
   $("#f-arq").addEventListener("change", async e => {
@@ -3057,11 +3096,11 @@ function previewImport(R) {
     <ul class="imp-list">${cancApp.map(c => `<li>${esc(c.p.nome)} <span class="hint">${tl(c.n)}</span></li>`).join("")}</ul></details>
     <label class="selall"><input type="checkbox" id="impCanc" checked> <span>Marcar essas pessoas como <b>compra cancelada</b> no app (não apaga ninguém)</span></label>` : ""}
   ${R.fora.length ? `<details open><summary class="bad-text">Estão no app, mas não estão neste relatório (${R.fora.length})</summary>
-    <p class="hint" style="margin:6px 0">Por isso o número do app pode ficar maior que o da plataforma. Podem ter saído da plataforma ou ter sido cadastrados à mão. Marque quem deve sair da conta: fica como <b>compra cancelada</b> (não apaga ninguém e dá para desfazer na ficha).</p>
-    <ul class="imp-list">${R.fora.map(({ p, como }) => `<li><label><input type="checkbox" data-imp-fora="${esc(p.id)}"> <b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.telefone ? " · " + esc(p.telefone) : ""}${p.adm ? " · cadastrado/mexido por " + esc(p.adm) : ""}</span>${como ? ` <span class="chip wait">no relatório está como ${esc(como)}</span>` : ""}</label></li>`).join("")}</ul></details>` : ""}`;
+    <p class="hint" style="margin:6px 0">Os marcados serão <b>excluídos do app</b> ao importar (é o que deixa o número igual ao da plataforma). Ficam guardados em <b>Excluídos</b> por ${LIX_DIAS} dias e dá para restaurar. Desmarque quem deve continuar.</p>
+    <ul class="imp-list">${R.fora.map(({ p, como }) => `<li><label><input type="checkbox" data-imp-fora="${esc(p.id)}" checked> <b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.telefone ? " · " + esc(p.telefone) : ""}${p.adm ? " · cadastrado/mexido por " + esc(p.adm) : ""}</span>${como ? ` <span class="chip wait">no relatório está como ${esc(como)}</span>` : ""}</label></li>`).join("")}</ul></details>` : ""}`;
 }
-async function importarRelatorio(novos, completar, cancelar, arquivo) {
-  if (!novos.length && !completar.length && !cancelar.length) { toast("Nada para importar."); return; }
+async function importarRelatorio(novos, completar, cancelar, arquivo, excluir = []) {
+  if (!novos.length && !completar.length && !cancelar.length && !excluir.length) { toast("Nada para importar."); return; }
   toast("Importando…");
   const importId = "imp" + Date.now().toString(36);
   let completados = 0, erro = false;
@@ -3083,9 +3122,12 @@ async function importarRelatorio(novos, completar, cancelar, arquivo) {
       }),
       ...cancelar.map(({ p }) => () => api.update("pessoas", p.id, { inscricao: "cancelada" })),
     ];
-    try { for (let i = 0; i < fila.length; i += 8) await Promise.all(fila.slice(i, i + 8).map(f => f())); }
+    try {
+      for (let i = 0; i < fila.length; i += 8) await Promise.all(fila.slice(i, i + 8).map(f => f()));
+      if (excluir.length) await excluirPessoas(excluir, "Não estavam no relatório importado", arquivo);
+    }
     catch (e) { erro = true; throw e; }
-  }, [novos.length && `${novos.length} adicionado(s)`, completar.length && "dados completados", cancelar.length && `${cancelar.length} marcado(s) como cancelado`].filter(Boolean).join(" · ")).then(ok)));
+  }, [novos.length && `${novos.length} adicionado(s)`, completar.length && "dados completados", cancelar.length && `${cancelar.length} marcado(s) como cancelado`, excluir.length && `${excluir.length} excluído(s)`].filter(Boolean).join(" · ")).then(ok)));
   if (erro) return;
   render();
   // aviso para a equipe: os outros ADMs veem o resumo na tela assim que a importação termina
@@ -3093,7 +3135,7 @@ async function importarRelatorio(novos, completar, cancelar, arquivo) {
   const aviso = { id: importId, em: new Date().toISOString(), por: ME.adm || "", porId: ME.id || "", arquivo: arquivo || "", top: curTopId(),
     novosP: novos.filter(n => !lg(n)).length, novosL: novos.filter(lg).length,
     mais40: novos.filter(n => (n.idade || 0) >= 40).length, pagPend: novos.filter(n => n.inscricao === "pendente").length,
-    saude: novos.filter(n => saudeAlerta(n)).length, completados, cancelados: cancelar.length,
+    saude: novos.filter(n => saudeAlerta(n)).length, completados, cancelados: cancelar.length, excluidos: excluir.length,
     totalP: S.P.filter(p => !lg(p) && !cancelado(p)).length, totalL: S.P.filter(p => lg(p) && !cancelado(p)).length };
   if (!DEMO) store.set("adm3-aviso-visto", importId);   // quem importou já sabe o resultado
   try { await api.set("config", "aviso", aviso); } catch (e) { console.error(e); }
@@ -3419,6 +3461,7 @@ function avisoModal() {
     a.saude && `<b>${a.saude}</b> com condição médica, medicamento ou restrição alimentar`,
     a.completados && `Dados completados de <b>${a.completados}</b> pessoa(s) que já estavam no app`,
     a.cancelados && `<b>${a.cancelados}</b> marcado(s) como compra cancelada`,
+    a.excluidos && `<b>${a.excluidos}</b> excluído(s) por não estarem no relatório (dá para restaurar em <b>Excluídos</b>)`,
     n && `Os novos chegam <b>sem atestado e sem termo</b>: já aparecem em Pendências`,
   ].filter(Boolean);
   modal(`
@@ -3507,7 +3550,7 @@ function conectarDados() {
     S.cronoCriando = S.cronoCriando || new Set();
     if (ficha && navigator.onLine !== false && !db.estado().offline && !S.cfgDocs[ficha] && !S.cronoCriando.has(ficha)) {
       S.cronoCriando.add(ficha); db.doc("config/" + ficha).set({ _adm: eu() }).catch(() => {}).finally(() => S.cronoCriando.delete(ficha)); }
-    if (["cronograma", "consagracao", "pins", "painel", "usuarios"].includes(S.view)) render();
+    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios"].includes(S.view)) render();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });
