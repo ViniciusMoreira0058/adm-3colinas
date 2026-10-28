@@ -1026,38 +1026,45 @@ function csgColarForm(dia) {
   const ex = (S.cfgDocs || {})["consag-" + (dia || hojeISO())];
   modal(`
     <h3>Colar lista da consagração</h3>
-    <div class="field"><label for="f-csgdia">Dia</label><input type="date" id="f-csgdia" value="${esc(dia || hojeISO())}" max="${hojeISO()}"></div>
+    <div class="form">
+      <div class="field"><label for="f-csgdia">Dia</label><input type="date" id="f-csgdia" value="${esc(dia || hojeISO())}" max="${hojeISO()}"></div>
+      <div class="field"><label for="f-csghora">Hora da chamada na live</label><input type="time" id="f-csghora" value="${esc((ex || {}).hora || "")}"></div>
+    </div>
     <div class="field"><label for="f-csgtxt">Lista de participantes</label><textarea id="f-csgtxt" rows="10" placeholder="Cole aqui a lista do grupo (um nome por linha). Numeração, emojis e nomes repetidos são ignorados."></textarea></div>
     <p class="hint" id="csgPrev" style="margin:0">${ex ? `Esse dia já tem ${ex.nomes.length} nome(s): o que você colar será somado.` : "Nenhuma linha ainda."}</p>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar lista</button></div></div>`,
   () => {
-    const d = $("#f-csgdia").value, nomes = lerNomesColados($("#f-csgtxt").value);
+    const d = $("#f-csgdia").value, nomes = lerNomesColados($("#f-csgtxt").value), hora = $("#f-csghora").value;
     if (!d) { toast("Escolha o dia."); return; }
     if (!nomes.length) { toast("Nenhum nome encontrado na lista."); return; }
     const atual = ((S.cfgDocs || {})["consag-" + d] || {}).nomes || [], ks = new Set(atual.map(norm));
     const novos = nomes.filter(n => !ks.has(norm(n)));
     closeModal();
-    save(() => api.set("config", "consag-" + d, { dia: d, nomes: [...atual, ...novos], por: eu(), em: new Date().toISOString() }),
+    const horaAntes = ((S.cfgDocs || {})["consag-" + d] || {}).hora || "";
+    save(() => api.set("config", "consag-" + d, { dia: d, nomes: [...atual, ...novos], hora: hora || horaAntes, por: eu(), em: new Date().toISOString() }),
       `${fmtDia(d)}: ${novos.length} nome(s) salvos${nomes.length - novos.length ? ` · ${nomes.length - novos.length} já estavam` : ""}`);
   });
   const prev = () => { const d = $("#f-csgdia").value, n = lerNomesColados($("#f-csgtxt").value), at = (((S.cfgDocs || {})["consag-" + d] || {}).nomes || []).map(norm);
     const novos = n.filter(x => !at.includes(norm(x))).length;
     $("#csgPrev").textContent = n.length ? `${n.length} nome(s) encontrados${at.length ? ` · ${novos} novos neste dia, ${n.length - novos} já estavam` : ""}: ${n.slice(0, 6).join(", ")}${n.length > 6 ? "…" : ""}` : at.length ? `Esse dia já tem ${at.length} nome(s): o que você colar será somado.` : "Nenhuma linha ainda."; };
-  $("#f-csgtxt").addEventListener("input", prev); $("#f-csgdia").addEventListener("change", prev);
+  $("#f-csgtxt").addEventListener("input", prev);
+  $("#f-csgdia").addEventListener("change", () => { prev(); $("#f-csghora").value = ((S.cfgDocs || {})["consag-" + $("#f-csgdia").value] || {}).hora || ""; });
 }
 function csgDiaForm(dia) {
   const d = (S.cfgDocs || {})["consag-" + dia]; if (!d) return;
-  const ed = podeEditar(); let nomes = [...(d.nomes || [])].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+  const ed = podeEditar(); let nomes = [...(d.nomes || [])].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })), hora = d.hora || "";
   const corpo = () => `
     <h3>Consagração · ${fmtDia(dia, true)} <small class="hint">Dia ${difDias(csgCfg().inicio, dia) + 1}</small></h3>
-    <p class="hint" style="margin:0">${nomes.length} pessoa(s) · lista colada por ${esc((d.por || {}).nome || "ADM")}${ed ? ". Toque no ✕ para tirar um nome." : ""}</p>
+    <p class="hint" style="margin:0">${nomes.length} pessoa(s) · lista colada por ${esc((d.por || {}).nome || "ADM")}${!ed && hora ? ` · chamada na live às ${esc(hora)}` : ""}${ed ? ". Toque no ✕ para tirar um nome." : ""}</p>
+    ${ed ? `<div class="field" style="max-width:220px"><label for="f-csghora">Hora da chamada na live</label><input type="time" id="f-csghora" value="${esc(hora)}"></div>` : ""}
     <div class="csg-nomes">${nomes.map((n, i) => `<span class="chip">${esc(n)}${ed ? ` <button class="linkbtn" type="button" data-csgrm="${i}" aria-label="Tirar ${esc(n)}">✕</button>` : ""}</span>`).join("")}</div>
     <div class="modal-foot">${ed ? `<button class="btn ghost bad-text" type="button" id="csgApagar">Apagar este dia</button>` : "<span></span>"}<div class="actions">
       <button class="btn" type="button" id="csgPdfDia">${ico("upload")} PDF do dia</button>${ed ? `<button class="btn" type="button" id="csgMais">${ico("paste")} Colar mais</button><button class="btn primary" type="submit">Salvar</button>` : `<button class="btn primary" type="button" data-close-btn>Fechar</button>`}</div></div>`;
-  modal(corpo(), () => { closeModal(); if (ed) save(() => api.update("config", "consag-" + dia, { nomes }), "Lista atualizada"); });
+  modal(corpo(), () => { closeModal(); if (ed) save(() => api.update("config", "consag-" + dia, { nomes, hora }), "Lista atualizada"); });
   const f = $("#mform");
   const ligar = () => {
     f.querySelectorAll("[data-csgrm]").forEach(b => b.onclick = () => { nomes.splice(+b.dataset.csgrm, 1); f.innerHTML = corpo(); ligar(); });
+    const h = $("#f-csghora"); if (h) h.oninput = () => { hora = h.value; };
     const ap = $("#csgApagar"); if (ap) ap.onclick = () => { if (ap.dataset.ok !== "1") { ap.dataset.ok = "1"; ap.textContent = "Confirmar: apagar o dia"; return; } closeModal(); save(() => api.remove("config", "consag-" + dia), "Dia apagado"); };
     const mais = $("#csgMais"); if (mais) mais.onclick = () => csgColarForm(dia);
     $("#csgPdfDia").onclick = () => csgPdfForm(dia);
@@ -1083,7 +1090,10 @@ function csgPdfForm(diaFixo) {
   modal(`
     <h3>Exportar Lista Consagração</h3>
     <div class="seg" role="group" aria-label="O que exportar" id="csgModo"><button type="button" data-m="dia" aria-pressed="true">Um dia</button><button type="button" data-m="per" aria-pressed="false">Período</button></div>
-    <div class="field" id="csgBoxDia"><label for="f-pdd">Dia</label><select id="f-pdd">${[...todos].reverse().map(d => `<option value="${d.dia}" ${d.dia === ult ? "selected" : ""}>${fmtDia(d.dia, true)} · Dia ${difDias(csgCfg().inicio, d.dia) + 1} · ${d.nomes.length} pessoas</option>`).join("")}</select></div>
+    <div class="form" id="csgBoxDia">
+      <div class="field"><label for="f-pdd">Dia</label><select id="f-pdd">${[...todos].reverse().map(d => `<option value="${d.dia}" ${d.dia === ult ? "selected" : ""}>${fmtDia(d.dia, true)} · Dia ${difDias(csgCfg().inicio, d.dia) + 1} · ${d.nomes.length} pessoas</option>`).join("")}</select></div>
+      <div class="field"><label for="f-pdhora">Hora da chamada na live</label><input type="time" id="f-pdhora" value="${esc((todos.find(d => d.dia === ult) || {}).hora || "")}"></div>
+    </div>
     <div class="form" id="csgBoxPer" hidden>
       <div class="field"><label for="f-pde">De</label><input type="date" id="f-pde" value="${esc(F.de || todos[0].dia)}"></div>
       <div class="field"><label for="f-pate">Até</label><input type="date" id="f-pate" value="${esc(F.ate || todos[todos.length - 1].dia)}"></div>
@@ -1095,11 +1105,15 @@ function csgPdfForm(diaFixo) {
   $("#csgModo").onclick = e => { const b = e.target.closest("[data-m]"); if (!b) return; modo = b.dataset.m;
     $("#csgModo").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); $("#csgBoxDia").hidden = modo !== "dia"; $("#csgBoxPer").hidden = modo === "dia"; };
   $("#csgWa").onclick = () => gerar(true);
+  $("#f-pdd").onchange = () => { $("#f-pdhora").value = (todos.find(d => d.dia === $("#f-pdd").value) || {}).hora || ""; };
   async function gerar(wa) {
     const de = modo === "dia" ? $("#f-pdd").value : $("#f-pde").value, ate = modo === "dia" ? de : $("#f-pate").value;
     if (!de || !ate || de > ate) { toast("Confira as datas do período."); return; }
     const bts = [$("#csgBaixar"), $("#csgWa")]; bts.forEach(b => b.disabled = true);
-    try { await gerarCsgPdf(modo, de, ate, wa); closeModal(); }
+    const hora = modo === "dia" ? $("#f-pdhora").value : "";
+    // a hora digitada aqui fica salva no dia (quem pode editar)
+    if (modo === "dia" && podeEditar() && hora !== ((todos.find(d => d.dia === de) || {}).hora || "")) api.update("config", "consag-" + de, { hora }).catch(e => console.error(e));
+    try { await gerarCsgPdf(modo, de, ate, wa, hora); closeModal(); }
     catch (e) { console.error(e); toast(erroAmigavel(e)); bts.forEach(b => b.disabled = false); }
   }
 }
@@ -1116,7 +1130,7 @@ async function entregarPdf(blob, nome, titulo, wa) {
   if (wa) { window.open("https://wa.me/?text=" + encodeURIComponent(titulo + " (PDF baixado: " + nome + ")"), "_blank"); toast("PDF baixado. Anexe no WhatsApp que abriu."); }
   else toast("PDF gerado: " + nome);
 }
-async function gerarCsgPdf(modo, de, ate, wa) {
+async function gerarCsgPdf(modo, de, ate, wa, hora = "") {
   const jsPDF = await carregarPdf();
   const cfg = csgCfg(), { dias, pessoas, totalPres } = csgContagem(modo === "dia" ? null : de, ate);
   const doDia = modo === "dia" ? (csgDias().find(d => d.dia === de) || { nomes: [] }) : null;
@@ -1131,7 +1145,7 @@ async function gerarCsgPdf(modo, de, ate, wa) {
   const adm = ME.adm || "-";
   const nDia = d => difDias(cfg.inicio, d) + 1;
   const sub = doDia ? `${fmtDia(de, true)} · DIA ${nDia(de)} DE ${cfg.total}` : `${fmtDia(de, true)} A ${fmtDia(ate, true)} · ${dias.length} DIA(S) COM LISTA`;
-  const resumo = doDia ? [["ADM responsável", adm, [255, 170, 100]], ["Participantes", String(linhas.length)]]
+  const resumo = doDia ? [["ADM responsável", adm, [255, 170, 100]], ["Chamada na live", hora ? hora.replace(":", "h") : "-"], ["Participantes", String(linhas.length)]]
     : [["ADM responsável", adm, [255, 170, 100]], ["Pessoas", String(pessoas.length)], ["Média/dia", dias.length ? String(Math.round(totalPres / dias.length)) : "-"]];
   const cabecalho = primeira => {
     const alt = primeira ? 44 : 16;
@@ -1163,7 +1177,7 @@ async function gerarCsgPdf(modo, de, ate, wa) {
   };
   cabecalho(true);
   doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor(...CINZA);
-  doc.text(doDia ? `Quem participou no dia · ${linhas.length} pessoa(s)` : `Presenças no período · ${fmtNum(totalPres)} no total`, 12, 73);
+  doc.text(doDia ? `Quem participou no dia · ${linhas.length} pessoa(s)${hora ? ` · chamada na live às ${hora.replace(":", "h")}` : ""}` : `Presenças no período · ${fmtNum(totalPres)} no total`, 12, 73);
   doc.text(`Gerado em ${gerado} por ${adm}`, W - 12, 73, { align: "right" });
   const base = doDia ? nDia(de) : Math.max(1, dias.length);
   doc.autoTable({
