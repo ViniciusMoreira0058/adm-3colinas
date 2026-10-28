@@ -400,7 +400,7 @@ function painelMeu() {
   </section>`;
 }
 function vPainelNovo() {
-  const s = stats(), td = topDoc() || {}, kits = topKits(), meta = S.config.metaMRE || 110, dias = diasParaTop();
+  const s = stats(), td = topDoc() || {}, dias = diasParaTop();
   const P = S.P.filter(p => !cancelado(p)), prontos = P.filter(prontoTop).length;
   const conta = k => P.filter(p => pendDe(p).includes(k)).length;
   const pagPend = S.P.filter(pagPendente).length, oc = RELATORIO_FINAL() ? ocorrAbertas().length : 0;
@@ -421,7 +421,6 @@ function vPainelNovo() {
     [oc, "ocorrência(s) aberta(s)", "ocorrencias", "", "bad"],
     [s.zero.length, "item(ns) zerado(s) no estoque", "estoque", "", "bad"],
     [s.low.length, "item(ns) com estoque baixo", "estoque", "", "wait"],
-    [Math.max(0, meta - kits), "kits MRE para lacrar", "estoque", "", "sent"],
     [s.tTotal - s.tDone, "tarefa(s) do checklist abertas", "checklist", "", "sent"],
   ].filter(t => t[0] > 0 && canSee({ id: t[2] }));
   const bloco = (titulo, ico_, corpo, go_) => `<section class="panel dash-bloco"><h3>${ico(ico_)} ${titulo}${go_ ? `<button class="linkbtn" type="button" data-go="${go_}">ver ›</button>` : ""}</h3>${corpo}</section>`;
@@ -450,7 +449,6 @@ function vPainelNovo() {
       <div>${anel(pct(s.termo, s.n), "#ff7a1a")}<span>Termo</span><small class="num">${s.termo} de ${s.n}</small>${tendencia("termo", s.termo)}</div>
       <div>${anel(pct(s.grupo, s.n), "var(--good)")}<span>Grupo</span><small class="num">${s.grupo} de ${s.n}</small>${tendencia("grupo", s.grupo)}</div></div>`, "pendencias")}
     ${bloco("Itens", "box", `<div class="dminis">
-      ${mini("Kits MRE", `${kits}<small>/${meta}</small>`, `<span class="bar ${kits >= meta ? "good" : ""}"><i style="width:${Math.min(100, pct(kits, meta))}%"></i></span>`, "estoque")}
       ${PRECO_ESTOQUE() ? mini("Valor em estoque", `<span class="dinheiro">${brl(valor)}</span>`, `${s.zero.length + s.low.length} item(ns) em alerta`, "estoque") : mini("Estoque em alerta", s.zero.length + s.low.length, `${s.zero.length} zerados`, "estoque")}
       ${mini("Checklist", pct(s.tDone, s.tTotal) + "%", `${s.tDone} de ${s.tTotal} prontas`, "checklist")}
       ${pins.length ? mini("Pins", `${pinsOk}<small>/${pins.length}</small>`, `${pins.length - pinsOk} pendentes`, "pins", ` data-pin-ir="pendente"`) : mini("Pista", (s.pistaM / 1000).toFixed(1).replace(".", ",") + " km", "3 dias", "pista")}</div>`, "estoque")}
@@ -490,7 +488,7 @@ function painelPronto() {
 function vPainel() {
   if (DASH_NOVO()) return vPainelNovo();
   const s = stats();
-  const kits = topKits(), meta = S.config.metaMRE || 110;
+  const kits = topKits();
   const fun = [
     ["Mensagem no grupo", s.msg], ["Entraram no grupo", s.grupo], ["Atestado confirmado", s.atestado],
     ["Termo assinado", s.termo], ["NFC registrado", s.nfc],
@@ -520,7 +518,7 @@ function vPainel() {
     <div class="kpi"><span class="lbl">Termos assinados</span><span class="val num">${s.termo}<small style="font-size:18px;color:var(--muted)"> / ${s.n}</small></span><div class="bar good"><i style="width:${pct(s.termo, s.n)}%"></i></div></div>
     <div class="kpi"><span class="lbl">No grupo</span><span class="val num">${s.grupo}</span><span class="sub">${s.n - s.grupo > 0 ? `faltam ${s.n - s.grupo} entrar` : "todos no grupo"}</span></div>
     <button class="kpi" type="button" data-go="checklist"><span class="lbl">Checklist ADM</span><span class="val num">${pct(s.tDone, s.tTotal)}%</span><span class="sub">${s.tDone} de ${s.tTotal} tarefas prontas</span></button>
-    <button class="kpi ${kits < meta ? "alert" : ""}" type="button" data-go="estoque"><span class="lbl">Kits MRE lacrados</span><span class="val num">${kits}</span><span class="sub">meta ${meta} · faltam ${Math.max(0, meta - kits)}</span></button>
+    <button class="kpi" type="button" data-go="estoque"><span class="lbl">MREs montados</span><span class="val num">${kits}</span><span class="sub">kits lacrados</span></button>
     <button class="kpi ${s.zero.length ? "alert" : ""}" type="button" data-go="estoque"><span class="lbl">Estoque em alerta</span><span class="val num">${s.zero.length + s.low.length}</span><span class="sub">${s.zero.length} zerados · ${s.low.length} baixos (até ${S.config.alertaBaixo})</span></button>
     ${PRECO_ESTOQUE() ? (() => { const v = S.estoque.reduce((a, e) => a + valorItem(e), 0), sp = S.estoque.filter(e => e.preco == null).length, mre = S.estoque.filter(ehMre), c = mre.reduce((a, e) => a + (Number(e.preco) || 0) * porMre(e), 0);
       return `<button class="kpi" type="button" data-go="estoque"><span class="lbl">Valor em estoque</span><span class="val num dinheiro">${brl(v)}</span><span class="sub">${c ? `1 MRE custa ${brl(c)}` : ""}${c && sp ? " · " : ""}${sp ? `${sp} item(ns) sem preço` : ""}</span></button>`; })() : ""}
@@ -1848,10 +1846,10 @@ function pdfDaTela() {
         return { titulo: `${f.l} · ${ts.filter(t => t.status === "pronto").length}/${ts.length}`, linhas: ts.map((t, i) => n(i, [t.titulo, opt(TASK, t.status).l, t.responsavel, [t.fornecedor, t.obs].filter(Boolean).join(" · ")])) }; }) };
   }
   if (v === "estoque") {
-    const s = stats(), kits = topKits(), meta = S.config.metaMRE || 110;
+    const s = stats(), kits = topKits();
     const sit = e => e.grupo === "equip" ? (e.conferir ? "Conferir" : "OK") : e.qtd === 0 ? "Zerado" : e.qtd <= S.config.alertaBaixo ? "Baixo" : "OK";
     return { titulo: "Estoque e compras", legenda: `Alerta de estoque baixo em até ${S.config.alertaBaixo} unidades`,
-      resumo: [["Kits MRE", `${kits}/${meta}`], ["Zerados", s.zero.length], ["Baixos", s.low.length]],
+      resumo: [["MREs montados", kits], ["Zerados", s.zero.length], ["Baixos", s.low.length]],
       colunas: [{ t: "Item", bold: true }, { t: "Qtd.", w: 16, al: "center" }, { t: "Situação", w: 24, status: true }, { t: "Local", w: 36 }, { t: "Compra / obs.", w: 50, cinza: true }],
       secoes: GRUPOS.map(g => ({ titulo: g.l, linhas: S.estoque.filter(e => e.grupo === g.v).sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
         .map(e => [e.item, e.qtd != null ? e.qtd : "", sit(e), e.local, [e.resp ? "compra: " + e.resp : "", e.obs].filter(Boolean).join(" · ")]) })) };
@@ -1904,7 +1902,7 @@ function pdfDaTela() {
       linhas: L.map(o => [quando(o.n.em), o.t.t, o.t.c]) };
   }
   if (v === "painel") {
-    const s = stats(), pins = pinsTodos(), kits = topKits(), meta = S.config.metaMRE || 110;
+    const s = stats(), pins = pinsTodos(), kits = topKits();
     const L = (a, b, c) => [a, String(b), c];
     return { semSimples: true, titulo: "Dashboard", sub: `Resumo do ${topName()}`, legenda: "Números do momento em que o PDF foi gerado",
       resumo: [["Senderistas", s.n], ["Legendários", s.lg.length], ["Checklist", pct(s.tDone, s.tTotal) + "%"]],
@@ -1913,7 +1911,7 @@ function pdfDaTela() {
         { titulo: "Senderistas", linhas: [L("Cadastrados", s.n, `${s.mais40.length} com +40 · ${s.semFamilia} sem família`), L("Atestado confirmado", s.atestado, pct(s.atestado, s.n) + "%"), L("Termo assinado", s.termo, pct(s.termo, s.n) + "%"),
           L("Mensagem do grupo", s.msg, pct(s.msg, s.n) + "%"), L("Entraram no grupo", s.grupo, pct(s.grupo, s.n) + "%"), L("NFC registrado", s.nfc, pct(s.nfc, s.n) + "%"), L("Pagamento pendente", S.P.filter(pagPendente).length, "boleto em aberto")] },
         { titulo: "Legendários", linhas: [L("Cadastrados", s.lg.length, ""), L("Atestado confirmado", s.lgAtest, pct(s.lgAtest, s.lg.length) + "%"), L("Termo assinado", s.lgAssinado, pct(s.lgAssinado, s.lg.length) + "%")] },
-        { titulo: "Operação", linhas: [L("Checklist pronto", `${s.tDone}/${s.tTotal}`, `${s.tAnd.length} em andamento`), L("Kits MRE lacrados", `${kits}/${meta}`, `faltam ${Math.max(0, meta - kits)}`),
+        { titulo: "Operação", linhas: [L("Checklist pronto", `${s.tDone}/${s.tTotal}`, `${s.tAnd.length} em andamento`), L("MREs montados", kits, "kits lacrados"),
           L("Estoque", `${s.zero.length} zerado(s)`, `${s.low.length} baixo(s) · ${s.conferir.length} para conferir`), L("Pista", (s.pistaM / 1000).toFixed(2).replace(".", ",") + " km", fmtNum(s.pistaM) + " m"),
           ...(pins.length ? [L("Pins entregues", `${pins.filter(p => p.status === "entregue").length}/${pins.length}`, `${pins.filter(p => p.status !== "entregue").length} pendente(s)`)] : [])] },
       ] };
@@ -2209,7 +2207,7 @@ function vChecklist() {
 
 function vEstoque() {
   const s = stats();
-  const kits = topKits(), meta = S.config.metaMRE || 110;
+  const kits = topKits();
   const sit = e => {
     if (e.grupo === "equip") return e.conferir ? '<span class="chip sent">Conferir</span>' : '<span class="chip ok">OK</span>';
     if (e.qtd === 0) return '<span class="chip bad">Zerado</span>';
@@ -2230,10 +2228,10 @@ function vEstoque() {
   return `
   <div class="head"><div><h2>Estoque e compras</h2><p>Use + e − para atualizar na hora da conferência. Alerta de estoque baixo em até ${S.config.alertaBaixo} unidades.</p></div>
     <div class="actions"><button class="btn primary" type="button" data-act="novo-item">${ico("plus")} Novo item</button></div></div>
-  ${pr ? vValoresEstoque(kits, meta) : ""}
-  <section class="panel"><h3>Kits MRE lacrados <small>meta ${meta}</small></h3>
-    <div class="goal"><div class="big num">${kits}<small> / ${meta}</small></div>
-      <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px"><div class="bar ${kits >= meta ? "good" : ""}" style="height:10px"><i style="width:${Math.min(100, pct(kits, meta))}%"></i></div><span class="hint">Faltam ${Math.max(0, meta - kits)} kits · ${s.zero.length} itens zerados e ${s.low.length} baixos no estoque</span></div>
+  ${pr ? vValoresEstoque(kits) : ""}
+  <section class="panel"><h3>MREs montados <small>kits lacrados</small></h3>
+    <div class="goal"><div class="big num">${kits}<small> MREs</small></div>
+      <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px"><span class="hint">Use + e − para somar os MREs conforme forem lacrados · ${s.zero.length} itens zerados e ${s.low.length} baixos no estoque</span></div>
       <div class="stepper"><button type="button" data-kits="-1" aria-label="Menos um kit">−</button><span>${kits}</span><button type="button" data-kits="1" aria-label="Mais um kit">+</button></div>
     </div></section>
   <div class="grid2">${section(GRUPOS[0])}<div style="display:flex;flex-direction:column;gap:16px;min-width:0">${section(GRUPOS[1])}${section(GRUPOS[2])}</div></div>`;
@@ -2246,7 +2244,7 @@ const lePreco = t => { t = String(t || "").replace(/[^\d,.-]/g, ""); if (!t) ret
 const valorItem = e => (Number(e.preco) || 0) * (Number(e.qtd) || 0);
 const ehMre = e => e.mre != null ? !!e.mre : e.grupo === "mre";
 const porMre = e => Number(e.porMre) > 0 ? Number(e.porMre) : 1;
-function vValoresEstoque(kits, meta) {
+function vValoresEstoque(kits) {
   const total = S.estoque.reduce((a, e) => a + valorItem(e), 0), semPreco = S.estoque.filter(e => e.preco == null).length;
   const mre = S.estoque.filter(ehMre).sort((a, b) => norm(a.item).localeCompare(norm(b.item)));
   const custo = mre.reduce((a, e) => a + (Number(e.preco) || 0) * porMre(e), 0), ed = podeEditar();
@@ -2255,7 +2253,7 @@ function vValoresEstoque(kits, meta) {
   return `<div class="kpis">
     <div class="kpi"><span class="lbl">Valor em estoque</span><span class="val num dinheiro">${brl(total)}</span><span class="sub">${semPreco ? `${semPreco} item(ns) sem preço` : "todos os itens com preço"}</span></div>
     <div class="kpi alert"><span class="lbl">Custo de 1 MRE</span><span class="val num dinheiro">${brl(custo)}</span><span class="sub">${mre.length} item(ns) no MRE${mre.some(e => e.preco == null) ? " · falta preço em " + mre.filter(e => e.preco == null).length : ""}</span></div>
-    <div class="kpi"><span class="lbl">Meta de ${meta} MREs</span><span class="val num dinheiro">${brl(custo * meta)}</span><span class="sub">${kits} lacrados = ${brl(custo * kits)}</span></div>
+    <div class="kpi"><span class="lbl">MREs montados</span><span class="val num">${kits}</span><span class="sub">gasto nos lacrados: ${brl(custo * kits)}</span></div>
     <div class="kpi"><span class="lbl">Dá para montar</span><span class="val num">${kitsDoEstoque}</span><span class="sub">${limita ? `com o estoque atual · limitado por ${esc(limita.item)}` : "MREs com o estoque atual"}</span></div>
   </div>
   <section class="panel mre-box"><h3>MRE <small>o que vai em cada kit · marque o quadradinho MRE no item para incluir</small></h3>
@@ -2360,12 +2358,12 @@ function dadosRelatorio() {
       media: at.length ? Math.round(at.reduce((a, x) => a + x.a, 0) / at.length) : null, pior, fim: ult ? ult.a : null };
   }).filter(d => d.total);
   const oc = ocorrencias(), porTipo = {}; oc.forEach(o => { porTipo[o.tipo] = (porTipo[o.tipo] || 0) + 1; });
-  const mre = S.estoque.filter(ehMre), custo = mre.reduce((a, e) => a + (Number(e.preco) || 0) * porMre(e), 0), kits = topKits(), meta = S.config.metaMRE || 110;
+  const mre = S.estoque.filter(ehMre), custo = mre.reduce((a, e) => a + (Number(e.preco) || 0) * porMre(e), 0), kits = topKits();
   const valor = S.estoque.reduce((a, e) => a + valorItem(e), 0);
   const pins = typeof pinsTodos === "function" ? pinsTodos() : [], pinsOk = pins.filter(p => p.status === "entregue").length;
   const canc = S.P.filter(p => p.tipo !== "legendario" && cancelado(p)).length, pend = S.P.filter(p => !cancelado(p) && p.inscricao === "pendente").length;
   const desist = oc.filter(o => o.tipo === "Desistência").length;
-  return { s, td, dias, oc, porTipo, custo, kits, meta, valor, pins, pinsOk, canc, pend, desist, mreN: mre.length };
+  return { s, td, dias, oc, porTipo, custo, kits, valor, pins, pinsOk, canc, pend, desist, mreN: mre.length };
 }
 function relatorioForm() {
   const R = dadosRelatorio(), { s } = R, km = (s.pistaM / 1000).toFixed(1).replace(".", ",");
@@ -2378,7 +2376,7 @@ function relatorioForm() {
       <section><h4>Documentos</h4><div class="list">${linha("Atestado OK", `${s.atestado} / ${s.n}`)}${linha("Termo assinado", `${s.termo} / ${s.n}`)}${linha("No grupo", `${s.grupo} / ${s.n}`)}${linha("Checklist ADM", `${pct(s.tDone, s.tTotal)}%`)}</div></section>
       <section><h4>Cronograma</h4><div class="list">${R.dias.map(d => linha(esc(d.nome), `${d.feitos}/${d.total} · ${d.fim == null ? "sem marcação" : atrasoTxt(d.fim)}`)).join("") || linha("Sem marcações", "-")}</div></section>
       <section><h4>Ocorrências</h4><div class="list">${linha("Total", R.oc.length)}${linha("Graves", R.oc.filter(o => o.grav === "grave").length)}${Object.entries(R.porTipo).map(([t, n]) => linha(esc(t), n)).join("")}</div></section>
-      <section><h4>Estoque e MRE</h4><div class="list">${linha("Kits MRE lacrados", `${R.kits} / ${R.meta}`)}${linha("Custo de 1 MRE", brl(R.custo))}${linha("Gasto nos kits lacrados", brl(R.custo * R.kits))}${linha("Valor em estoque", brl(R.valor))}</div></section>
+      <section><h4>Estoque e MRE</h4><div class="list">${linha("MREs montados", R.kits)}${linha("Custo de 1 MRE", brl(R.custo))}${linha("Gasto nos kits lacrados", brl(R.custo * R.kits))}${linha("Valor em estoque", brl(R.valor))}</div></section>
       <section><h4>Pista e pins</h4><div class="list">${linha("Pista total", km + " km")}${R.pins.length ? linha("Pins entregues", `${R.pinsOk} / ${R.pins.length}`) : ""}</div></section>
     </div>
     <div class="modal-foot"><span><button class="btn ghost" type="button" data-close-btn>Fechar</button></span>
@@ -2392,7 +2390,7 @@ function relatorioPdf(R) {
   const per = [td.inicio && fmtDate(td.inicio), td.fim && fmtDate(td.fim)].filter(Boolean).join(" a ");
   return { titulo: "Relatório final", arquivo: "Relatorio final " + topName(), orient: "portrait",
     sub: [topName(), td.local, per].filter(Boolean).join(" · "), legenda: "Números do TOP no momento em que o relatório foi gerado",
-    resumo: [["Senderistas", s.n], ["Ocorrências", R.oc.length], ["MREs", `${R.kits}/${R.meta}`]],
+    resumo: [["Senderistas", s.n], ["Ocorrências", R.oc.length], ["MREs", R.kits]],
     colunas: [{ t: "Item", bold: true }, { t: "Resultado", w: 92 }],
     secoes: [
       { titulo: "Pessoas", linhas: [["Senderistas", s.n], ["Legendários", s.lg.length], ["+40", s.mais40.length], ["Desistências registradas no TOP", R.desist], ["Compras canceladas", R.canc], ["Boletos ainda pendentes", R.pend]] },
@@ -2401,7 +2399,7 @@ function relatorioPdf(R) {
           [`${d.nome}: maior atraso`, d.pior ? `${atrasoTxt(d.pior.a)} em ${d.pior.i.atv}` : "-"], [`${d.nome}: no último momento marcado`, atrasoTxt(d.fim)]]) : [["Cronograma", "sem marcações"]] },
       { titulo: `Ocorrências (${R.oc.length})`, linhas: [["Graves", R.oc.filter(o => o.grav === "grave").length], ...Object.entries(R.porTipo).map(([t, n]) => [t, n]),
           ...[...R.oc].reverse().map(o => [`${hm(o.em)} · ${o.nome || "Sem pessoa"}`, `${o.tipo} (${(OC_GRAV.find(g => g.v === o.grav) || {}).l || ""})${o.desc ? ": " + o.desc : ""}${o.prov ? " · " + o.prov : ""}${o.status === "resolvida" ? " · resolvida" : " · ABERTA"}`])] },
-      { titulo: "Estoque e MRE", linhas: [["Kits MRE lacrados", `${R.kits} de ${R.meta}`], ["Itens no MRE", R.mreN], ["Custo de 1 MRE", brl(R.custo)], ["Gasto nos kits lacrados", brl(R.custo * R.kits)], ["Custo da meta de MREs", brl(R.custo * R.meta)], ["Valor em estoque", brl(R.valor)], ["Itens zerados", s.zero.length], ["Itens baixos", s.low.length]] },
+      { titulo: "Estoque e MRE", linhas: [["MREs montados", R.kits], ["Itens no MRE", R.mreN], ["Custo de 1 MRE", brl(R.custo)], ["Gasto nos kits lacrados", brl(R.custo * R.kits)], ["Valor em estoque", brl(R.valor)], ["Itens zerados", s.zero.length], ["Itens baixos", s.low.length]] },
       { titulo: "Pista e pins", linhas: [["Pista total", km + " km"], ...(R.pins.length ? [["Pins entregues", `${R.pinsOk} de ${R.pins.length}`]] : [])] },
     ] };
 }
