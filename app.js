@@ -322,7 +322,7 @@ function painelInscricao() {
   const sim = k => S.P.filter(p => !cancelado(p) && p.ficha && p.ficha[k] && !/^n[aã]o\b/i.test(p.ficha[k]));
   const canc = S.P.filter(cancelado).length, pend = S.P.filter(p => p.inscricao === "pendente").length;
   return `
-    <section class="panel"><h3>Camisas dos senderistas <small>${ps.length} com tamanho informado</small></h3>
+    <section class="panel"><h3>Fardas <small>${ps.length} com tamanho informado</small></h3>
       <div class="list">${tam.map(([t, n]) => `<div class="li"><span class="grow">${esc(t)}</span><b class="num">${n}</b></div>`).join("") || `<div class="empty">Sem tamanhos.</div>`}</div>
     </section>
     <section class="panel"><h3>Saúde e inscrição <small>do relatório</small></h3>
