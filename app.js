@@ -354,7 +354,7 @@ function retratoHoje() {
 }
 let dashGravando = false, dashUltimo = "";
 function registrarDia() {
-  if (!DASH_NOVO() || !podeEditar() || dashGravando) return;
+  if (!DASH_NOVO() || !S.isOwner || dashGravando) return;   // só o dono grava: retrato de outro ADM viraria aviso para o dono
   const H = dashHist(), r = retratoHoje(), d = diaHoje();
   // compara campo a campo: o banco devolve o JSON com as chaves em outra ordem
   const ant = H[d] || {}; if (Object.keys(r).every(k => ant[k] === r[k])) return;
@@ -3723,7 +3723,7 @@ function histDetalhe(h) {
 const histLinha = x => ({ ...x, aba: abaDoRegistro(x.col, x.dados || { tipo: x.tipo || ((S.pessoas.find(p => p.id === x.doc_id) || {}).tipo) }) });
 function histFiltrado() {
   const h = S.hf, nq = norm(h.q);
-  return S.hist.map(histLinha).filter(x => (!h.quem || x.quem === h.quem) && (!h.aba || x.aba === h.aba) && (!h.acao || x.acao === h.acao)
+  return S.hist.filter(x => !String(x.doc_id || "").startsWith("dash-hist-")).map(histLinha).filter(x => (!h.quem || x.quem === h.quem) && (!h.aba || x.aba === h.aba) && (!h.acao || x.acao === h.acao)
     && (!nq || norm(x.nome).includes(nq) || norm(x.quem).includes(nq)));
 }
 function vHistorico() {
