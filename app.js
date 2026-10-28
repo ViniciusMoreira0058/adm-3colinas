@@ -492,6 +492,7 @@ function vPessoas(tipo) {
       ${S.isOwner && total ? `<button class="btn ${sel ? "primary" : ""}" type="button" data-act="selecionar" aria-pressed="${sel}">${ico("check")} ${sel ? "Concluir seleção" : "Selecionar"}</button>` : ""}
       <button class="btn" type="button" data-act="importar">${ico("upload")} Importar relatório</button>
       <button class="btn" type="button" data-act="colar">${ico("paste")} Colar lista</button>
+      <button class="btn" type="button" data-act="assinaturas">${ico("check")} Importar assinaturas</button>
       ${nLix ? `<button class="btn" type="button" data-act="lixeira">${ico("trash")} Excluídos (${nLix})</button>` : ""}
       <button class="btn primary" type="button" data-act="novo">${ico("plus")} ${lg ? "Novo legendário" : "Novo senderista"}</button>
     </div></div>
@@ -2580,6 +2581,7 @@ document.addEventListener("click", e => {
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
   if (d.act === "novo") { personForm(null, S.view === "legendarios" ? "legendario" : "participante"); return; }
+  if (d.act === "assinaturas") { assinaturasForm(); return; }
   if (d.act === "lixeira") { lixeiraForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.act === "importar") { importForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.restaurar && S.isOwner) {
@@ -3044,6 +3046,70 @@ function analisarImport(lidos) {
     .map(p => ({ p, como: comoOutro.get(norm(p.nome)) || "" }));
   novos.forEach(n => { const o = acharNoApp({ ...n, tipo: n.tipo === "legendario" ? "participante" : "legendario" }); if (o) n.outroTipo = o.p; });
   return { novos, ja, canc, ign, repPlan, fora, total: lidos.length + ign.length };
+}
+/* Importar assinaturas (CSV do termo, ZapSign): só quem está "Assinado" vira termo assinado; "Enviado" não muda nada */
+function assinaturasForm() {
+  modal(`
+    <h3>Importar assinaturas do termo</h3>
+    <p class="hint" style="margin:0">Envie a planilha de assinaturas (.csv ou .xlsx, colunas Nome, E-mail, Status e Tipo). Só quem está como <b>Assinado</b> fica com o termo assinado no app. Quem está como Enviado não é alterado.</p>
+    <div class="field"><label for="f-ass">Planilha</label><input id="f-ass" type="file" accept=".csv,.xlsx,.xls"></div>
+    <div id="assPrev" class="imp-prev"></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="assBtn" disabled>Atualizar</button></div></div>`,
+  () => {
+    if (!A || !A.marcar.length) return;
+    closeModal();
+    const lista = A.marcar;
+    save(async () => { for (let i = 0; i < lista.length; i += 8) await Promise.all(lista.slice(i, i + 8).map(({ p, data }) => api.update("pessoas", p.id, { termo: "assinado", ...(data ? { termoAssinadoEm: data } : {}) }))); },
+      `Termo assinado: ${lista.length} pessoa(s) atualizada(s)`);
+  });
+  let A = null;
+  $("#f-ass").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const prev = $("#assPrev"); prev.innerHTML = `<div class="hint">Lendo ${esc(f.name)}…</div>`; $("#assBtn").disabled = true;
+    try {
+      let linhas;
+      if (/\.csv$/i.test(f.name)) linhas = lerCsv(await f.text());
+      else { const X = await carregarXlsx(); const wb = X.read(await f.arrayBuffer(), { type: "array" }); linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" }); }
+      A = analisarAssinaturas(linhas);
+      if (!A) { prev.innerHTML = `<div class="bad-text">Não achei as colunas Nome e Status nessa planilha.</div>`; return; }
+      const li = (x, extra = "") => `<li><b>${esc(x.nome)}</b> <span class="hint">${x.tipo === "legendario" ? "Legendário" : "Senderista"}${extra}</span></li>`;
+      prev.innerHTML = `
+        <div class="imp-kpis">
+          <div class="ok"><b class="num">${A.marcar.length}</b><span>vão ficar assinados</span></div>
+          <div><b class="num">${A.assinados}</b><span>assinados na planilha</span></div>
+          <div><b class="num">${A.enviados}</b><span>só enviados (não mudam)</span></div>
+          <div class="bad"><b class="num">${A.nao.length}</b><span>não achei no app</span></div>
+        </div>
+        <details open><summary>Vão ficar com termo assinado (${A.marcar.length})</summary><ul class="imp-list">${A.marcar.map(({ p, n }) => li(n, ` · era ${esc((TERMO.find(t => t.v === p.termo) || {}).l || "Pendente")}${norm(p.nome) !== norm(n.nome) ? ` · no app: ${esc(p.nome)}` : ""}`)).join("") || '<li class="hint">Ninguém novo.</li>'}</ul></details>
+        ${A.ja.length ? `<details><summary>Já estavam assinados no app (${A.ja.length})</summary><ul class="imp-list">${A.ja.map(x => li(x)).join("")}</ul></details>` : ""}
+        ${A.nao.length ? `<details open><summary class="bad-text">Assinaram, mas não achei no app (${A.nao.length})</summary><p class="hint" style="margin:6px 0">Confira se o nome está escrito diferente no app e marque o termo na ficha.</p><ul class="imp-list">${A.nao.map(n => li(n, n.email ? " · " + esc(n.email) : "")).join("")}</ul></details>` : ""}`;
+      $("#assBtn").disabled = !A.marcar.length;
+      $("#assBtn").textContent = A.marcar.length ? `Marcar ${A.marcar.length} como assinado` : "Nada para atualizar";
+    } catch (err) { console.error(err); prev.innerHTML = `<div class="bad-text">Não consegui ler esse arquivo.</div>`; }
+  });
+}
+function analisarAssinaturas(linhas) {
+  const h = (linhas[0] || []).map(x => norm(String(x)));
+  const col = re => h.findIndex(x => re.test(x));
+  const iN = col(/^nome/), iE = col(/mail/), iS = col(/^status/), iT = col(/^tipo/), iD = col(/data assinatura/);
+  if (iN < 0 || iS < 0) return null;
+  const rows = linhas.slice(1).filter(r => String(r[iN] || "").trim()).map(r => {
+    const st = norm(String(r[iS] || "")), tp = norm(String(iT >= 0 ? r[iT] : ""));
+    const dt = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(iD >= 0 ? r[iD] : ""));
+    return { nome: String(r[iN]).trim(), email: String(iE >= 0 ? r[iE] : "").trim().toLowerCase(), telefone: "", tipo: /legend/.test(tp) ? "legendario" : "participante",
+      assinado: /assinad/.test(st), data: dt ? `${dt[3]}-${dt[2]}-${dt[1]}` : "" };
+  });
+  const out = { assinados: 0, enviados: 0, marcar: [], ja: [], nao: [] }, vistos = new Set();
+  rows.forEach(n => {
+    if (!n.assinado) { out.enviados++; return; }
+    out.assinados++;
+    // e-mail repetido entre pessoas diferentes: acharNoApp só aceita e-mail se o primeiro nome também bate
+    const a = acharNoApp(n);
+    if (!a) { out.nao.push(n); return; }
+    if (vistos.has(a.p.id)) return; vistos.add(a.p.id);
+    if (a.p.termo === "assinado") out.ja.push(n); else out.marcar.push({ p: a.p, n, data: n.data });
+  });
+  return out;
 }
 function importForm(tipoAtual) {
   modal(`
