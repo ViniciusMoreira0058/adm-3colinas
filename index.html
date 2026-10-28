@@ -14,14 +14,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap">
-<script>
-  // fonte nova (Plus Jakarta Sans) em teste: só na demonstração
-  if (/[?&]demo=1/.test(location.search)) {
-    document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap">');
-    document.documentElement.classList.add("fonte-nova");
-  }
-</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap">
 <style>
 /* Layout: barra lateral fixa (desktop) / abas inferiores (celular); conteúdo em painéis de campo, laranja como sinal de ação e alerta. Dark-first. */
 :root {
@@ -30,13 +23,9 @@
   --good: #46c486; --good-soft: rgba(70,196,134,.14); --warn: #f2b233; --warn-soft: rgba(242,178,51,.15);
   --bad: #ff5d52; --bad-soft: rgba(255,93,82,.14); --shadow: 0 10px 30px rgba(0,0,0,.45);
   --wa: #25d366; --on-wa: #062b14;
-  --display: "Outfit", system-ui, sans-serif;
-  --body: "Outfit", system-ui, sans-serif;
-  color-scheme: dark;
-}
-:root.fonte-nova {
   --display: "Plus Jakarta Sans", system-ui, sans-serif;
   --body: "Plus Jakarta Sans", system-ui, sans-serif;
+  color-scheme: dark;
 }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
   --bg: #ffffff; --surface: #fff8f2; --surface2: #ffeedf; --line: #f1dcc7;
@@ -456,7 +445,7 @@ tbody tr:hover td { background: var(--accent-soft); }
 }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .4s ease; } }
 
-/* Identidade ADM 3Colinas: fundo das montanhas ao pôr do sol, painéis translúcidos, Outfit (mesma fonte dos apps Bold) */
+/* Identidade ADM 3Colinas: fundo das montanhas ao pôr do sol, painéis translúcidos, fonte Plus Jakarta Sans */
 :root {
   --veil: linear-gradient(180deg, rgba(6,12,20,.55) 0%, rgba(6,12,20,.86) 38%, rgba(6,12,20,.95) 100%);
   --glass: rgba(12,18,27,.80); --glass2: rgba(16,24,35,.92); --glass-bar: rgba(6,12,20,.78);
