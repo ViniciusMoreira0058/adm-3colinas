@@ -647,6 +647,22 @@ body.av-tv .av-pista { height: 100%; min-height: 0; padding: 1.2vh; gap: 1vh; }
 body.av-tv .av-pista-head h3, body.av-tv .av-momento, body.av-tv .av-pista details, body.av-tv .av-pista > .hint:last-child { display: none; }
 body.av-tv .av-mapa { flex: 1; height: auto; min-height: 0; }
 @media (max-height: 540px) { body.av-tv .corrente-pin b { left: 50%; top: 22px; transform: translateX(-50%); max-width: 170px; } body.av-tv .av-pista > p.hint, body.av-tv .av-depois, body.av-tv .av-pista-head .btn, body.av-tv .av-atraso + .btn { display: none; } body.av-tv .av-top .eyebrow { font-size: 10px; } }
+/* Mapa em tela cheia: o mapa ocupa tudo e o relógio/momento ficam num cartão por cima */
+body.av-mapa-cheio { overflow: hidden; }
+body.av-mapa-cheio .av-pista { position: fixed; inset: 0; z-index: 60; margin: 0; padding: 0; border: 0; border-radius: 0; background: #0b1119; }
+body.av-mapa-cheio .av-pista > :not(#avMapa):not(.av-pista-head) { display: none !important; }
+body.av-mapa-cheio .av-pista-head { position: absolute; z-index: 1100; right: max(12px, env(safe-area-inset-right, 0px)); bottom: max(28px, env(safe-area-inset-bottom, 0px)); }
+body.av-mapa-cheio .av-pista-head h3, body.av-mapa-cheio .av-pista-head [data-act="kmz"], body.av-mapa-cheio .av-pista-head [data-act="mapa-cheio"] { display: none; }
+body.av-mapa-cheio .av-pista-head .seg { background: rgba(11,17,25,.85); }
+body.av-mapa-cheio #avMapa { position: absolute; inset: 0; height: auto; border: 0; border-radius: 0; }
+.av-sobre { display: none; }
+body.av-mapa-cheio .av-sobre { display: block; position: fixed; z-index: 1100; top: max(12px, env(safe-area-inset-top, 0px)); left: max(60px, env(safe-area-inset-left, 0px)); max-width: min(520px, calc(100vw - 130px));
+  padding: 12px 16px; border-radius: 14px; background: rgba(11,17,25,.86); color: #fff; border-left: 5px solid #ff7a1a; box-shadow: 0 6px 24px rgba(0,0,0,.45); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.av-sobre-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; } .av-sobre-top b { font-family: var(--display); font-size: clamp(26px, 5vh, 54px); line-height: 1; margin-right: auto; }
+.av-sobre .lbl { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #ff9b4d; font-weight: 700; }
+.av-sobre h2 { margin: 2px 0 6px; font-family: var(--display); font-size: clamp(18px, 3.6vh, 38px); line-height: 1.05; text-transform: uppercase; }
+.av-sobre p { margin: 0; color: #c9d1da; font-size: clamp(12px, 1.9vh, 18px); }
+@media (max-width: 600px) { body.av-mapa-cheio .av-sobre { left: 10px; right: 10px; max-width: none; top: auto; bottom: max(78px, env(safe-area-inset-bottom, 0px)); } }
 .av-momento { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #ff7a1a 12%, transparent); border-left: 4px solid #ff7a1a; }
 .av-momento .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #ff7a1a; font-weight: 700; }
 @keyframes corrente { 0% { box-shadow: 0 0 0 0 rgba(255,122,26,.7); } 100% { box-shadow: 0 0 0 18px rgba(255,122,26,0); } }

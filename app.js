@@ -737,7 +737,12 @@ function vAoVivo() {
   const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const prev = prox && prox.hora ? (atraso > 0 ? somaMin(prox.hora, atraso) : prox.hora) : "";
   const mapa = vMapaVivo(), tv = modoTv();
-  return `<div class="aovivo${mapa ? " tem-mapa" : ""}"><div class="av-info">
+  const sobre = S.mapaCheio && mapa ? `<div class="av-sobre"><div class="av-sobre-top"><b class="num">${hora}</b>
+      <span class="chip ${atraso > 10 ? "bad" : atraso > 0 ? "wait" : "ok"}">${atraso == null ? "Sem marcações" : atraso > 0 ? "Atrasado " + fmtDif(atraso).replace("+", "") : atraso < 0 ? "Adiantado " + fmtDif(atraso).replace("−", "") : "No horário"}</span>
+      <button class="btn sm" type="button" data-act="mapa-cheio">Fechar</button></div>
+    <span class="lbl">Agora</span><h2>${agora ? esc(agora.atv) : prox ? "Aguardando início" : "Dia encerrado"}</h2>
+    ${prox ? `<p><span class="lbl">Próximo</span> ${esc(prox.atv)}${prev ? ` · ~${esc(prev)}` : ""}</p>` : ""}</div>` : "";
+  return `<div class="aovivo${mapa ? " tem-mapa" : ""}">${sobre}<div class="av-info">
     <div class="av-top"><div><span class="eyebrow">${esc(topName())} · ${esc(D.nome || "")}</span><b class="av-relogio num">${hora}</b></div>
       <div class="actions"><span class="chip ${atraso > 10 ? "bad" : atraso > 0 ? "wait" : "ok"} av-atraso">${atraso == null ? "Sem marcações ainda" : atraso > 0 ? "Atrasado " + fmtDif(atraso).replace("+", "") : atraso < 0 ? "Adiantado " + fmtDif(atraso).replace("−", "") : "No horário"}</span>
       ${paisagem.matches ? "" : tv ? `<button class="btn" type="button" data-act="aovivo-tv">Sair do modo TV</button>` : `<button class="btn" type="button" data-act="aovivo-tv">Modo TV</button><button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button>`}</div></div>
@@ -753,12 +758,14 @@ setInterval(() => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) rende
 // Modo TV: tudo numa tela só, sem menu. Liga pelo botão (fica salvo no aparelho) ou sozinho com o celular deitado.
 const paisagem = matchMedia("(orientation: landscape) and (max-height: 540px)");
 const modoTv = () => S.view === "aovivo" && (paisagem.matches || (() => { try { return localStorage.getItem("adm3-avtv") === "1"; } catch (e) { return false; } })());
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && S.mapaCheio) { S.mapaCheio = false; if (mapaAV) mapaAV.dia = null; render(); } });
 paisagem.addEventListener("change", () => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) render(); });
 
 /* ---------- Mapa da pista ao vivo (em teste: só na demonstração) ----------
    A linha vem do KMZ/KML da pista (config/pista-mapa). Os ADMs marcam quando a corrente sai e chega em cada trecho
    (config/pista-vivo-<top>); enquanto o trecho anda, a posição é estimada pelo tempo previsto do trecho. */
 const MAPA_VIVO = () => true;
+const MAPA_CHEIO = () => DEMO; // mapa em tela cheia: em teste na demonstração
 const libJs = {};
 function carregarLib(nome, js, css) {
   return libJs[nome] || (libJs[nome] = new Promise((ok, erro) => {
@@ -850,6 +857,7 @@ function vMapaVivo() {
   const km = m => (m / 1000).toFixed(1).replace(".", ",");
   return `<section class="panel av-pista"><div class="av-pista-head"><h3>Onde está a corrente</h3>
       <div class="actions"><div class="seg" role="group" aria-label="Dia da pista">${dias.map(d => `<button type="button" data-av-dia="${esc(d.id)}" aria-pressed="${d.id === dia.id}">${esc(d.dia)}</button>`).join("")}</div>
+      ${E.lin && MAPA_CHEIO() ? `<button class="btn" type="button" data-act="mapa-cheio">${S.mapaCheio ? "Fechar mapa" : "⤢ Mapa em tela cheia"}</button>` : ""}
       ${ed ? `<button class="btn" type="button" data-act="kmz">${ico("upload")} Importar KMZ</button>` : ""}</div></div>
     ${mom ? `<div class="av-momento"><span class="lbl">${mom.andando ? "Acontecendo agora" : "Último momento"}</span><b>${esc(mom.atv)}</b><small class="hint">${mom.andando ? "começou " : "terminou "}${esc(mom.andando ? mom.ini : mom.fim || mom.ini)}${E.ponto ? ` · no mapa: ${esc(E.ponto.n)}` : ""}</small></div>` : ""}
     <p class="hint" style="margin:0">${!E.andou ? "A corrente ainda não saiu neste dia." : E.lin ? `${km(E.ateM)} de ${km(E.total)} km do ${esc(dia.dia)} (${Math.round(E.ateM / (E.total || 1) * 100)}%)${!E.usaPonto && pos.estimado ? " · posição estimada pelo tempo previsto do trecho" : ""}` : ""}</p>
@@ -2352,6 +2360,8 @@ function render() {
   view.innerHTML = html;
   botaoPdf();
   document.body.classList.toggle("av-tv", modoTv());
+  if (S.view !== "aovivo") S.mapaCheio = false;
+  document.body.classList.toggle("av-mapa-cheio", !!S.mapaCheio);
   if (S.view === "aovivo") montarMapaVivo(); else if (mapaAV) { try { mapaAV.map.remove(); } catch (e) {} mapaAV = null; }
   if ((focusId === "q" || focusId === "hq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
 }
@@ -2953,6 +2963,11 @@ document.addEventListener("click", e => {
   if (d.pvDesf != null && podeEditar()) { if (confirm("Desfazer a marcação deste trecho?")) marcarTrecho(+d.pvDesf, "desf"); return; }
   if (d.act === "saude") { saudeBusca(); return; }
   if (d.act === "aovivo-tv") { const on = !modoTv(); try { localStorage.setItem("adm3-avtv", on ? "1" : "0"); } catch (e) {} if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); render(); return; }
+  if (d.act === "mapa-cheio") { S.mapaCheio = !S.mapaCheio; if (mapaAV) mapaAV.dia = null;
+    const el = document.documentElement;
+    if (S.mapaCheio && !document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else if (!S.mapaCheio && document.fullscreenElement && !modoTv()) document.exitFullscreen().catch(() => {});
+    render(); return; }
   if (d.act === "aovivo-tela") { const el = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen ? el.requestFullscreen() : Promise.resolve()).catch(() => {}); return; }
   if (d.act === "importar-eq") { importForm("legendario"); return; }
   if (d.eqAdd !== undefined && podeEditar()) { equipePessoaForm(null, d.eqAdd); return; }
@@ -3067,6 +3082,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target.matches && e.target.matches("[data-hist-ver]")) { e.target.click(); return; }
   if (e.key !== "Escape") return;
   if ($(".login") && precisaLogin()) return;
+  if (S.mapaCheio && !$("#modalRoot").innerHTML) { S.mapaCheio = false; if (mapaAV) mapaAV.dia = null; render(); return; }
   if ($("#modalRoot").innerHTML) closeModal();
   else if ($(".app").classList.contains("menu-open")) { setMenu(false); $("#menuBtn").focus(); }
 });
