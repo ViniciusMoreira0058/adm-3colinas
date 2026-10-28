@@ -2137,6 +2137,11 @@ const ocPref = () => "ocorr-" + curTopId() + "-";
 const ocorrencias = () => Object.entries(S.cfgDocs || {}).filter(([k, v]) => k.startsWith(ocPref()) && v && !v.excluida).map(([id, v]) => ({ ...v, id })).sort((a, b) => String(b.em).localeCompare(String(a.em)));
 const ocorrAbertas = () => ocorrencias().filter(o => o.status !== "resolvida");
 function salvarOcorr(id, o, msg) { const { id: _, ...data } = o; save(() => api.set("config", id, { ...data, top: curTopId(), atualizadoPor: ME.adm || "" }), msg); }
+async function copiarTexto(t, ok) {
+  try { await navigator.clipboard.writeText(t); toast(ok); }
+  catch { const a = document.createElement("textarea"); a.value = t; a.style.position = "fixed"; a.style.opacity = "0"; document.body.appendChild(a); a.select();
+    try { document.execCommand("copy"); toast(ok); } catch (e) { prompt("Copie o link:", t); } a.remove(); }
+}
 function vOcorrencias() {
   const L = ocorrencias(), ab = L.filter(o => o.status !== "resolvida"), f = S.ocFiltro || "abertas", ed = podeEditar();
   const rows = f === "abertas" ? ab : L;
@@ -2563,7 +2568,7 @@ function personForm(p, tipo) {
       ${lg ? `
       <div class="field"><label for="f-equipe">Equipe</label>${sel("equipe", [{ v: "", l: "—" }, ...equipesUsadas().map(e => ({ v: e, l: e }))], p.equipe || "")}</div>
       <div class="field"><label for="f-funcao">Função na equipe</label><input id="f-funcao" name="funcao" list="funcoes" value="${esc(p.funcao)}" placeholder="ex.: Chefe, Subchefe"><datalist id="funcoes"><option value="Chefe"><option value="Subchefe"></datalist></div>
-      <div class="field"><label for="f-termo">Termo LGND</label>${sel("termo", TERMO, p.termo)}${TERMO_LINK() && p.termoLink && p.termo !== "assinado" ? `<a class="hint termo-link" href="${esc(p.termoLink)}" target="_blank" rel="noopener">Abrir link do termo</a>` : ""}</div>
+      <div class="field"><label for="f-termo">Termo LGND</label>${sel("termo", TERMO, p.termo)}${TERMO_LINK() && p.termoLink && p.termo !== "assinado" ? `<span class="termo-link"><a class="hint" href="${esc(p.termoLink)}" target="_blank" rel="noopener">Abrir link do termo</a> · <button class="linkbtn hint" type="button" data-copiar-link="${esc(p.id)}">Copiar link</button></span>` : ""}</div>
       <div class="field"><label for="f-atestado">Status do atestado</label>${sel("atestado", ATESTADO, p.atestado)}</div>
       <div class="field"><label for="f-dataAtestado">Previsão do atestado</label><input id="f-dataAtestado" name="dataAtestado" value="${esc(p.dataAtestado)}" placeholder="ex.: semana do dia 30/10"></div>
       ` : `
@@ -2572,7 +2577,7 @@ function personForm(p, tipo) {
       <div class="field"><label for="f-familia">Família</label>${sel("familia", [{ v: "", l: "Sem família" }, ...Array.from({ length: 12 }, (_, i) => ({ v: String(i + 1), l: "Família " + String(i + 1).padStart(2, "0") }))], p.familia ? String(p.familia) : "")}</div>
       <div class="field"><label for="f-atestado">Status do atestado</label>${sel("atestado", ATESTADO, p.atestado)}</div>
       <div class="field"><label for="f-dataAtestado">Previsão do atestado</label><input id="f-dataAtestado" name="dataAtestado" value="${esc(p.dataAtestado)}" placeholder="ex.: semana do dia 30/10"></div>
-      <div class="field"><label for="f-termo">Status do termo</label>${sel("termo", TERMO, p.termo)}${TERMO_LINK() && p.termoLink && p.termo !== "assinado" ? `<a class="hint termo-link" href="${esc(p.termoLink)}" target="_blank" rel="noopener">Abrir link do termo</a>` : ""}</div>
+      <div class="field"><label for="f-termo">Status do termo</label>${sel("termo", TERMO, p.termo)}${TERMO_LINK() && p.termoLink && p.termo !== "assinado" ? `<span class="termo-link"><a class="hint" href="${esc(p.termoLink)}" target="_blank" rel="noopener">Abrir link do termo</a> · <button class="linkbtn hint" type="button" data-copiar-link="${esc(p.id)}">Copiar link</button></span>` : ""}</div>
       `}
       ${lg ? "" : `<div class="field full"><span class="lab">Confirmações</span><div class="checks">
         <label><input type="checkbox" id="f-msgGrupo" name="msgGrupo" ${p.msgGrupo ? "checked" : ""}> Mensagem do grupo enviada</label>
@@ -3141,6 +3146,7 @@ document.addEventListener("click", e => {
   if (d.pvDesf != null && podeEditar()) { if (confirm("Desfazer a marcação deste trecho?")) marcarTrecho(+d.pvDesf, "desf"); return; }
   if (d.act === "saude") { saudeBusca(); return; }
   if (d.act === "aovivo-tv") { const on = !modoTv(); try { localStorage.setItem("adm3-avtv", on ? "1" : "0"); } catch (e) {} if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); render(); return; }
+  if (d.copiarLink) { const p = S.pessoas.find(x => x.id === d.copiarLink); if (p && p.termoLink) copiarTexto(p.termoLink, "Link do termo copiado"); return; }
   if (d.act === "nova-ocorr") { ocorrForm(); return; }
   if (d.ocEdit) { const o = ocorrencias().find(x => x.id === d.ocEdit); if (o) ocorrForm(o); return; }
   if (d.ocResolver && podeEditar()) { const o = ocorrencias().find(x => x.id === d.ocResolver); if (o) salvarOcorr(o.id, { ...o, status: o.status === "resolvida" ? "aberta" : "resolvida", resolvidaEm: o.status === "resolvida" ? null : new Date().toISOString(), resolvidaPor: ME.adm || "" }, o.status === "resolvida" ? "Ocorrência reaberta" : "Ocorrência resolvida"); return; }
@@ -3400,7 +3406,7 @@ function vPendencias() {
   <div class="seg" role="group" aria-label="Pendência">${seg("oque", "qualquer", "Qualquer pendência")}${seg("oque", "atestado", "Atestado")}${seg("oque", "termo", "Termo")}${seg("oque", "grupo", "Grupo")}</div>
   ${rows.length ? `<section class="panel"><div class="list pend">${rows.map(p => `<div class="li pendrow">
       <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
-        <div class="pendtags">${tags(p)}${linkTermo(p) ? `<span class="chip ok" title="A cobrança já leva o link do termo">link do termo</span>` : ""}${p.dataAtestado && !atOk(p) ? `<span class="hint">previsão: ${esc(p.dataAtestado)}</span>` : ""}</div>
+        <div class="pendtags">${tags(p)}${linkTermo(p) ? `<button class="chip ok chip-btn" type="button" data-copiar-link="${esc(p.id)}" title="Copiar só o link do termo">${ico("paste")} link do termo</button>` : ""}${p.dataAtestado && !atOk(p) ? `<span class="hint">previsão: ${esc(p.dataAtestado)}</span>` : ""}</div>
         ${obsLinha(p)}<small class="hint">${esc(p.adm || "Sem ADM")}${p.cobradoEm ? ` · cobrado ${esc(quando(p.cobradoEm))}` : " · ainda não cobrado"}</small></div>
       ${waNumber(p.telefone) ? `<a class="wa" href="${waCobrar(p)}" target="_blank" rel="noopener" data-cobrar="${p.id}">${ico("wa")} Cobrar</a>` : `<span class="wa off">${ico("wa")} Sem telefone</span>`}
     </div>`).join("")}</div></section>`
