@@ -627,6 +627,24 @@ a.btn { text-decoration: none; }
 .corrente-pin b { position: absolute; left: 22px; top: -6px; max-width: 230px; width: max-content; white-space: normal; background: #0b1119; color: #fff; font: 700 12px/1.25 var(--body, system-ui); padding: 5px 8px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .corrente-pin b small { display: block; font-size: 9px; letter-spacing: .08em; color: #ff9b4d; }
 @media (max-width: 600px) { .corrente-pin b { left: 50%; top: 22px; transform: translateX(-50%); max-width: 170px; } }
+.av-info { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+/* Modo TV (botão ou celular deitado): relógio e momentos à esquerda, mapa à direita, sem menu */
+body.av-tv .side, body.av-tv .mtop, body.av-tv .scrim, body.av-tv #view > .banner { display: none !important; }
+body.av-tv .app .main { margin-left: 0 !important; padding: max(10px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) 10px max(14px, env(safe-area-inset-left, 0px)); }
+body.av-tv .wrap { max-width: none; }
+body.av-tv .aovivo { height: calc(100dvh - 20px); gap: 1.6vh; overflow: hidden; }
+body.av-tv .aovivo.tem-mapa { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 2vw; }
+body.av-tv .av-info { gap: 1.6vh; overflow: hidden; }
+body.av-tv .av-relogio { font-size: clamp(30px, 11vh, 120px); }
+body.av-tv .av-agora, body.av-tv .av-prox { padding: 1.6vh 1.4vw; border-radius: 14px; }
+body.av-tv .av-agora h2 { font-size: clamp(20px, 6.5vh, 76px); margin: .5vh 0; }
+body.av-tv .av-prox h3 { font-size: clamp(16px, 4vh, 46px); margin: .5vh 0; }
+body.av-tv .av-agora p, body.av-tv .av-prox p, body.av-tv .av-depois { font-size: clamp(12px, 2.2vh, 24px); }
+body.av-tv .av-agora .lbl, body.av-tv .av-prox .lbl { font-size: clamp(10px, 1.6vh, 15px); }
+body.av-tv .av-pista { height: 100%; min-height: 0; padding: 1.2vh; gap: 1vh; }
+body.av-tv .av-pista-head h3, body.av-tv .av-momento, body.av-tv .av-pista details, body.av-tv .av-pista > .hint:last-child { display: none; }
+body.av-tv .av-mapa { flex: 1; height: auto; min-height: 0; }
+@media (max-height: 540px) { body.av-tv .corrente-pin b { left: 50%; top: 22px; transform: translateX(-50%); max-width: 170px; } body.av-tv .av-pista > p.hint, body.av-tv .av-depois, body.av-tv .av-pista-head .btn, body.av-tv .av-atraso + .btn { display: none; } body.av-tv .av-top .eyebrow { font-size: 10px; } }
 .av-momento { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #ff7a1a 12%, transparent); border-left: 4px solid #ff7a1a; }
 .av-momento .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #ff7a1a; font-weight: 700; }
 @keyframes corrente { 0% { box-shadow: 0 0 0 0 rgba(255,122,26,.7); } 100% { box-shadow: 0 0 0 18px rgba(255,122,26,0); } }

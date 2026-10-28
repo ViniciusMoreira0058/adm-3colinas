@@ -736,20 +736,24 @@ function vAoVivo() {
   const somaMin = (h, d) => { const m = minDe(h); if (m == null) return h; const t = (m + (d || 0) + 1440) % 1440; return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); };
   const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const prev = prox && prox.hora ? (atraso > 0 ? somaMin(prox.hora, atraso) : prox.hora) : "";
-  return `<div class="aovivo">
+  const mapa = vMapaVivo(), tv = modoTv();
+  return `<div class="aovivo${mapa ? " tem-mapa" : ""}"><div class="av-info">
     <div class="av-top"><div><span class="eyebrow">${esc(topName())} · ${esc(D.nome || "")}</span><b class="av-relogio num">${hora}</b></div>
       <div class="actions"><span class="chip ${atraso > 10 ? "bad" : atraso > 0 ? "wait" : "ok"} av-atraso">${atraso == null ? "Sem marcações ainda" : atraso > 0 ? "Atrasado " + fmtDif(atraso).replace("+", "") : atraso < 0 ? "Adiantado " + fmtDif(atraso).replace("−", "") : "No horário"}</span>
-      <button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button></div></div>
+      ${paisagem.matches ? "" : tv ? `<button class="btn" type="button" data-act="aovivo-tv">Sair do modo TV</button>` : `<button class="btn" type="button" data-act="aovivo-tv">Modo TV</button><button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button>`}</div></div>
     <section class="av-agora"><span class="lbl">Agora</span><h2>${agora ? esc(agora.atv) : prox ? "Aguardando início" : "Dia encerrado"}</h2>
       ${agora ? `<p>${[agora.local, agora.resp].filter(Boolean).map(esc).join(" · ")}${M[agora.id].ini ? ` · desde ${esc(M[agora.id].ini)}${agora.hora ? ` (previsto ${esc(agora.hora)})` : ""}` : ""}</p>` : ""}</section>
     <section class="av-prox"><span class="lbl">Próximo</span><h3>${prox ? esc(prox.atv) : "—"}</h3>
       ${prox ? `<p>${prox.hora ? `previsto ${esc(prox.hora)}${prev && prev !== prox.hora ? ` · deve começar ~${esc(prev)}` : ""}` : ""}${prox.local ? " · " + esc(prox.local) : ""}</p>` : ""}</section>
     ${seguintes.length ? `<ul class="av-depois">${seguintes.map(i => `<li><span class="num">${esc(i.hora || "")}</span>${esc(i.atv)}</li>`).join("")}</ul>` : ""}
     <div class="av-barra"><div class="bar good"><i style="width:${pct(nFeito, D.itens.length)}%"></i></div><span class="hint num">${nFeito} de ${D.itens.length} momentos do ${esc(D.nome || "dia")} concluídos · atualiza sozinho</span></div>
-    ${vMapaVivo()}
-  </div>`;
+  </div>${mapa}</div>`;
 }
 setInterval(() => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) render(); }, 30000);
+// Modo TV: tudo numa tela só, sem menu. Liga pelo botão (fica salvo no aparelho) ou sozinho com o celular deitado.
+const paisagem = matchMedia("(orientation: landscape) and (max-height: 540px)");
+const modoTv = () => S.view === "aovivo" && (paisagem.matches || (() => { try { return localStorage.getItem("adm3-avtv") === "1"; } catch (e) { return false; } })());
+paisagem.addEventListener("change", () => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) render(); });
 
 /* ---------- Mapa da pista ao vivo (em teste: só na demonstração) ----------
    A linha vem do KMZ/KML da pista (config/pista-mapa). Os ADMs marcam quando a corrente sai e chega em cada trecho
@@ -2347,6 +2351,7 @@ function render() {
   const caret = focusId === "q" || focusId === "hq" ? document.activeElement.selectionStart : null;
   view.innerHTML = html;
   botaoPdf();
+  document.body.classList.toggle("av-tv", modoTv());
   if (S.view === "aovivo") montarMapaVivo(); else if (mapaAV) { try { mapaAV.map.remove(); } catch (e) {} mapaAV = null; }
   if ((focusId === "q" || focusId === "hq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
 }
@@ -2947,6 +2952,7 @@ document.addEventListener("click", e => {
   if (d.pvFim != null && podeEditar()) { marcarTrecho(+d.pvFim, "fim"); return; }
   if (d.pvDesf != null && podeEditar()) { if (confirm("Desfazer a marcação deste trecho?")) marcarTrecho(+d.pvDesf, "desf"); return; }
   if (d.act === "saude") { saudeBusca(); return; }
+  if (d.act === "aovivo-tv") { const on = !modoTv(); try { localStorage.setItem("adm3-avtv", on ? "1" : "0"); } catch (e) {} if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); render(); return; }
   if (d.act === "aovivo-tela") { const el = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen ? el.requestFullscreen() : Promise.resolve()).catch(() => {}); return; }
   if (d.act === "importar-eq") { importForm("legendario"); return; }
   if (d.eqAdd !== undefined && podeEditar()) { equipePessoaForm(null, d.eqAdd); return; }
