@@ -176,6 +176,8 @@ const VIEWS = [
   { id: "tops", l: "Tops", i: "flag" },
   { id: "usuarios", l: "Usuários", i: "key", owner: true },
   { id: "historico", l: "Histórico", i: "clock", owner: true },
+  { id: "postop", l: "Pós-TOP", i: "chart", all: true, menu: true, extra: true },   // pesquisa dos ADMs depois do TOP
+  { id: "guia", l: "Como usar", c: "Guia", i: "list", all: true, menu: true, extra: true },   // guia para ADM novo
 ];
 /* Acesso: o dono vê tudo; cada usuário vê as abas que o dono liberou no cadastro dele. */
 const NIVEIS = [
@@ -193,6 +195,7 @@ const precisaLogin = () => !ME.acesso;
 const canSee = v => {
   if (ORG()) v = VIEWS.find(x => x.id === v.id) || v;   // {id} sozinho também respeita need/owner da aba
   if (v.org && !ORG()) return false;
+  if (v.extra && !EXTRA()) return false;
   if (!ME.acesso) return v.id === "painel";
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
   if (S.isOwner || (VIEWS.find(x => x.id === v.id) || v).all) return true;
@@ -249,7 +252,7 @@ function renderNav() {
   counts.usuarios = online ? `${online} on` : null;
   const novas = ME.acesso ? notifNovas() : 0;
   const navBtn = v => `<button type="button" data-go="${v.id}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : v.id === "importacao" && impFaltam() ? `<span class="badge num">${impFaltam()}</span>` : ""}</button>`;
-  const vis = VIEWS.filter(v => canSee(v) && !v.all);
+  const vis = VIEWS.filter(v => canSee(v) && (!v.all || v.menu));
   document.body.classList.toggle("org", ORG());
   $("#nav").innerHTML = !ORG() ? vis.map(navBtn).join("")
     : MENU_GRUPOS.map(([g, ids]) => { const b = vis.filter(v => ids.includes(v.id)); return b.length ? (g ? `<div class="nav-grp">${g}</div>` : "") + b.map(navBtn).join("") : ""; }).join("")
@@ -440,7 +443,7 @@ function vPainelNovo() {
   ].filter(t => t[0] > 0 && canSee({ id: t[2] }));
   const bloco = (titulo, ico_, corpo, go_) => `<section class="panel dash-bloco"><h3>${ico(ico_)} ${titulo}${go_ ? `<button class="linkbtn" type="button" data-go="${go_}">ver ›</button>` : ""}</h3>${corpo}</section>`;
   const mini = (l, v, sub, go_, extra = "") => `<${go_ ? `button type="button" data-go="${go_}"${extra}` : "div"} class="dmini"><span class="lbl">${l}</span><b class="num">${v}</b>${sub ? `<small>${sub}</small>` : ""}</${go_ ? "button" : "div"}>`;
-  return `${backupBanner()}
+  return `${backupBanner()}${EXTRA() && store.get("adm3-guia-visto") !== "1" ? `<div class="banner"><span>${ico("list")} <b>Novo por aqui?</b> O guia mostra em 2 minutos o que fazer em cada página.</span><div class="actions"><button class="btn primary" type="button" data-go="guia">Ver o guia</button><button class="btn ghost" type="button" data-act="guia-ok">Agora não</button></div></div>` : ""}
   ${ME.acesso && ["pedir", "bloqueado", "instalar"].includes(estadoNotif()) ? `<div class="banner aviso"><span>${ico("bell")} <b>Notificações desligadas neste aparelho.</b> Ative para receber os avisos do app no celular.</span><button class="btn primary" type="button" data-act="notif-ajuda">Ativar</button></div>` : ""}
   <section class="dash-topo">
     <div class="dash-id"><img class="dash-logo" src="assets/logo.png" alt="Track 3 Colinas · Franca SP">
@@ -927,7 +930,8 @@ const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
 const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "familias", "consagracao"]],
-  ["Operação", ["cronograma", "aovivo", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "usuarios", "historico"]]];
+  ["Operação", ["cronograma", "aovivo", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
+const EXTRA = () => DEMO; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
 /* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
 const IMPS = [
@@ -1011,6 +1015,102 @@ function backupBanner() {
   if (d != null && d < 7) return "";
   return `<div class="banner aviso"><span>${ico("upload")} <b>Backup da semana.</b> ${d == null ? "Ainda não tem nenhum backup guardado." : `O último foi há ${d} dias${b.por ? " (" + esc(b.por) + ")" : ""}.`} Baixe a planilha com tudo do TOP e guarde no Drive.</span><button class="btn primary" type="button" data-act="backup">Baixar backup</button></div>`;
 }
+/* ---------- Pós-TOP: cada ADM avalia o TOP (1 a 5) e conta o que foi bom e o que melhorar. config/postop-<top>-<membro>; lições do dono em config/postop-<top>-licoes ---------- */
+const PT_ITENS = [["organizacao", "Organização geral"], ["comunicacao", "Comunicação da equipe ADM"], ["cronograma", "Cumprimento do cronograma"],
+  ["logistica", "Logística e estoque"], ["alimentacao", "Alimentação e MRE"], ["seguranca", "Segurança e saúde"]];
+const ptPref = () => "postop-" + curTopId() + "-";
+const ptRespostas = () => Object.entries(S.cfgDocs || {}).filter(([k, v]) => k.startsWith(ptPref()) && v && v.notas).map(([id, v]) => ({ ...v, id })).sort((a, b) => String(a.por || "").localeCompare(String(b.por || "")));
+const ptMinha = () => (S.cfgDocs || {})[ptPref() + (ME.id || "eu")] || null;
+const ptLicoes = () => ((S.cfgDocs || {})[ptPref() + "licoes"] || {}).texto || "";
+const notaTxt = m => m == null ? "sem nota" : m.toFixed(1).replace(".", ",") + " de 5";
+function ptResumo() {
+  const R = ptRespostas();
+  const itens = PT_ITENS.map(([k, l]) => { const xs = R.map(r => Number((r.notas || {})[k])).filter(n => n > 0); return { k, l, m: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null, n: xs.length }; });
+  const ok = itens.filter(i => i.m != null);
+  return { R, itens, geral: ok.length ? ok.reduce((a, i) => a + i.m, 0) / ok.length : null };
+}
+function vPosTop() {
+  const P = ptResumo(), eu = ptMinha(), lic = ptLicoes(), ativos = (S.equipe || []).filter(m => m.ativo !== false).length;
+  const cor = m => m == null ? "" : m >= 4 ? "good" : m >= 3 ? "" : "bad";
+  return `
+  <div class="head"><div><h2>Pós-TOP</h2><p>Cada ADM dá uma nota de 1 a 5 para o TOP e conta o que foi bom e o que dá para melhorar. As respostas viram as lições para o próximo TOP e entram no Relatório final.</p></div>
+    <div class="actions">${RELATORIO_FINAL() ? `<button class="btn glass" type="button" data-act="relatorio">${ico("list")} Relatório final</button>` : ""}<button class="btn primary" type="button" data-act="pt-responder">${ico("edit")} ${eu ? "Editar minha resposta" : "Responder a pesquisa"}</button></div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Nota geral</span><span class="val num">${P.geral == null ? "—" : P.geral.toFixed(1).replace(".", ",")}</span><span class="sub">média de 1 a 5</span></div>
+    <div class="kpi"><span class="lbl">Respostas</span><span class="val num">${P.R.length}</span><span class="sub">${S.isOwner && ativos ? `de ${ativos} ADMs` : "ADMs responderam"}</span></div>
+    <div class="kpi ${eu ? "" : "alert"}"><span class="lbl">Sua resposta</span><span class="val num" style="font-size:22px">${eu ? "Enviada" : "Falta"}</span><span class="sub">${eu ? esc(quando(eu.em)) : "toque em Responder"}</span></div>
+  </div>
+  <section class="panel"><h3>Notas por área</h3>
+    <div class="pt-notas">${P.itens.map(it => `<div class="pt-nota"><span>${it.l}</span><div class="bar ${cor(it.m)}"><i style="width:${it.m == null ? 0 : it.m * 20}%"></i></div><b class="num">${it.m == null ? "—" : it.m.toFixed(1).replace(".", ",")}</b></div>`).join("")}</div></section>
+  <div class="grid2">
+    <section class="panel"><h3>O que foi bom <small>${P.R.filter(r => r.bom).length}</small></h3>${P.R.filter(r => r.bom).map(r => `<div class="pt-fala"><p>${esc(r.bom)}</p><small>${esc(r.por || "ADM")}</small></div>`).join("") || `<div class="empty">Ninguém escreveu ainda.</div>`}</section>
+    <section class="panel"><h3>O que melhorar <small>${P.R.filter(r => r.melhorar).length}</small></h3>${P.R.filter(r => r.melhorar).map(r => `<div class="pt-fala"><p>${esc(r.melhorar)}</p><small>${esc(r.por || "ADM")}</small></div>`).join("") || `<div class="empty">Ninguém escreveu ainda.</div>`}</section>
+  </div>
+  <section class="panel"><h3>Lições para o próximo TOP ${S.isOwner ? `<button class="linkbtn" type="button" data-act="pt-licoes">${lic ? "editar ›" : "escrever ›"}</button>` : ""}</h3>
+    ${lic ? `<div class="pt-licoes">${esc(lic).replace(/\n/g, "<br>")}</div>` : `<div class="empty">${S.isOwner ? "Leia as respostas e escreva aqui o que muda no próximo TOP. Isso vai para o Relatório final." : "O dono escreve aqui o que muda no próximo TOP."}</div>`}</section>`;
+}
+function posTopForm() {
+  const eu = ptMinha() || {}, n = eu.notas || {};
+  modal(`
+    <h3>Pesquisa pós-TOP</h3>
+    <p class="hint" style="margin:0">De 1 (ruim) a 5 (excelente). Leva 1 minuto. Sua resposta aparece com o seu nome para a equipe.</p>
+    <div class="pt-form">${PT_ITENS.map(([k, l]) => `<div class="pt-q"><span>${l}</span><div class="pt-escala" role="radiogroup" aria-label="${l}">${[1, 2, 3, 4, 5].map(v => `<label><input type="radio" name="${k}" value="${v}" ${Number(n[k]) === v ? "checked" : ""}><span>${v}</span></label>`).join("")}</div></div>`).join("")}</div>
+    <div class="field"><label for="f-ptbom">O que foi bom</label><textarea id="f-ptbom" name="bom" style="min-height:70px">${esc(eu.bom || "")}</textarea></div>
+    <div class="field"><label for="f-ptmel">O que dá para melhorar no próximo TOP</label><textarea id="f-ptmel" name="melhorar" style="min-height:70px">${esc(eu.melhorar || "")}</textarea></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Enviar</button></div></div>`,
+  fd => {
+    const notas = {}; PT_ITENS.forEach(([k]) => { const v = Number(fd.get(k)); if (v) notas[k] = v; });
+    if (!Object.keys(notas).length) { toast("Dê pelo menos uma nota."); return; }
+    closeModal();
+    save(() => api.set("config", ptPref() + (ME.id || "eu"), { notas, bom: String(fd.get("bom") || "").trim(), melhorar: String(fd.get("melhorar") || "").trim(), por: ME.adm || "", em: new Date().toISOString(), top: curTopId() }), "Obrigado! Resposta enviada.").then(render);
+  });
+}
+function licoesForm() {
+  modal(`
+    <h3>Lições para o próximo TOP</h3>
+    <p class="hint" style="margin:0">Uma por linha. Vai para o Relatório final.</p>
+    <div class="field"><textarea id="f-lic" name="texto" style="min-height:180px" placeholder="ex.: começar a cobrança de atestado 30 dias antes">${esc(ptLicoes())}</textarea></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { closeModal(); save(() => api.set("config", ptPref() + "licoes", { texto: String(fd.get("texto") || "").trim(), por: ME.adm || "", em: new Date().toISOString(), top: curTopId() }), "Lições salvas").then(render); });
+}
+
+/* ---------- Guia "Como usar": o que fazer em cada página, só das páginas que a pessoa vê ---------- */
+const GUIA = {
+  painel: ["Visão geral do TOP", ["Mostra quantos dias faltam, quantos estão prontos e o que fazer hoje.", "Toque em qualquer item de \"O que fazer hoje\" para ir direto à tela certa."]],
+  participantes: ["Lista dos senderistas", ["Toque no status de atestado ou termo para avançar.", "O lápis abre a ficha completa. Quem mexe por último vira o ADM responsável."]],
+  legendarios: ["Lista dos legendários", ["Mesma ideia dos senderistas: atestado, termo e equipe de cada um."]],
+  equipes: ["Equipes LGND", ["Mostra cada legendário na sua área e função.", "Atualiza sozinho quando a planilha de equipes é importada."]],
+  pendencias: ["Quem ainda deve algo", ["Filtre por atestado, termo, grupo ou boleto.", "Use \"Cobrar em sequência\" para mandar o WhatsApp de um por um com a mensagem pronta e o link do termo."]],
+  familias: ["Famílias", ["Monte e confira as famílias de senderistas."]],
+  consagracao: ["Consagração", ["Organiza a consagração por dia, com quem está em cada momento."]],
+  cronograma: ["Cronograma do TOP", ["Marque início e fim de cada momento na hora em que acontece.", "O app calcula o atraso e mostra no Ao vivo."]],
+  aovivo: ["Painel ao vivo", ["Mostra o momento atual, atrasos e a pista no mapa.", "Use o Modo TV (ou vire o celular) para deixar no telão."]],
+  ocorrencias: ["Ocorrências", ["Registre mal-estar, lesão, desistência e outros na hora.", "Marque como resolvida quando terminar. Entra no Relatório final."]],
+  checklist: ["Checklist da equipe ADM", ["Cada tarefa tem etapa, responsável e status.", "Mude o status conforme for fazendo."]],
+  pista: ["KM da pista", ["Trechos de cada dia com metros e tempo."]],
+  pins: ["Pins", ["Entrega dos pins por lote. Importe a planilha do lote quando chegar."]],
+  estoque: ["Estoque e compras", ["Use + e − na conferência. Preço de cada item soma o valor em estoque.", "Marque MRE nos itens que vão no kit e some os MREs montados."]],
+  importacao: ["Importação do dia", ["As 4 planilhas na ordem: inscrições, assinaturas, avaliações e equipes.", "Todas pelo mesmo botão Importar. O ✓ mostra quem já importou hoje."]],
+  tops: ["Tops", ["Histórico dos TOPs, iniciar e finalizar. Também gera o backup."]],
+  postop: ["Pós-TOP", ["Depois do TOP, dê suas notas e conte o que foi bom e o que melhorar."]],
+  usuarios: ["Usuários", ["Cadastre ADMs e escolha as páginas que cada um vê e se pode editar."]],
+  historico: ["Histórico", ["Tudo que foi alterado, por quem e quando. Toque numa linha para ver o detalhe."]],
+};
+function vGuia() {
+  const vs = VIEWS.filter(v => GUIA[v.id] && canSee(v));
+  const ROTINA = [
+    canSee({ id: "importacao" }) && ["Todo dia de manhã", "Importe as 4 planilhas em Importação do dia.", "importacao"],
+    canSee({ id: "pendencias" }) && ["Depois de importar", "Abra Pendências e use Cobrar em sequência.", "pendencias"],
+    ["Durante o TOP", "Marque o Cronograma e registre as Ocorrências. O Ao vivo mostra tudo para a equipe.", canSee({ id: "cronograma" }) ? "cronograma" : "painel"],
+    canSee({ id: "postop" }) && ["Depois do TOP", "Responda o Pós-TOP. O dono gera o Relatório final.", "postop"],
+  ].filter(Boolean);
+  return `
+  <div class="head"><div><h2>Como usar</h2><p>O básico de cada página que você pode ver. Na lupa do alto você acha qualquer pessoa ou item de qualquer lugar.</p></div>
+    ${store.get("adm3-guia-visto") !== "1" ? `<div class="actions"><button class="btn primary" type="button" data-act="guia-ok">${ico("check")} Entendi</button></div>` : ""}</div>
+  <section class="panel"><h3>A rotina em 4 passos</h3><div class="guia-rotina">${ROTINA.map(([q, t, v], i) => `<button type="button" class="guia-passo" data-go="${v}"><span class="imp-n num">${i + 1}</span><span><b>${q}</b><small>${t}</small></span><i aria-hidden="true">›</i></button>`).join("")}</div></section>
+  <div class="guia-cards">${vs.map(v => `<section class="panel guia-card"><h3>${ico(v.i)} ${v.l}</h3><p class="guia-sub">${GUIA[v.id][0]}</p><ul>${GUIA[v.id][1].map(t => `<li>${esc(t)}</li>`).join("")}</ul>${v.id !== "guia" ? `<button class="linkbtn" type="button" data-go="${v.id}">abrir ›</button>` : ""}</section>`).join("")}</div>`;
+}
+
 /* Período do backup: dia, semana (7 dias), mês (30 dias) ou o TOP todo. Num período, entra o que foi criado ou alterado dentro dele. */
 const BK_PER = [{ v: "dia", l: "Diário", d: "o que mudou hoje", dias: 1 }, { v: "semana", l: "Semanal", d: "o que mudou nos últimos 7 dias", dias: 7 },
   { v: "mes", l: "Mensal", d: "o que mudou nos últimos 30 dias", dias: 30 }, { v: "top", l: "TOP todo", d: "tudo do TOP, completo", dias: 0 }];
@@ -2510,7 +2610,7 @@ function dadosRelatorio() {
   const pins = typeof pinsTodos === "function" ? pinsTodos() : [], pinsOk = pins.filter(p => p.status === "entregue").length;
   const canc = S.P.filter(p => p.tipo !== "legendario" && cancelado(p)).length, pend = S.P.filter(p => !cancelado(p) && p.inscricao === "pendente").length;
   const desist = oc.filter(o => o.tipo === "Desistência").length;
-  return { s, td, dias, oc, porTipo, custo, kits, valor, pins, pinsOk, canc, pend, desist, mreN: mre.length };
+  return { s, td, dias, oc, porTipo, custo, kits, valor, pins, pinsOk, canc, pend, desist, mreN: mre.length, pt: EXTRA() ? ptResumo() : null };
 }
 function relatorioForm() {
   const R = dadosRelatorio(), { s } = R, km = (s.pistaM / 1000).toFixed(1).replace(".", ",");
@@ -2525,6 +2625,7 @@ function relatorioForm() {
       <section><h4>Ocorrências</h4><div class="list">${linha("Total", R.oc.length)}${linha("Graves", R.oc.filter(o => o.grav === "grave").length)}${Object.entries(R.porTipo).map(([t, n]) => linha(esc(t), n)).join("")}</div></section>
       <section><h4>Estoque e MRE</h4><div class="list">${linha("MREs montados", R.kits)}${linha("Custo de 1 MRE", brl(R.custo))}${linha("Gasto nos kits lacrados", brl(R.custo * R.kits))}${linha("Valor em estoque", brl(R.valor))}</div></section>
       <section><h4>Pista e pins</h4><div class="list">${linha("Pista total", km + " km")}${R.pins.length ? linha("Pins entregues", `${R.pinsOk} / ${R.pins.length}`) : ""}</div></section>
+      ${R.pt && R.pt.R.length ? `<section><h4>Pós-TOP (ADMs)</h4><div class="list">${linha("Respostas", R.pt.R.length)}${linha("Nota geral", notaTxt(R.pt.geral))}${R.pt.itens.map(it => linha(esc(it.l), notaTxt(it.m))).join("")}</div></section>` : ""}
     </div>
     <div class="modal-foot"><span><button class="btn ghost" type="button" data-close-btn>Fechar</button></span>
       <div class="actions"><button class="btn" type="button" id="relWa">${ico("wa")} Enviar no WhatsApp</button><button class="btn primary" type="button" id="relPdf">Baixar PDF</button></div></div>`, () => {});
@@ -2548,6 +2649,9 @@ function relatorioPdf(R) {
           ...[...R.oc].reverse().map(o => [`${hm(o.em)} · ${o.nome || "Sem pessoa"}`, `${o.tipo} (${(OC_GRAV.find(g => g.v === o.grav) || {}).l || ""})${o.desc ? ": " + o.desc : ""}${o.prov ? " · " + o.prov : ""}${o.status === "resolvida" ? " · resolvida" : " · ABERTA"}`])] },
       { titulo: "Estoque e MRE", linhas: [["MREs montados", R.kits], ["Itens no MRE", R.mreN], ["Custo de 1 MRE", brl(R.custo)], ["Gasto nos kits lacrados", brl(R.custo * R.kits)], ["Valor em estoque", brl(R.valor)], ["Itens zerados", s.zero.length], ["Itens baixos", s.low.length]] },
       { titulo: "Pista e pins", linhas: [["Pista total", km + " km"], ...(R.pins.length ? [["Pins entregues", `${R.pinsOk} de ${R.pins.length}`]] : [])] },
+      ...(R.pt && (R.pt.R.length || ptLicoes()) ? [{ titulo: `Pós-TOP: avaliação dos ADMs (${R.pt.R.length})`, linhas: [["Nota geral", notaTxt(R.pt.geral)], ...R.pt.itens.map(it => [it.l, notaTxt(it.m)]),
+          ...R.pt.R.filter(r => r.bom).map(r => [`Foi bom · ${r.por || "ADM"}`, r.bom]), ...R.pt.R.filter(r => r.melhorar).map(r => [`Melhorar · ${r.por || "ADM"}`, r.melhorar]),
+          ...(ptLicoes() ? [["Lições para o próximo TOP", ptLicoes()]] : [])] }] : []),
     ] };
 }
 
@@ -2818,6 +2922,8 @@ function render() {
     : v === "notificacoes" ? vNotificacoes()
     : v === "estoque" ? vEstoque()
     : v === "importacao" ? vImportacao()
+    : v === "postop" ? vPosTop()
+    : v === "guia" ? vGuia()
     : vPista());
   // padrão das telas: o nome do grupo do menu aparece em cima do título de cada tela
   if (ORG()) { const g = (MENU_GRUPOS.find(([, ids]) => ids.includes(v)) || [])[0]; if (g) html = html.replace('<div class="head"><div><h2>', `<div class="head"><div><span class="eyebrow">${g}</span><h2>`); }
@@ -3437,6 +3543,9 @@ document.addEventListener("click", e => {
   if (d.pvDesf != null && podeEditar()) { if (confirm("Desfazer a marcação deste trecho?")) marcarTrecho(+d.pvDesf, "desf"); return; }
   if (d.act === "saude") { saudeBusca(); return; }
   if (d.act === "busca") { buscaGeral(); return; }
+  if (d.act === "guia-ok") { store.set("adm3-guia-visto", "1"); render(); return; }
+  if (d.act === "pt-responder") { posTopForm(); return; }
+  if (d.act === "pt-licoes") { licoesForm(); return; }
   if (d.act === "backup") { backupForm(); return; }
   if (d.act === "aovivo-tv") { const on = !modoTv(); try { localStorage.setItem("adm3-avtv", on ? "1" : "0"); } catch (e) {} if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); render(); return; }
   if (d.copiarLink) { const p = S.pessoas.find(x => x.id === d.copiarLink); if (p && p.termoLink) copiarTexto(p.termoLink, "Link do termo copiado"); return; }
@@ -3726,13 +3835,38 @@ function msgForm() {
   fd => { store.set(chave, String(fd.get("msg") || "").trim() || PADRAO); closeModal(); toast("Mensagem salva"); render(); });
   $("#msgPadrao").onclick = () => { $("#f-msg").value = PADRAO; };
 }
-function cobrarSequencia() {
+function cobrarSequencia(soEstes) {
   const pag = abaPag(), texto = pag ? textoPagamento : textoCobranca, registrar = pag ? registrarAvisoPag : registrarCobranca;
-  const fila = (pag ? pagLista() : pendLista()).filter(p => waNumber(p.telefone));
-  if (!fila.length) { toast("Ninguém com telefone nesse filtro."); return; }
+  const todos = (pag ? pagLista() : pendLista()).filter(p => waNumber(p.telefone));
+  const hoje = p => { const c = pag ? p.cobradoPagEm : p.cobradoEm; return c && new Date(c).toDateString() === new Date().toDateString(); };
+  if (!todos.length) { toast("Ninguém com telefone nesse filtro."); return; }
+  // tela de início: quantos, e se pula quem já foi cobrado hoje
+  if (EXTRA() && !soEstes) {
+    const jaHoje = todos.filter(hoje).length, semTel = (pag ? pagLista() : pendLista()).length - todos.length;
+    modal(`
+      <h3>${pag ? "Avisar em sequência" : "Cobrar em sequência"}</h3>
+      <p class="hint" style="margin:0">O app abre o WhatsApp de uma pessoa por vez com a mensagem pronta${pag ? "" : " (e o link do termo de cada um)"}. Você toca em enviar, volta para o app e a próxima pessoa já aparece.</p>
+      <div class="imp-kpis"><div class="ok"><b class="num">${todos.length}</b><span>com telefone neste filtro</span></div><div><b class="num">${jaHoje}</b><span>já ${pag ? "avisados" : "cobrados"} hoje</span></div>${semTel ? `<div class="bad"><b class="num">${semTel}</b><span>sem telefone</span></div>` : ""}</div>
+      ${jaHoje ? `<label class="selall"><input type="checkbox" id="seqHoje" checked> Pular quem já foi ${pag ? "avisado" : "cobrado"} hoje</label>` : ""}
+      <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${ico("wa")} Começar</button></div></div>`,
+    () => { const pula = $("#seqHoje") && $("#seqHoje").checked; const f = pula ? todos.filter(p => !hoje(p)) : todos;
+      if (!f.length) { closeModal(); toast("Todos já foram cobrados hoje."); return; } cobrarSequencia(f); });
+    return;
+  }
+  const fila = soEstes || todos, feitos = new Set(), pulados = new Set();
   let i = 0;
   const passo = () => {
-    if (i >= fila.length) { closeModal(); toast(`${pag ? "Aviso" : "Cobrança"} concluído: ${fila.length} pessoa(s)`); return; }
+    if (i >= fila.length) {
+      if (!EXTRA()) { closeModal(); toast(`${pag ? "Aviso" : "Cobrança"} concluído: ${fila.length} pessoa(s)`); return; }
+      const pl = fila.filter(p => pulados.has(p.id) && !feitos.has(p.id));
+      modal(`
+        <h3>${pag ? "Aviso" : "Cobrança"} concluída</h3>
+        <div class="imp-kpis"><div class="ok"><b class="num">${feitos.size}</b><span>${pag ? "avisados" : "cobrados"}</span></div><div class="${pl.length ? "bad" : ""}"><b class="num">${pl.length}</b><span>pulados</span></div></div>
+        ${pl.length ? `<details open><summary>Pulados (${pl.length})</summary><ul class="imp-list">${pl.map(p => `<li><b>${esc(p.nome)}</b> <span class="hint">${esc(p.telefone || "")}</span></li>`).join("")}</ul></details>` : `<p class="hint" style="margin:0">Todo mundo da lista recebeu a mensagem.</p>`}
+        <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button>${pl.length ? `<button class="btn primary" type="button" id="seqDeNovo">${ico("wa")} Cobrar os pulados</button>` : ""}</div></div>`, () => {});
+      const dn = $("#seqDeNovo"); if (dn) dn.onclick = () => cobrarSequencia(pl);
+      return;
+    }
     const p = S.P.find(x => x.id === fila[i].id) || fila[i];
     modal(`
       <h3>${pag ? "Avisar" : "Cobrar"} ${i + 1} de ${fila.length}</h3>
@@ -3740,13 +3874,14 @@ function cobrarSequencia() {
       <div><b style="font-size:18px">${esc(p.nome)}</b><div class="pendtags">${pag ? '<span class="chip wait">Boleto pendente</span>' : pendDe(p).map(k => `<span class="chip wait">${PEND[k]}</span>`).join("")}</div>
         <small class="hint">${esc(p.telefone || "")} · ${esc(p.adm || "Sem ADM")}${(pag ? p.cobradoPagEm : p.cobradoEm) ? (pag ? " · avisado " : " · cobrado ") + esc(quando(pag ? p.cobradoPagEm : p.cobradoEm)) : ""}</small></div>
       <div class="field"><label for="f-txt">Mensagem (pode ajustar antes de enviar)</label><textarea id="f-txt" style="min-height:130px">${esc(texto(p))}</textarea></div>
-      <div class="modal-foot"><div><button class="btn ghost" type="button" data-close-btn>Parar</button></div>
+      <div class="modal-foot"><div><button class="btn ghost" type="button" data-close-btn>Parar</button>${EXTRA() && i ? `<button class="btn ghost" type="button" id="seqVoltar">Voltar</button>` : ""}</div>
         <div class="actions"><button class="btn" type="button" id="seqPular">Pular</button><a class="btn primary" id="seqWa" href="#" target="_blank" rel="noopener">${ico("wa")} Abrir WhatsApp</a></div></div>`, () => {});
+    const vb = $("#seqVoltar"); if (vb) vb.onclick = () => { i--; passo(); };
     const wa = $("#seqWa");
     const atual = () => { wa.href = waCobrar(p, $("#f-txt").value); };
     atual(); $("#f-txt").addEventListener("input", atual);
-    wa.addEventListener("click", () => { registrar(p); i++; setTimeout(passo, 400); });
-    $("#seqPular").onclick = () => { i++; passo(); };
+    wa.addEventListener("click", () => { registrar(p); feitos.add(p.id); i++; setTimeout(passo, 400); });
+    $("#seqPular").onclick = () => { pulados.add(p.id); i++; passo(); };
   };
   passo();
 }

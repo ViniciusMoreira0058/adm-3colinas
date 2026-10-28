@@ -1627,3 +1627,13 @@ window.ADM_DEMO.notifs = [
   window.ADM_DEMO.docs.push({ col: "config", id: "importacoes-top1922", data: { ultimo, hist, top: "top1922" } });
   window.ADM_DEMO.docs.push({ col: "config", id: "backup-ultimo", data: { em: h(8, 9, 0), por: "Vinicius", top: "top1922" } });
 })();
+// Pós-TOP: 3 respostas fictícias da equipe
+(function () {
+  const em = n => new Date(Date.now() - n * 36e5).toISOString();
+  const R = [
+    ["m-thal", "Thalisson", { organizacao: 5, comunicacao: 4, cronograma: 3, logistica: 4, alimentacao: 5, seguranca: 5 }, "Equipe muito unida e o check de atestados chegou completo.", "Atrasamos 40 min no segundo dia; dá para sair mais cedo do acampamento."],
+    ["m-hen", "Henrique", { organizacao: 4, comunicacao: 3, cronograma: 3, logistica: 5, alimentacao: 4, seguranca: 4 }, "Estoque organizado, nada faltou.", "Rádios: precisamos de mais baterias e um canal só para a pista."],
+    ["m-rafa", "Rafael Lima", { organizacao: 5, comunicacao: 4, cronograma: 4, logistica: 4, alimentacao: 3, seguranca: 5 }, "Ao vivo na TV ajudou muito a coordenação.", "MRE do terceiro dia veio com pouca água."],
+  ];
+  R.forEach(([id, por, notas, bom, melhorar], i) => window.ADM_DEMO.docs.push({ col: "config", id: "postop-top1922-" + id, data: { notas, bom, melhorar, por, em: em(5 - i), top: "top1922" } }));
+})();
