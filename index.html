@@ -15,6 +15,13 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap">
+<script>
+  // fonte nova (Plus Jakarta Sans) em teste: só na demonstração
+  if (/[?&]demo=1/.test(location.search)) {
+    document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap">');
+    document.documentElement.classList.add("fonte-nova");
+  }
+</script>
 <style>
 /* Layout: barra lateral fixa (desktop) / abas inferiores (celular); conteúdo em painéis de campo, laranja como sinal de ação e alerta. Dark-first. */
 :root {
@@ -26,6 +33,10 @@
   --display: "Outfit", system-ui, sans-serif;
   --body: "Outfit", system-ui, sans-serif;
   color-scheme: dark;
+}
+:root.fonte-nova {
+  --display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --body: "Plus Jakarta Sans", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
   --bg: #ffffff; --surface: #fff8f2; --surface2: #ffeedf; --line: #f1dcc7;
