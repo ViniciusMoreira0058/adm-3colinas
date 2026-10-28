@@ -921,7 +921,7 @@ const MAPA_CHEIO = () => true;
 const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
-const ORG = () => DEMO; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
+const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
 const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "familias", "consagracao"]],
   ["Operação", ["cronograma", "aovivo", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "usuarios", "historico"]]];
 
@@ -1007,12 +1007,29 @@ function backupBanner() {
   if (d != null && d < 7) return "";
   return `<div class="banner aviso"><span>${ico("upload")} <b>Backup da semana.</b> ${d == null ? "Ainda não tem nenhum backup guardado." : `O último foi há ${d} dias${b.por ? " (" + esc(b.por) + ")" : ""}.`} Baixe a planilha com tudo do TOP e guarde no Drive.</span><button class="btn primary" type="button" data-act="backup">Baixar backup</button></div>`;
 }
-async function baixarBackup() {
+/* Período do backup: dia, semana (7 dias), mês (30 dias) ou o TOP todo. Num período, entra o que foi criado ou alterado dentro dele. */
+const BK_PER = [{ v: "dia", l: "Diário", d: "o que mudou hoje", dias: 1 }, { v: "semana", l: "Semanal", d: "o que mudou nos últimos 7 dias", dias: 7 },
+  { v: "mes", l: "Mensal", d: "o que mudou nos últimos 30 dias", dias: 30 }, { v: "top", l: "TOP todo", d: "tudo do TOP, completo", dias: 0 }];
+const BK_DATAS = ["atualizado", "admEm", "em", "criadoEm", "importadoEm", "entregueEm", "aptoEm", "termoAssinadoEm", "pagoEm", "cobradoEm", "cobradoPagEm", "atualizadoEm"];
+const ultimaMudanca = o => BK_DATAS.map(k => o && o[k]).filter(x => typeof x === "string" && /^\d{4}-\d{2}-\d{2}/.test(x)).sort().pop() || "";
+function backupForm() {
+  modal(`
+    <h3>Baixar backup</h3>
+    <p class="hint" style="margin:0">Escolha o período. Diário, semanal e mensal trazem só o que foi criado ou alterado nesse tempo. TOP todo traz tudo.</p>
+    <div class="bk-opcoes">${BK_PER.map((o, i) => `<label class="bk-op"><input type="radio" name="per" value="${o.v}" ${o.v === "top" ? "checked" : ""}><span><b>${o.l}</b><small>${o.d}</small></span></label>`).join("")}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${ico("upload")} Baixar</button></div></div>`,
+  fd => { const per = fd.get("per") || "top"; closeModal(); baixarBackup(per); });
+}
+async function baixarBackup(per = "top") {
   toast("Gerando o backup…");
   try {
-    const X = await carregarXlsx(), wb = X.utils.book_new();
+    const X = await carregarXlsx(), wb = X.utils.book_new(), P = BK_PER.find(o => o.v === per) || BK_PER[3];
+    const desde = P.dias ? (P.dias === 1 ? hojeISO() : new Date(Date.now() - P.dias * 864e5).toISOString()) : "";
+    const noPer = lista => !desde ? lista : lista.filter(o => { const m = ultimaMudanca(o); return m && (P.dias === 1 ? m.slice(0, 10) >= desde || new Date(m).toLocaleDateString("sv") === desde : m >= desde); });
+    const resumo = [];
     const cel = v => v == null ? "" : typeof v === "object" ? JSON.stringify(v).slice(0, 32000) : v;
     const aba = (nome, lista) => {
+      lista = noPer(lista); resumo.push([nome, lista.length]);
       const cols = [...new Set(lista.flatMap(o => Object.keys(o || {})))].filter(c => c !== "_adm");
       X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([cols, ...lista.map(o => cols.map(c => cel(o[c])))]), nome.slice(0, 31));
     };
@@ -1025,9 +1042,11 @@ async function baixarBackup() {
     aba("Ocorrências", ocorrencias());
     aba("Pins", pinsTodos());
     aba("Tops", S.tops);
-    aba("Configurações", Object.entries(S.cfgDocs || {}).filter(([k]) => k !== "pista-mapa").map(([id, d]) => ({ id, dados: d })));
-    X.writeFile(wb, `backup-adm3colinas-${curTopId()}-${hojeISO()}.xlsx`);
-    await api.set("config", "backup-ultimo", { em: new Date().toISOString(), por: ME.adm || "", top: curTopId() });
+    aba("Configurações", Object.entries(S.cfgDocs || {}).filter(([k]) => k !== "pista-mapa" && (!desde || ultimaMudanca(S.cfgDocs[k]))).map(([id, d]) => ({ id, dados: d, ...(ultimaMudanca(d) ? { atualizado: ultimaMudanca(d) } : {}) })));
+    const rs = X.utils.aoa_to_sheet([["Backup ADM 3Colinas"], ["TOP", topName()], ["Período", `${P.l} (${P.d})`], ["Gerado em", new Date().toLocaleString("pt-BR")], ["Por", ME.adm || ""], [], ["Aba", "Registros"], ...resumo]);
+    X.utils.book_append_sheet(wb, rs, "Resumo"); wb.SheetNames.unshift(wb.SheetNames.pop());   // Resumo como primeira aba
+    X.writeFile(wb, `backup-adm3colinas-${curTopId()}-${P.v}-${hojeISO()}.xlsx`);
+    await api.set("config", "backup-ultimo", { em: new Date().toISOString(), por: ME.adm || "", top: curTopId(), periodo: P.v });
     toast("Backup baixado. Guarde o arquivo no Drive.");
   } catch (e) { console.error(e); toast("Não consegui gerar o backup. Confira a internet."); }
 }
@@ -3413,7 +3432,7 @@ document.addEventListener("click", e => {
   if (d.pvDesf != null && podeEditar()) { if (confirm("Desfazer a marcação deste trecho?")) marcarTrecho(+d.pvDesf, "desf"); return; }
   if (d.act === "saude") { saudeBusca(); return; }
   if (d.act === "busca") { buscaGeral(); return; }
-  if (d.act === "backup") { baixarBackup(); return; }
+  if (d.act === "backup") { backupForm(); return; }
   if (d.act === "aovivo-tv") { const on = !modoTv(); try { localStorage.setItem("adm3-avtv", on ? "1" : "0"); } catch (e) {} if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); render(); return; }
   if (d.copiarLink) { const p = S.pessoas.find(x => x.id === d.copiarLink); if (p && p.termoLink) copiarTexto(p.termoLink, "Link do termo copiado"); return; }
   if (d.act === "nova-ocorr") { ocorrForm(); return; }

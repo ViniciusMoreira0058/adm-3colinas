@@ -757,6 +757,11 @@ body.org .head p { max-width: 70ch; }
 .bg-li small { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bg-li svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
 .bg-li:hover { border-color: var(--accent); }
+.bk-opcoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bk-op { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface2); cursor: pointer; }
+.bk-op:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.bk-op input { margin-top: 3px; accent-color: var(--accent); }
+.bk-op span { display: flex; flex-direction: column; gap: 2px; } .bk-op small { color: var(--muted); font-size: 13px; }
 @media (max-width: 1023px) { body.org #themeBtnM { display: none; } }   /* o tema continua no menu */
 @media (max-width: 520px) { body.org .backbtn span { display: none; } body.org .mtop:has(#backBtn:not([hidden])) .avatar { display: none; } }
 </style>
