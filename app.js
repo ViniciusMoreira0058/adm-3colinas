@@ -2432,7 +2432,9 @@ let authMode = "login";
 function loginForm(aviso, erro) {
   const m = authMode;
   const titulo = { login: "", signup: "Primeiro acesso: crie sua senha com o e-mail que o coordenador cadastrou.", reset: "Digite seu e-mail. Vamos mandar um link para você criar uma senha nova.", newpass: "Crie sua senha nova." }[m];
+  const cena = $("#splash svg");
   $("#modalRoot").innerHTML = `<div class="login" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    ${cena ? `<div class="login-scene" aria-hidden="true">${cena.outerHTML.replace(/ id="(glow|ridgeTrail)"/g, ' id="$1L"').replace(/#(glow|ridgeTrail)\b/g, "#$1L")}</div>` : ""}
     <div class="login-card">
       <img src="assets/logo.png" alt="Track 3 Colinas · Franca SP">
       <h1 id="loginTitle">ADM 3COLINAS</h1>
@@ -3753,6 +3755,13 @@ const saudeAlerta = p => { const f = p.ficha || {}; return [f.condicaoMedica, f.
 /* ---------- Abertura: trilha de luz subindo a crista até o cume enquanto o app carrega ----------
    Aparece depois do login (ou na hora, para quem já está logado). */
 let splashStart = 0, splashDone = true;
+// a imagem é em pé (736×1308): em tela larga mostra a faixa da crista (y 429 a 734) em vez do meio da foto
+function ajustaCena() {
+  const vh = 736 * innerHeight / Math.max(1, innerWidth);
+  const vb = vh >= 1308 ? "0 0 736 1308" : `0 ${Math.round(Math.max(0, Math.min(1308 - vh, 730 - vh)))} 736 ${Math.round(vh)}`;
+  document.querySelectorAll("svg[data-cena]").forEach(sv => sv.setAttribute("viewBox", vb));
+}
+addEventListener("resize", ajustaCena); ajustaCena();
 function showSplash() {
   if (!splashDone) return;
   splashDone = false; splashStart = Date.now();

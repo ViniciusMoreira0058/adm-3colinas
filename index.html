@@ -504,10 +504,10 @@ th { background: var(--glass2); }
 .splash { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: #070d16; overflow: hidden; transition: opacity .6s ease, visibility .6s; }
 .splash::before { content: ""; position: absolute; inset: -40px; background: url("assets/bg.jpg") center 35% / cover no-repeat; filter: blur(28px) brightness(.6); }
 .splash.out { opacity: 0; visibility: hidden; pointer-events: none; }
-.scene { position: relative; height: 100%; aspect-ratio: 736 / 1308; max-width: 100%; overflow: hidden; box-shadow: 0 0 80px rgba(0,0,0,.6); container-type: inline-size; }
-.scene svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-@media (min-aspect-ratio: 3/4) { .scene { height: min(94vh, 100%); border-radius: 22px; } }
-@media (max-aspect-ratio: 736/1308) { .scene { width: 100%; height: 100%; } }
+/* a montanha ocupa a tela toda (no computador também); o app ajusta o recorte para a crista animada sempre aparecer */
+.scene { position: absolute; inset: 0; overflow: hidden; container-type: inline-size; }
+.scene svg, .login-scene svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.splash-title { font-size: clamp(30px, min(11cqw, 9vh), 72px) !important; }
 .ridge-trail { stroke-dasharray: 100; stroke-dashoffset: 100; animation: ridge 2.8s ease-in-out infinite; }
 @keyframes ridge { 0% { stroke-dashoffset: 100; opacity: 1; } 86% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
 .summit-pulse { transform-origin: center; transform-box: fill-box; animation: pulse 2.8s ease-out infinite; opacity: 0; }
@@ -525,9 +525,14 @@ th { background: var(--glass2); }
 @keyframes splashbar { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 @media (prefers-reduced-motion: reduce) { .splash-bar i, .ridge-trail, .summit-pulse { animation: none; } .splash-bar i { width: 100%; } .ridge-trail { stroke-dashoffset: 0; } }
 /* Tela de entrada */
-.login { position: fixed; inset: 0; z-index: 150; display: grid; place-items: end center; background: #070d16 url("assets/bg.jpg") center 30% / cover no-repeat; color: #fff;
+.login { position: fixed; inset: 0; z-index: 150; display: grid; place-items: end center; background: #070d16 url("assets/bg.jpg") center 30% / cover no-repeat; color: #fff; isolation: isolate;
   padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); overflow-y: auto; }
-.login::before { content: ""; position: fixed; inset: 0; background: linear-gradient(180deg, rgba(6,12,20,0) 30%, rgba(6,12,20,.75) 62%, rgba(6,12,20,.96) 100%); pointer-events: none; }
+.login::before { content: ""; position: fixed; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(6,12,20,0) 40%, rgba(6,12,20,.45) 75%, rgba(6,12,20,.7) 100%); pointer-events: none; }
+.login-scene { position: fixed; inset: 0; z-index: -2; pointer-events: none; }
+/* quadro do login translúcido por cima da montanha animada */
+.login-card { background: rgba(8,14,24,.42); border: 1px solid rgba(255,255,255,.16); border-radius: 24px; padding: 26px 22px 20px !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); box-shadow: 0 24px 60px rgba(0,0,0,.35); margin-bottom: 2vh; }
+@media (min-width: 760px) { .login { place-items: center; } .login-card { width: min(460px, 100%) !important; margin: 0; } .login-card h1 { font-size: 44px; white-space: nowrap; } }
 .login-card { position: relative; width: min(420px, 100%); display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding-bottom: 4vh; }
 .login-card img { width: 84px; height: auto; filter: drop-shadow(0 8px 18px rgba(0,0,0,.4)); }
 .login-card h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: clamp(34px, 10vw, 52px); line-height: 1; letter-spacing: -.01em; }
@@ -614,7 +619,7 @@ a.btn { text-decoration: none; }
 <div class="backdrop" aria-hidden="true"></div>
 <div class="splash out" id="splash" role="status" aria-live="polite">
   <div class="scene">
-    <svg viewBox="0 0 736 1308" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <svg data-cena viewBox="0 0 736 1308" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
       <image href="assets/bg.jpg" x="0" y="0" width="736" height="1308"/>
       <path d="M0 734 L24 715 L48 701 L72 696 L96 672 L120 643 L144 625 L156 621 L168 625 L180 608 L192 605 L204 611 L216 597 L240 579 L264 556 L288 531 L312 520 L324 498 L336 467 L348 460 L360 469 L384 460 L408 438 L432 429" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="3" stroke-linejoin="round"/>
