@@ -1304,6 +1304,7 @@ const corStatus = t => /^(confirmado|apto|assinado|sim|ok|pronto|entregue|ativa|
   : /^(pendente|baixo|aguardando|msg enviada|em andamento|a fazer|não|conferir|boleto)/i.test(t) ? PDF_COR.AMBAR : null;
 // versão "só nomes": fica o # e a coluna do nome (marcada com nome: true ou a primeira em negrito), em retrato
 function pdfSimples(sp) {
+  if (sp.simples) return { ...sp, orient: "portrait", arquivo: (sp.arquivo || sp.titulo) + " nomes", ...sp.simples };   // página que define o próprio PDF simples
   const ci = Math.max(0, sp.colunas.findIndex(c => c.nome)) || sp.colunas.findIndex(c => c.bold);
   const k = ci < 0 ? 0 : ci, so = ls => ls.map((l, i) => [String(i + 1), l[k]]);
   const total = sp.linhas ? sp.linhas.length : sp.secoes.reduce((a, x) => a + x.linhas.length, 0);
@@ -1424,12 +1425,17 @@ function pdfDaTela() {
   }
   if (v === "equipes") {
     const lgs = S.P.filter(p => p.tipo === "legendario" && !cancelado(p)), sem = lgs.filter(p => !p.equipe);
-    const lin = m => m.sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || norm(a.nome).localeCompare(norm(b.nome))).map((p, i) => n(i, [p.nome, p.funcao || "", opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, p.telefone]));
+    const ord = m => m.sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || norm(a.nome).localeCompare(norm(b.nome)));
+    const lin = m => ord(m).map((p, i) => n(i, [p.nome, p.funcao || "", opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, p.telefone]));
+    const linS = m => ord(m).map((p, i) => n(i, [p.nome, p.telefone || "", p.equipe || "Sem equipe"]));
+    // quem está sem equipe não vai no PDF (pedido do Vinicius)
+    const secs = f => equipesUsadas().map(e => { const m = lgs.filter(p => p.equipe === e); return { titulo: `${e} · ${m.length} pessoa(s)`, linhas: f(m) }; }).filter(x => x.linhas.length);
     return { titulo: "Equipes LGND", legenda: `${lgs.length - sem.length} de ${lgs.length} legendários com equipe`,
-      resumo: [["Com equipe", lgs.length - sem.length], ["Sem equipe", sem.length], ["Equipes", equipesUsadas().filter(e => lgs.some(p => p.equipe === e)).length]],
+      resumo: [["Com equipe", lgs.length - sem.length], ["Equipes", equipesUsadas().filter(e => lgs.some(p => p.equipe === e)).length]],
       colunas: [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Função", w: 28 }, { t: "Atestado", w: 26, status: true }, { t: "Termo", w: 26, status: true }, { t: "Telefone", w: 34 }],
-      secoes: [...equipesUsadas().map(e => { const m = lgs.filter(p => p.equipe === e); return { titulo: `${e} · ${m.length} pessoa(s)`, linhas: lin(m) }; }).filter(x => x.linhas.length),
-        ...(sem.length ? [{ titulo: `Sem equipe · ${sem.length}`, linhas: lin(sem) }] : [])] };
+      secoes: secs(lin),
+      simplesTxt: "Simples: nome, telefone e equipe de cada um, separado por equipe.",
+      simples: { resumo: [["Total", lgs.length - sem.length]], colunas: [{ t: "#", w: 12, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Telefone", w: 42 }, { t: "Equipe", w: 40 }], secoes: secs(linS) } };
   }
   if (v === "familias") {
     const parts = S.P.filter(p => p.tipo !== "legendario"), sem = parts.filter(p => !p.familia);
@@ -1541,7 +1547,7 @@ function pdfTelaForm() {
   let tipo = sp.semSimples ? "completo" : store.get("adm3-pdf-tipo") || "completo";
   const seg = $("#pdfTipo"), txt = $("#pdfTipoTxt");
   const pinta = () => { if (!seg) return; seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === tipo));
-    txt.textContent = tipo === "nomes" ? "Só nomes: lista simples numerada, só com o nome de cada um." : "Completo: com telefone, status e todas as colunas da tela."; };
+    txt.textContent = tipo === "nomes" ? (sp.simplesTxt || "Só nomes: lista simples numerada, só com o nome de cada um.") : "Completo: com telefone, status e todas as colunas da tela."; };
   if (seg) seg.onclick = e => { const b = e.target.closest("button"); if (!b) return; tipo = b.dataset.t; store.set("adm3-pdf-tipo", tipo); pinta(); };
   pinta();
 }
