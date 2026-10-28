@@ -758,7 +758,7 @@ paisagem.addEventListener("change", () => { if (S.view === "aovivo" && !$("#moda
 /* ---------- Mapa da pista ao vivo (em teste: só na demonstração) ----------
    A linha vem do KMZ/KML da pista (config/pista-mapa). Os ADMs marcam quando a corrente sai e chega em cada trecho
    (config/pista-vivo-<top>); enquanto o trecho anda, a posição é estimada pelo tempo previsto do trecho. */
-const MAPA_VIVO = () => DEMO;
+const MAPA_VIVO = () => true;
 const libJs = {};
 function carregarLib(nome, js, css) {
   return libJs[nome] || (libJs[nome] = new Promise((ok, erro) => {
