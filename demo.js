@@ -1221,7 +1221,7 @@ window.ADM_DEMO = {
 "id": "ex01",
 "data": {
 "adm": "Vinicius",
-"atestado": "confirmado",
+"atestado": "apto",
 "cidade": "Franca",
 "email": "carlos.exemplo@email.com",
 "familia": 1,
@@ -1233,7 +1233,8 @@ window.ADM_DEMO = {
 "termo": "assinado",
 "tipo": "participante",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Não", "medicamento": "Não", "restricaoAlimentar": "Não", "contato": "Ana Ramos (esposa) · +55 16 99300-0001", "camisa": "G/L"}
 }
 },
 {
@@ -1255,7 +1256,8 @@ window.ADM_DEMO = {
 "termo": "enviada",
 "tipo": "participante",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Hipertensão", "medicamento": "Losartana 50mg (manhã)", "restricaoAlimentar": "Não", "contato": "Lúcia Teixeira (mãe) · +55 16 99300-0002", "camisa": "GG/XL"}
 }
 },
 {
@@ -1276,7 +1278,8 @@ window.ADM_DEMO = {
 "termo": "aguardando",
 "tipo": "participante",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Não", "medicamento": "Não", "restricaoAlimentar": "Lactose", "contato": "Paula Lima (esposa) · +55 16 99300-0003"}
 }
 },
 {
@@ -1297,7 +1300,8 @@ window.ADM_DEMO = {
 "termo": "enviada",
 "tipo": "participante",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Asma leve", "medicamento": "Bombinha de salbutamol (se precisar)", "restricaoAlimentar": "Não", "contato": "Clara Moreira (irmã) · +55 16 99300-0004"}
 }
 },
 {
@@ -1306,7 +1310,7 @@ window.ADM_DEMO = {
 "data": {
 "inscricao": "pendente",
 "adm": "Henrique",
-"atestado": "pendente",
+"atestado": "apto",
 "cidade": "Batatais",
 "email": "pedro.exemplo@email.com",
 "familia": null,
@@ -1318,7 +1322,8 @@ window.ADM_DEMO = {
 "termo": "pendente",
 "tipo": "participante",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Não", "medicamento": "Não", "restricaoAlimentar": "Não", "contato": "Júlia Alves (noiva) · +55 16 99300-0005"}
 }
 },
 {
@@ -1338,7 +1343,8 @@ window.ADM_DEMO = {
 "termo": "assinado",
 "tipo": "participante",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Diabetes tipo 2", "medicamento": "Metformina 850mg (almoço e jantar)", "restricaoAlimentar": "Açúcar", "contato": "Rosa Campos (esposa) · +55 16 99300-0006"}
 }
 },
 {
@@ -1360,7 +1366,8 @@ window.ADM_DEMO = {
 "termo": "assinado",
 "tipo": "participante",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Não", "medicamento": "Não", "restricaoAlimentar": "Camarão", "contato": "Beatriz Prado (esposa) · +55 19 99300-0007"}
 }
 },
 {
@@ -1380,7 +1387,8 @@ window.ADM_DEMO = {
 "termo": "enviada",
 "tipo": "participante",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Não", "medicamento": "Não", "restricaoAlimentar": "Não", "contato": "Márcia Souza (mãe) · +55 16 99300-0008"}
 }
 },
 {
@@ -1392,10 +1400,11 @@ window.ADM_DEMO = {
 "nome": "Sérgio Augusto Pires",
 "telefone": "+55 16 99100-0101",
 "termo": "assinado",
-"atestado": "confirmado",
+"atestado": "apto",
 "tipo": "legendario",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Não", "medicamento": "Não", "restricaoAlimentar": "Não", "contato": "Renata Pires (esposa) · +55 16 99300-0009"}
 }
 },
 {
@@ -1410,7 +1419,8 @@ window.ADM_DEMO = {
 "termo": "pendente",
 "tipo": "legendario",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Tireoide", "medicamento": "Levotiroxina 75mcg (jejum)", "restricaoAlimentar": "Não", "contato": "Sílvia Freitas (esposa) · +55 16 99300-0010"}
 }
 },
 {
@@ -1424,7 +1434,8 @@ window.ADM_DEMO = {
 "termo": "pendente",
 "tipo": "legendario",
 "exemplo": true,
-"top": "top1922"
+"top": "top1922",
+"ficha": {"condicaoMedica": "Não", "medicamento": "Não", "restricaoAlimentar": "Glúten", "contato": "Helena Barros (esposa) · +55 16 99300-0011"}
 }
 }
 ],

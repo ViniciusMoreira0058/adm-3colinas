@@ -165,6 +165,7 @@ const VIEWS = [
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
+  { id: "aovivo", l: "Ao vivo", i: "flag", need: ["cronograma"], demo: true },   // painel para TV/celular (em teste, só na demo)
   { id: "consagracao", l: "Consagração", i: "group" },
   { id: "pins", l: "Pins", i: "check" },
   { id: "checklist", l: "Checklist", i: "list" },
@@ -240,6 +241,7 @@ function renderNav() {
   counts.usuarios = online ? `${online} on` : null;
   const novas = ME.acesso ? notifNovas() : 0;
   $("#nav").innerHTML = VIEWS.filter(v => canSee(v) && !v.all).map(v => `<button type="button" data-go="${v.id}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : ""}</button>`).join("");
+  const sb = $("#saudeBtn"); if (sb) sb.hidden = !(NOVO() && ME.acesso && (canSee({ id: "participantes" }) || canSee({ id: "legendarios" })));
   const sino = $("#bellBtn");
   if (sino) { sino.hidden = !ME.acesso; sino.querySelector(".badge").hidden = !novas; sino.querySelector(".badge").textContent = novas > 99 ? "99+" : novas;
     sino.setAttribute("aria-label", novas ? `Notificações: ${novas} nova(s)` : "Notificações"); }
@@ -332,6 +334,22 @@ function painelInscricao() {
       </div>
     </section>`;
 }
+function painelPronto() {
+  const P = S.P.filter(p => !cancelado(p)), sen = P.filter(p => p.tipo !== "legendario"), lg = P.filter(p => p.tipo === "legendario");
+  const ok = a => a.filter(prontoTop).length, falta = P.filter(p => !prontoTop(p)).sort((a, b) => faltaTop(b).length - faltaTop(a).length || norm(a.nome).localeCompare(norm(b.nome)));
+  const porItem = k => P.filter(p => faltaTop(p).includes(k)).length;
+  const linha = p => { const url = waCobrar(p);
+    return `<div class="li"><span class="grow"><b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}</span><br>${faltaTop(p).map(k => `<span class="chip ${k === "apto" && atOk(p) ? "wait" : "bad"}">${k === "apto" ? (atOk(p) ? "Atestado: aguardando equipe médica" : "Falta atestado") : "Falta " + FALTA[k].toLowerCase()}</span>`).join(" ")}</span>
+      ${url && pendDe(p).length ? `<a class="wa" href="${url}" target="_blank" rel="noopener" data-cobrar="${p.id}" title="Uma mensagem só com tudo que falta">${ico("wa")} Cobrar tudo</a>` : ""}</div>`; };
+  return `<section class="panel pronto-top"><h3>Pronto para o TOP <small>pago, termo assinado e atestado Apto</small></h3>
+    <div class="pronto-kpis">
+      <div><b class="num ok-text">${ok(sen)}<small> / ${sen.length}</small></b><span>senderistas prontos</span><div class="bar good"><i style="width:${pct(ok(sen), sen.length)}%"></i></div></div>
+      <div><b class="num ok-text">${ok(lg)}<small> / ${lg.length}</small></b><span>legendários prontos</span><div class="bar good"><i style="width:${pct(ok(lg), lg.length)}%"></i></div></div>
+      <div><b class="num">${falta.length}</b><span>faltam: ${porItem("pagamento")} pagamento · ${porItem("termo")} termo · ${porItem("apto")} atestado Apto</span></div>
+    </div>
+    ${falta.length ? `<details ${falta.length <= 6 ? "open" : ""}><summary>O que falta para cada um (${falta.length})</summary><div class="list">${falta.map(linha).join("")}</div></details>` : `<p class="ok-text" style="margin:0"><b>Todo mundo pronto para o TOP!</b></p>`}
+  </section>`;
+}
 function vPainel() {
   const s = stats();
   const kits = topKits(), meta = S.config.metaMRE || 110;
@@ -371,6 +389,7 @@ function vPainel() {
     <button class="kpi ${P.length - e ? "alert" : ""}" type="button" data-go="pins" data-pin-ir="pendente"><span class="lbl">Pins pendentes</span><span class="val num">${P.length - e}</span><span class="sub">bonés ainda sem pin</span></button>`; })() : ""}
     <button class="kpi" type="button" data-go="legendarios"><span class="lbl">Legendários</span><span class="val num">${s.lg.length}</span><span class="sub">${s.lgAtest} atestados · ${s.lgAssinado} termos</span></button>
   </div>
+  ${NOVO() ? painelPronto() : ""}
   <div class="grid2">
     <section class="panel"><h3>Documentos e grupo <small>de ${s.n} senderistas</small></h3>
       <div class="funnel">${fun.map(([l, v]) => `<div class="funnel-row"><span>${l}</span><div class="bar ${v === s.n && s.n ? "good" : ""}"><i style="width:${pct(v, s.n)}%"></i></div><b>${v} · ${pct(v, s.n)}%</b></div>`).join("")}</div>
@@ -437,7 +456,7 @@ function obsForm(p) {
   const l = $("#obsLimpar"); if (l) l.onclick = () => { closeModal(); touch(p.id, { obs: "", obsPor: "", obsEm: "" }, "Observação apagada"); };
   const ta = $("#f-obsq"); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
 }
-const tagsInscricao = p => (S.aviso && p.importId === S.aviso.id ? ' <span class="chip ok">Novo</span>' : "") + (cancelado(p) ? ' <span class="chip bad">Compra cancelada</span>' : p.inscricao === "pendente" ? ' <span class="chip wait">Pagamento pendente</span>' : "")
+const tagsInscricao = p => (NOVO() && prontoTop(p) ? ' <span class="chip ok">✓ Pronto p/ o TOP</span>' : "") + (S.aviso && p.importId === S.aviso.id ? ' <span class="chip ok">Novo</span>' : "") + (cancelado(p) ? ' <span class="chip bad">Compra cancelada</span>' : p.inscricao === "pendente" ? ' <span class="chip wait">Pagamento pendente</span>' : "")
   + (saudeAlerta(p) ? ' <span class="tag saude" title="Tem condição médica, medicamento ou restrição alimentar">Saúde</span>' : "");
 /* Possíveis repetidos: mesmo nome, telefone ou e-mail dentro do TOP (inclusive entre senderistas e legendários). */
 let repCache = { P: null, m: null };
@@ -700,6 +719,36 @@ function cronoMarcar(id, dados, msg) {
   const existe = !!(S.cfgDocs || {})[docId];
   save(() => existe ? api.update("config", docId, { [id]: atual }) : api.set("config", docId, { _adm: eu(), [id]: atual }), msg);
 }
+/* Painel ao vivo do TOP: junta as marcações de todos os ADMs (o primeiro início e o primeiro fim de cada momento) */
+function marcasTodas() {
+  const M = {};
+  admsVisiveis().forEach(a => Object.entries(cronoMarcas(a)).forEach(([k, m]) => { if (!m || typeof m !== "object") return;
+    const x = M[k] || (M[k] = {}); ["ini", "fim"].forEach(c => { if (m[c] && (!x[c] || minDe(m[c]) < minDe(x[c]))) x[c] = m[c]; }); }));
+  return M;
+}
+function vAoVivo() {
+  const plano = cronoPlano(), M = marcasTodas(), dia = cronoDiaAtual(plano, M), D = plano.find(d => d.id === dia) || { itens: [] };
+  const comecou = i => M[i.id] && M[i.id].ini, feito = i => M[i.id] && M[i.id].fim;
+  const andando = D.itens.filter(i => comecou(i) && !feito(i)), agora = andando[andando.length - 1];
+  const prox = D.itens.find(i => !comecou(i)), seguintes = prox ? D.itens.slice(D.itens.indexOf(prox) + 1, D.itens.indexOf(prox) + 4) : [];
+  const ult = [...D.itens].reverse().find(comecou), atraso = ult && ult.hora ? atrasoDe(ult.hora, M[ult.id].ini) : null;
+  const nFeito = D.itens.filter(feito).length;
+  const somaMin = (h, d) => { const m = minDe(h); if (m == null) return h; const t = (m + (d || 0) + 1440) % 1440; return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); };
+  const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const prev = prox && prox.hora ? (atraso > 0 ? somaMin(prox.hora, atraso) : prox.hora) : "";
+  return `<div class="aovivo">
+    <div class="av-top"><div><span class="eyebrow">${esc(topName())} · ${esc(D.nome || "")}</span><b class="av-relogio num">${hora}</b></div>
+      <div class="actions"><span class="chip ${atraso > 10 ? "bad" : atraso > 0 ? "wait" : "ok"} av-atraso">${atraso == null ? "Sem marcações ainda" : atraso > 0 ? "Atrasado " + fmtDif(atraso).replace("+", "") : atraso < 0 ? "Adiantado " + fmtDif(atraso).replace("−", "") : "No horário"}</span>
+      <button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button></div></div>
+    <section class="av-agora"><span class="lbl">Agora</span><h2>${agora ? esc(agora.atv) : prox ? "Aguardando início" : "Dia encerrado"}</h2>
+      ${agora ? `<p>${[agora.local, agora.resp].filter(Boolean).map(esc).join(" · ")}${M[agora.id].ini ? ` · desde ${esc(M[agora.id].ini)}${agora.hora ? ` (previsto ${esc(agora.hora)})` : ""}` : ""}</p>` : ""}</section>
+    <section class="av-prox"><span class="lbl">Próximo</span><h3>${prox ? esc(prox.atv) : "—"}</h3>
+      ${prox ? `<p>${prox.hora ? `previsto ${esc(prox.hora)}${prev && prev !== prox.hora ? ` · deve começar ~${esc(prev)}` : ""}` : ""}${prox.local ? " · " + esc(prox.local) : ""}</p>` : ""}</section>
+    ${seguintes.length ? `<ul class="av-depois">${seguintes.map(i => `<li><span class="num">${esc(i.hora || "")}</span>${esc(i.atv)}</li>`).join("")}</ul>` : ""}
+    <div class="av-barra"><div class="bar good"><i style="width:${pct(nFeito, D.itens.length)}%"></i></div><span class="hint num">${nFeito} de ${D.itens.length} momentos do ${esc(D.nome || "dia")} concluídos · atualiza sozinho</span></div>
+  </div>`;
+}
+setInterval(() => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) render(); }, 30000);
 function vCronograma() {
   const adm = cronoAdm(), meu = adm.id === ME.id, eqAdm = equipeDe(adm.id), E = eqDoc();
   const topo = `<div class="head"><div><h2>Cronograma</h2><p>${esc(topName())} · ${meu ? "<b>Seu cronograma</b>" : `Cronograma de <b>${esc(adm.nome)}</b>`}${eqAdm ? ` · ${esc(eqAdm.nome)}` : ""} · toque em <b>Iniciar</b> quando o momento começar e em <b>Terminar</b> quando acabar. Cada ADM marca o seu e funciona sem internet.</p></div>
@@ -2101,6 +2150,7 @@ function render() {
     : v === "legendarios" ? vPessoas("legendario")
     : v === "familias" ? vFamilias()
     : v === "equipes" ? vEquipes()
+    : v === "aovivo" ? vAoVivo()
     : v === "checklist" ? vChecklist()
     : v === "cronograma" ? vCronograma()
     : v === "consagracao" ? vConsagracao()
@@ -2706,6 +2756,8 @@ document.addEventListener("click", e => {
     save(async () => { for (const p of alvo) { const d = {}; ["nome", "cidade"].forEach(k => { if (consertaAcento(p[k]) !== p[k]) d[k] = consertaAcento(p[k]); }); await api.update("pessoas", p.id, d); } }, `${alvo.length} nome(s) corrigido(s)`);
     return;
   }
+  if (d.act === "saude") { saudeBusca(); return; }
+  if (d.act === "aovivo-tela") { const el = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen ? el.requestFullscreen() : Promise.resolve()).catch(() => {}); return; }
   if (d.act === "importar-eq") { importForm("legendario"); return; }
   if (d.eqAdd !== undefined && podeEditar()) { equipePessoaForm(null, d.eqAdd); return; }
   if (d.eqP && podeEditar()) { const p = S.P.find(x => x.id === d.eqP); if (p) equipePessoaForm(p); return; }
@@ -2821,13 +2873,20 @@ document.addEventListener("keydown", e => {
 });
 
 /* ---------- Pendências: quem ainda deve atestado, termo ou entrar no grupo, com cobrança pelo WhatsApp ---------- */
-const PEND = { atestado: "atestado médico", termo: "assinatura do termo", grupo: "entrar no grupo de senderistas" };
+const PEND = { pagamento: "pagamento do boleto", atestado: "atestado médico", termo: "assinatura do termo", grupo: "entrar no grupo de senderistas" };
+/* Novidades em teste (semáforo, cobrança única, ficha de saúde rápida, painel ao vivo): só na demonstração até o Vinicius aprovar */
+const NOVO = () => DEMO;
+// Semáforo "pronto para o TOP": pago + termo assinado + atestado Apto (liberado pela equipe médica)
+const FALTA = { pagamento: "Pagamento", termo: "Termo", apto: "Atestado Apto" };
+const faltaTop = p => cancelado(p) ? [] : [pagPendente(p) && "pagamento", p.termo !== "assinado" && "termo", p.atestado !== "apto" && "apto"].filter(Boolean);
+const prontoTop = p => !cancelado(p) && !faltaTop(p).length;
 const MSG_COBRANCA = "Olá {nome}, tudo bem? Aqui é {adm}, da equipe ADM do {top} Legendários 3 Colinas. Para garantir sua participação, ainda falta: {pendencias}. Consegue resolver o quanto antes? Qualquer dúvida estou à disposição.";
 const msgCobranca = () => store.get("adm3-msg-cobranca") || MSG_COBRANCA;
 const cancelado = p => p.inscricao === "cancelada";
 function pendDe(p) {
   if (cancelado(p)) return [];
   const r = [];
+  if (NOVO() && pagPendente(p)) r.push("pagamento");   // cobrança única: boleto entra na mesma mensagem
   if (!atOk(p)) r.push("atestado");
   if (p.termo !== "assinado") r.push("termo");
   if (p.tipo !== "legendario" && !p.noGrupo) r.push("grupo");
@@ -2943,6 +3002,7 @@ function registrarCobranca(p) {
   if (k.includes("atestado") && (p.atestado || "pendente") === "pendente") data.atestado = "enviada";
   if (k.includes("termo") && (p.termo || "pendente") === "pendente") data.termo = "enviada";
   if (k.includes("grupo") && !p.msgGrupo) data.msgGrupo = true;
+  if (k.includes("pagamento")) data.cobradoPagEm = data.cobradoEm;   // cobrança única também avisa do boleto
   touch(p.id, data);
 }
 function msgForm() {
@@ -3749,6 +3809,39 @@ function fichaHtml(p) {
     ["jaServiu", "Já serviu"], ["areasServiu", "Áreas que já serviu"], ["areasPretende", "Quer servir em"], ["habilidades", "Habilidades"], ["veiculo", "Veículo"],
     ["equipamento", "Equipamento"], ["ingresso", "Ingresso"], ["codigo", "Código"], ["cadastro", "Inscrito em"]];
   return `<div class="field full"><span class="lab">Dados da inscrição</span><dl class="ficha">${L.filter(([k]) => f[k]).map(([k, l]) => `<dt>${l}</dt><dd>${esc(f[k])}</dd>`).join("")}</dl></div>`;
+}
+/* Ficha de saúde rápida: botão no topo → busca → ficha (usa o que já está no aparelho, funciona sem internet) */
+function saudeBusca() {
+  const pess = S.P.filter(p => !cancelado(p)).sort((a, b) => (saudeAlerta(b) - saudeAlerta(a)) || norm(a.nome).localeCompare(norm(b.nome)));
+  const lista = q => { const k = norm(q); const r = pess.filter(p => !k || norm(p.nome).includes(k));
+    return r.length ? r.slice(0, 60).map(p => `<button type="button" class="saude-li" data-saude="${p.id}"><span><b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.idade ? " · " + p.idade + " anos" : ""}</span></span>${saudeAlerta(p) ? '<span class="tag saude">Saúde</span>' : ""}</button>`).join("") : `<div class="empty">Ninguém com esse nome.</div>`; };
+  modal(`
+    <h3>Ficha de saúde</h3>
+    <p class="hint" style="margin:0">${pess.filter(saudeAlerta).length} pessoa(s) com condição médica, remédio ou restrição alimentar aparecem primeiro. Funciona sem internet.</p>
+    <div class="field"><input id="saudeQ" type="search" placeholder="Buscar pelo nome" autocomplete="off"></div>
+    <div class="saude-lista" id="saudeLista">${lista("")}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => {});
+  $("#saudeQ").addEventListener("input", e => { $("#saudeLista").innerHTML = lista(e.target.value); });
+  $("#saudeLista").addEventListener("click", e => { const b = e.target.closest("[data-saude]"); if (b) saudeFicha(S.P.find(p => p.id === b.dataset.saude)); });
+}
+function saudeFicha(p) {
+  if (!p) return;
+  const f = p.ficha || {}, nao = v => !v || /^n[aã]o\b/i.test(v);
+  const tel = (String(f.contato || "").match(/\+?\d[\d\s()-]{8,}/) || [""])[0], n = waNumber(tel);
+  const item = (l, v, alerta) => `<div class="saude-item ${alerta ? "alerta" : ""}"><span>${l}</span><b>${nao(v) ? "Não" : esc(v)}</b></div>`;
+  modal(`
+    <h3>${esc(p.nome)}</h3>
+    <p class="hint" style="margin:0">${tipoNome(p)}${p.idade ? " · " + p.idade + " anos" : ""}${p.equipe ? " · " + esc(equipeTxt(p)) : ""} · atestado ${esc(opt(ATESTADO, p.atestado).l.toLowerCase())}</p>
+    <div class="saude-ficha">
+      ${item("Condição médica", f.condicaoMedica, !nao(f.condicaoMedica))}
+      ${item("Remédio", f.medicamento, !nao(f.medicamento))}
+      ${item("Restrição alimentar", f.restricaoAlimentar, !nao(f.restricaoAlimentar))}
+      <div class="saude-item contato"><span>Contato de emergência</span><b>${f.contato ? esc(f.contato) : "Não informado"}</b>
+        ${tel ? `<div class="actions"><a class="btn" href="tel:${esc(tel.replace(/[^\d+]/g, ""))}">Ligar</a>${n ? `<a class="wa" href="https://wa.me/${n}" target="_blank" rel="noopener">${ico("wa")} WhatsApp</a>` : ""}</div>` : ""}</div>
+      ${p.telefone ? `<div class="saude-item"><span>Telefone da pessoa</span><b>${esc(p.telefone)}</b></div>` : ""}
+    </div>
+    <div class="modal-foot"><button class="btn ghost" type="button" id="saudeVoltar">Voltar</button><div class="actions"><button class="btn primary" type="button" data-close-btn>Fechar</button></div></div>`, () => {});
+  $("#saudeVoltar").onclick = saudeBusca;
 }
 const saudeAlerta = p => { const f = p.ficha || {}; return [f.condicaoMedica, f.medicamento, f.restricaoAlimentar].some(v => v && !/^n[aã]o\b/i.test(v)); };
 

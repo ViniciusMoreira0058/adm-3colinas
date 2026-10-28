@@ -582,6 +582,36 @@ a.btn { text-decoration: none; }
 .login-links { display: flex; flex-direction: column; gap: 4px; align-items: center; }
 .login-card .note { font-size: 13px; color: rgba(233,238,245,.75); }
 #meBtn[hidden] { display: none; }
+
+/* Novidades em teste (demo): semáforo, ficha de saúde, painel ao vivo */
+.pronto-top .pronto-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 10px; }
+.pronto-kpis > div { display: flex; flex-direction: column; gap: 4px; }
+.pronto-kpis b { font-size: 30px; font-family: var(--display); line-height: 1; } .pronto-kpis b small { font-size: 16px; color: var(--muted); }
+.pronto-kpis span { color: var(--muted); font-size: 13px; }
+.pronto-top .li .chip { margin-top: 4px; }
+.ok-text { color: var(--good); }
+.saude-lista { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow: auto; }
+.saude-li { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+.saude-li:hover { background: var(--surface2); }
+.saude-ficha { display: flex; flex-direction: column; gap: 8px; }
+.saude-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.saude-item span { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.saude-item b { font-size: 17px; }
+.saude-item.alerta { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, var(--surface)); }
+.saude-item .actions { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+.aovivo { display: flex; flex-direction: column; gap: 16px; }
+.av-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.av-relogio { display: block; font-family: var(--display); font-size: clamp(40px, 8vw, 84px); line-height: 1; }
+.av-atraso { font-size: 15px; padding: 8px 12px; }
+.av-agora, .av-prox { border-radius: 18px; padding: 18px 20px; border: 1px solid var(--line); background: var(--surface); }
+.av-agora { border-color: #ff7a1a; background: color-mix(in srgb, #ff7a1a 14%, var(--surface)); }
+.av-agora .lbl, .av-prox .lbl { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.av-agora h2 { margin: 6px 0; font-family: var(--display); font-size: clamp(30px, 6vw, 72px); line-height: 1.05; text-transform: uppercase; }
+.av-prox h3 { margin: 6px 0; font-family: var(--display); font-size: clamp(22px, 4vw, 44px); line-height: 1.1; text-transform: uppercase; }
+.av-agora p, .av-prox p { margin: 0; color: var(--muted); font-size: clamp(14px, 1.6vw, 20px); }
+.av-depois { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: clamp(14px, 1.6vw, 20px); }
+.av-depois li { display: flex; gap: 12px; } .av-depois .num { color: var(--muted); min-width: 52px; }
+.av-barra { display: flex; flex-direction: column; gap: 6px; }
 </style>
 
 </head>
@@ -611,6 +641,7 @@ a.btn { text-decoration: none; }
   <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></symbol>
   <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.4-9.3-9A5.3 5.3 0 0 1 12 6.6 5.3 5.3 0 0 1 21.3 12C19 16.6 12 21 12 21z"/><path d="M8 12h2l1-2 2 4 1-2h2"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/></symbol>
   <symbol id="i-group" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.5 3.6-5.5 7-5.5s6.2 2 7 5.5"/></symbol>
@@ -664,6 +695,7 @@ a.btn { text-decoration: none; }
         <img class="avatar" src="icons/icon-192.png" alt="" width="40" height="40">
         <div style="min-width:0"><span class="appname">ADM 3Colinas</span><b id="mtopTitle">Dashboard</b><small id="mtopSub">TOP 1922</small></div>
       </div>
+      <button class="icon-btn saude-btn" id="saudeBtn" type="button" data-act="saude" aria-label="Ficha de saúde" title="Ficha de saúde" hidden><svg aria-hidden="true"><use href="#i-heart"/></svg></button>
       <button class="icon-btn bell" id="bellBtn" type="button" data-go="notificacoes" aria-label="Notificações" hidden><svg aria-hidden="true"><use href="#i-bell"/></svg><span class="badge num" hidden></span></button>
       <button class="icon-btn" id="themeBtnM" type="button" aria-label="Trocar tema"></button>
     </div>
