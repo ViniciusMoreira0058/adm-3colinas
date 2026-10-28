@@ -772,7 +772,7 @@ const MAPA_VIVO = () => true;
 const MAPA_CHEIO = () => true;
 const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca em Pendências
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
-const TERMO_LINK = () => DEMO; // link individual do termo (planilha de assinaturas) na cobrança: em teste na demonstração
+const TERMO_LINK = () => true; // link individual do termo (planilha de assinaturas) na cobrança
 const libJs = {};
 function carregarLib(nome, js, css) {
   return libJs[nome] || (libJs[nome] = new Promise((ok, erro) => {
