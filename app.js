@@ -13,7 +13,12 @@ const sb = DEMO ? null : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const ico = (id, cls = "") => `<svg class="${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
-const norm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+const CP1252 = "€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ";   // bytes 0x80–0x9F lidos como Windows-1252
+const consertaAcento = v => {
+  if (typeof v !== "string" || !/[ÃÂ][\u0080-\u00ff]|Ã/.test(v)) return v;
+  try { const b = Uint8Array.from([...v].map(c => { const k = c.charCodeAt(0); if (k <= 255) return k; const w = CP1252.indexOf(c); if (w < 0) throw 0; return 0x80 + w; })); return new TextDecoder("utf-8", { fatal: true }).decode(b); } catch (e) { return v; }
+};
+const norm = s => String(consertaAcento(s) || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 const digits = s => String(s || "").replace(/\D/g, "").slice(-11);
 const fmtNum = n => Number(n || 0).toLocaleString("pt-BR");
 const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
@@ -468,6 +473,7 @@ function vPessoas(tipo) {
   const rows = filterPeople();
   const doTipo = S.P.filter(p => lg ? p.tipo === "legendario" : p.tipo !== "legendario");
   const total = doTipo.filter(p => !cancelado(p)).length, nCanc = doTipo.length - total;
+  const quebrados = doTipo.filter(p => ["nome", "cidade"].some(k => consertaAcento(p[k]) !== p[k])), nQuebr = quebrados.length;
   const nLix = lixeira().filter(x => (x.data.tipo === "legendario") === lg && (x.data.top || atualId()) === curTopId()).length;
   const exemplos = S.P.some(p => p.exemplo);
   const fil = lg
@@ -497,6 +503,7 @@ function vPessoas(tipo) {
       ${nLix ? `<button class="btn" type="button" data-act="lixeira">${ico("trash")} Excluídos (${nLix})</button>` : ""}
       <button class="btn primary" type="button" data-act="novo">${ico("plus")} ${lg ? "Novo legendário" : "Novo senderista"}</button>
     </div></div>
+  ${podeEditar() && nQuebr ? `<div class="banner"><span><b>${nQuebr}</b> ${nQuebr > 1 ? "nomes estão" : "nome está"} com acento quebrado (ex.: ${esc(quebrados[0].nome)}).</span><button class="btn" type="button" data-act="conserta-acento">Corrigir</button></div>` : ""}
   ${nRep && S.f.status !== "rep" ? `<div class="banner"><span><b>${nRep}</b> ${nRep > 1 ? "cadastros parecem repetidos" : "cadastro parece repetido"} (mesmo nome, telefone ou e-mail).</span><button class="btn" type="button" data-fil="rep">Ver repetidos</button></div>` : ""}
   ${exemplos ? `<div class="banner"><span>Os nomes marcados como <span class="tag acc">exemplo</span> são fictícios, só para a demonstração.</span><button class="btn" type="button" data-act="limpar-ex">Apagar exemplos</button></div>` : ""}
   <div class="toolbar">
@@ -1532,6 +1539,18 @@ function pinMsgForm() {
   $("#msgPadrao").onclick = () => { $("#f-msg").value = MSG_PIN; };
 }
 // lê o .csv "alunos do lote" da plataforma (separado por ponto e vírgula, com aspas)
+/* Lê qualquer planilha (.csv, .xlsx) e devolve as linhas. CSV da plataforma pode vir em UTF-8 ou Windows-1252:
+   tenta UTF-8 e, se não for, lê como Windows-1252. Texto com acento já quebrado ("FabrÃcio") é consertado. */
+async function textoArquivo(f) {
+  const buf = await f.arrayBuffer();
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (e) { return new TextDecoder("windows-1252").decode(buf); }
+}
+async function lerPlanilha(f) {
+  let linhas;
+  if (/\.(csv|txt)$/i.test(f.name)) linhas = lerCsv(await textoArquivo(f));
+  else { const X = await carregarXlsx(); const wb = X.read(await f.arrayBuffer(), { type: "array" }); linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" }); }
+  return linhas.map(r => r.map(consertaAcento));
+}
 function lerCsv(txt) {
   txt = txt.replace(/^﻿/, "");
   const sep = (txt.split(/\r?\n/)[0].match(/;/g) || []).length >= (txt.split(/\r?\n/)[0].match(/,/g) || []).length ? ";" : ",";
@@ -1583,7 +1602,7 @@ function pinImportarForm() {
   $("#f-pincsv").addEventListener("change", async e => {
     const f = e.target.files[0]; if (!f) return;
     try {
-      R = lerPlanilhaPins(lerCsv(await f.text()));
+      R = lerPlanilhaPins(await lerPlanilha(f));
       const atuais = new Set(pinsTodos().map(p => p.id)), novos = R.filter(n => !atuais.has(n.id)).length, ent = R.filter(n => n.status === "entregue").length;
       $("#pinPrev").innerHTML = `<b>${R.length}</b> pessoa(s) na planilha · ${ent} entregue(s), ${R.length - ent} pendente(s) · <b>${novos}</b> nova(s) no app`;
       $("#pinImpBtn").disabled = !R.length;
@@ -2582,6 +2601,11 @@ document.addEventListener("click", e => {
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
   if (d.act === "novo") { personForm(null, S.view === "legendarios" ? "legendario" : "participante"); return; }
+  if (d.act === "conserta-acento") {
+    const alvo = S.P.filter(p => ["nome", "cidade"].some(k => consertaAcento(p[k]) !== p[k]));
+    save(async () => { for (const p of alvo) { const d = {}; ["nome", "cidade"].forEach(k => { if (consertaAcento(p[k]) !== p[k]) d[k] = consertaAcento(p[k]); }); await api.update("pessoas", p.id, d); } }, `${alvo.length} nome(s) corrigido(s)`);
+    return;
+  }
   if (d.act === "assinaturas") { assinaturasForm(); return; }
   if (d.act === "lixeira") { lixeiraForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
   if (d.act === "importar") { importForm(S.view === "legendarios" ? "legendario" : "participante"); return; }
@@ -3091,10 +3115,7 @@ function assinaturasForm(pre) {
     const f = e.target.files[0]; if (!f) return;
     $("#assPrev").innerHTML = `<div class="hint">Lendo ${esc(f.name)}…</div>`; $("#assBtn").disabled = true;
     try {
-      let linhas;
-      if (/\.csv$/i.test(f.name)) linhas = lerCsv(await f.text());
-      else { const X = await carregarXlsx(); const wb = X.read(await f.arrayBuffer(), { type: "array" }); linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" }); }
-      mostrar(linhas);
+      mostrar(await lerPlanilha(f));
     } catch (err) { console.error(err); $("#assPrev").innerHTML = `<div class="bad-text">Não consegui ler esse arquivo.</div>`; }
   });
 }
@@ -3187,9 +3208,7 @@ function importForm(tipoAtual) {
     const f = e.target.files[0]; if (!f) return;
     const prev = $("#impPrev"); prev.innerHTML = `<div class="hint">Lendo ${esc(f.name)}…</div>`; $("#impBtn").disabled = true;
     try {
-      const X = await carregarXlsx();
-      const wb = X.read(await f.arrayBuffer(), { type: "array" });
-      const linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" });
+      const linhas = await lerPlanilha(f);
       if (ehAssinaturas(linhas)) { closeModal(); assinaturasForm(linhas); return; }
       if (ehAvaliacoes(linhas)) { closeModal(); avaliacoesForm(linhas); return; }
       R = analisarImport(lerRelatorio(linhas)); R.arquivo = f.name;
