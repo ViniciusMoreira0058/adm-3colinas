@@ -47,7 +47,9 @@ const ATESTADO = [
   { v: "enviada", l: "Msg enviada", c: "sent" },
   { v: "aguardando", l: "Aguardando", c: "wait" },
   { v: "confirmado", l: "Confirmado", c: "ok" },
+  { v: "apto", l: "Apto", c: "ok" },   // equipe médica liberou (planilha de avaliações: Status Avaliação = Apto)
 ];
+const atOk = p => p.atestado === "confirmado" || p.atestado === "apto";
 const TERMO = [
   { v: "pendente", l: "Pendente", c: "" },
   { v: "enviada", l: "Msg enviada", c: "sent" },
@@ -281,15 +283,15 @@ function stats() {
   const pistaM = S.pista.reduce((s, d) => s + (d.trechos || []).reduce((a, x) => a + (Number(x.m) || 0), 0), 0);
   return {
     n, dup, all,
-    atestado: all.filter(p => p.atestado === "confirmado").length,
+    atestado: all.filter(p => atOk(p)).length,
     termo: all.filter(p => p.termo === "assinado").length,
     nfc: all.filter(p => p.nfc).length,
     msg: all.filter(p => p.msgGrupo).length,
     grupo: all.filter(p => p.noGrupo).length,
     mais40: all.filter(is40),
-    mais40ok: all.filter(p => is40(p) && p.atestado === "confirmado").length,
+    mais40ok: all.filter(p => is40(p) && atOk(p)).length,
     semFamilia: all.filter(p => !p.familia).length,
-    lg, lgAssinado: lg.filter(p => p.termo === "assinado").length, lgAtest: lg.filter(p => p.atestado === "confirmado").length,
+    lg, lgAssinado: lg.filter(p => p.termo === "assinado").length, lgAtest: lg.filter(p => atOk(p)).length,
     tTotal: t.length, tDone: done, tAnd: t.filter(x => x.status === "andamento"),
     low, zero, conferir, pistaM,
   };
@@ -327,7 +329,7 @@ function vPainel() {
     ["Termo assinado", s.termo], ["NFC registrado", s.nfc],
   ];
   const pendAdm = {};
-  s.all.filter(p => p.atestado !== "confirmado" || p.termo !== "assinado").forEach(p => { const k = p.adm || "Sem ADM"; pendAdm[k] = (pendAdm[k] || 0) + 1; });
+  s.all.filter(p => !atOk(p) || p.termo !== "assinado").forEach(p => { const k = p.adm || "Sem ADM"; pendAdm[k] = (pendAdm[k] || 0) + 1; });
   const alerts = [
     ...s.zero.map(e => ({ t: e.item, d: "Zerado · " + (GRUPOS.find(g => g.v === e.grupo) || {}).l, c: "bad", l: "Zerado" })),
     ...s.low.map(e => ({ t: e.item, d: `${e.qtd} un. · ${(GRUPOS.find(g => g.v === e.grupo) || {}).l}`, c: "wait", l: "Baixo" })),
@@ -384,11 +386,11 @@ function filterPeople() {
     .filter(p => status === "canc" ? cancelado(p) : !cancelado(p))
     .filter(p => {
       switch (status) {
-        case "atestado": return p.atestado !== "confirmado";
+        case "atestado": return !atOk(p);
         case "termo": return p.termo !== "assinado";
         case "grupo": return !p.noGrupo;
         case "40": return is40(p);
-        case "ok": return p.atestado === "confirmado" && p.termo === "assinado";
+        case "ok": return atOk(p) && p.termo === "assinado";
         case "novos": return !!S.aviso && p.importId === S.aviso.id;
         case "rep": return repetidos().has(p.id);
         default: return true;
@@ -485,7 +487,7 @@ function vPessoas(tipo) {
   const nSel = S.sel.ids.size, todos = rows.length > 0 && nSel === rows.length;
   const caixa = p => sel ? `<input type="checkbox" class="selbox" data-sel="${p.id}" ${S.sel.ids.has(p.id) ? "checked" : ""} aria-label="Selecionar ${esc(p.nome)}">` : "";
   const nomeTipo = lg ? "legendários" : "senderistas";
-  const atest = p => `${cyc(ATESTADO, "atestado", p)}${p.dataAtestado && p.atestado !== "confirmado" ? `<div class="hint" style="font-size:12px;margin-top:3px">${esc(p.dataAtestado)}</div>` : ""}`;
+  const atest = p => `${cyc(ATESTADO, "atestado", p)}${p.dataAtestado && !atOk(p) ? `<div class="hint" style="font-size:12px;margin-top:3px">${esc(p.dataAtestado)}</div>` : ""}`;
   return `
   <div class="head"><div><h2>${lg ? "Legendários" : "Senderistas"}</h2><p>${lg ? "Servos do TOP: equipe, atestado e termo LGND." : "Cadastro, atestado, termo, grupo e NFC de cada senderista."} Toque no status para avançar. Quem mexer por último vira o ADM responsável.</p></div>
     <div class="actions">
@@ -548,7 +550,7 @@ function vFamilias() {
   ${sem.length ? `<section class="panel"><h3>Sem família <small>${sem.length}</small></h3><div class="list">${sem.map(p => `<div class="li"><span class="grow">${esc(p.nome)} ${is40(p) ? '<span class="tag">+40</span>' : ""}</span><select class="sel" data-fam="${p.id}" aria-label="Família de ${esc(p.nome)}"><option value="">Escolher…</option>${fams.map(f => `<option value="${f}">Família ${String(f).padStart(2, "0")}</option>`).join("")}</select></div>`).join("")}</div></section>` : ""}
   <div class="fams">${fams.map(f => { const m = parts.filter(p => Number(p.familia) === f); return `
     <section class="fam"><header><b>Família ${String(f).padStart(2, "0")}</b><span class="hint num">${m.length} · ${m.filter(is40).length} +40</span></header>
-    ${m.length ? `<ul>${m.map(p => `<li><span>${esc(p.nome)}</span>${p.atestado === "confirmado" && p.termo === "assinado" ? '<span class="chip ok">OK</span>' : '<span class="chip wait">Pend.</span>'}</li>`).join("")}</ul>` : `<div class="empty">Ninguém ainda.</div>`}</section>`; }).join("")}</div>`;
+    ${m.length ? `<ul>${m.map(p => `<li><span>${esc(p.nome)}</span>${atOk(p) && p.termo === "assinado" ? '<span class="chip ok">OK</span>' : '<span class="chip wait">Pend.</span>'}</li>`).join("")}</ul>` : `<div class="empty">Ninguém ainda.</div>`}</section>`; }).join("")}</div>`;
 }
 
 /* ---------- Cronograma ----------
@@ -1212,7 +1214,7 @@ async function gerarCsgPdf(modo, de, ate, wa, hora = "") {
    faixa azul-marinho com a montanha, título, cartões de resumo e tabela. */
 const PDF_COR = { NAVY: [11, 17, 25], LARANJA: [255, 122, 26], TINTA: [30, 20, 11], CINZA: [123, 101, 83], LINHA: [241, 220, 199], CREME: [255, 248, 242], VERDE: [29, 138, 85], AMBAR: [168, 111, 0], VERMELHO: [192, 57, 43] };
 const simNao = v => v ? "Sim" : "Não";
-const corStatus = t => /^(confirmado|assinado|sim|ok|pronto|entregue|ativa|pago)/i.test(t) ? PDF_COR.VERDE
+const corStatus = t => /^(confirmado|apto|assinado|sim|ok|pronto|entregue|ativa|pago)/i.test(t) ? PDF_COR.VERDE
   : /^(zerado|não assinou|cancelad|bloquead)/i.test(t) ? PDF_COR.VERMELHO
   : /^(pendente|baixo|aguardando|msg enviada|em andamento|a fazer|não|conferir|boleto)/i.test(t) ? PDF_COR.AMBAR : null;
 // versão "só nomes": fica o # e a coluna do nome (marcada com nome: true ou a primeira em negrito), em retrato
@@ -1313,7 +1315,7 @@ function pdfDaTela() {
     const filtro = filtroTxt([fil, S.f.adm && "ADM " + S.f.adm, S.f.q && `busca "${S.f.q}"`]);
     const insc = p => ({ cancelada: "Cancelada", pendente: "Boleto pendente" })[p.inscricao] || "";
     return { titulo: lg ? "Legendários" : "Senderistas", sub: `${topName()} · ${filtro}`, legenda: `${rows.length} ${lg ? "legendário(s)" : "senderista(s)"} · ${filtro}`, orient: "landscape",
-      resumo: [["Na lista", rows.length], ["Atestado OK", rows.filter(p => p.atestado === "confirmado").length], ["Termo OK", rows.filter(p => p.termo === "assinado").length], ...(lg ? [] : [["+40", rows.filter(is40).length], ["No grupo", rows.filter(p => p.noGrupo).length]])],
+      resumo: [["Na lista", rows.length], ["Atestado OK", rows.filter(p => atOk(p)).length], ["Termo OK", rows.filter(p => p.termo === "assinado").length], ...(lg ? [] : [["+40", rows.filter(is40).length], ["No grupo", rows.filter(p => p.noGrupo).length]])],
       colunas: lg ? [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true }, { t: "Telefone", w: 34 }, { t: "Equipe", w: 34 }, { t: "Atestado", w: 26, status: true }, { t: "Termo", w: 26, status: true }, { t: "Inscrição", w: 28, status: true }, { t: "Responsável", w: 40, cinza: true }]
         : [{ t: "#", w: 9, al: "center", cinza: true }, { t: "Nome", bold: true, nome: true }, { t: "Obs.", w: 26, cinza: true }, { t: "Telefone", w: 32 }, { t: "Cidade", w: 26 }, { t: "Atestado", w: 23, status: true }, { t: "Termo", w: 23, status: true }, { t: "Grupo", w: 14, al: "center", status: true }, { t: "NFC", w: 12, al: "center", status: true }, { t: "Fam.", w: 12, al: "center" }, { t: "Responsável", w: 32, cinza: true }],
       linhas: rows.map((p, i) => n(i, lg ? [p.nome, p.telefone, p.equipe, opt(ATESTADO, p.atestado).l, opt(TERMO, p.termo).l, insc(p) || "Ativa", respTxt(p)]
@@ -1927,7 +1929,7 @@ function topStats(id) {
   const ts = S.tarefas.filter(t => topOf(t) === id);
   return {
     n: parts.length, lg: ps.length - parts.length,
-    at: parts.filter(p => p.atestado === "confirmado").length, te: parts.filter(p => p.termo === "assinado").length,
+    at: parts.filter(p => atOk(p)).length, te: parts.filter(p => p.termo === "assinado").length,
     fam: new Set(parts.map(p => p.familia).filter(Boolean)).size,
     tDone: ts.filter(t => t.status === "pronto").length, tTot: ts.length,
   };
@@ -2698,7 +2700,7 @@ const cancelado = p => p.inscricao === "cancelada";
 function pendDe(p) {
   if (cancelado(p)) return [];
   const r = [];
-  if (p.atestado !== "confirmado") r.push("atestado");
+  if (!atOk(p)) r.push("atestado");
   if (p.termo !== "assinado") r.push("termo");
   if (p.tipo !== "legendario" && !p.noGrupo) r.push("grupo");
   return r;
@@ -2800,7 +2802,7 @@ function vPendencias() {
   <div class="seg" role="group" aria-label="Pendência">${seg("oque", "qualquer", "Qualquer pendência")}${seg("oque", "atestado", "Atestado")}${seg("oque", "termo", "Termo")}${seg("oque", "grupo", "Grupo")}</div>
   ${rows.length ? `<section class="panel"><div class="list pend">${rows.map(p => `<div class="li pendrow">
       <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
-        <div class="pendtags">${tags(p)}${p.dataAtestado && p.atestado !== "confirmado" ? `<span class="hint">previsão: ${esc(p.dataAtestado)}</span>` : ""}</div>
+        <div class="pendtags">${tags(p)}${p.dataAtestado && !atOk(p) ? `<span class="hint">previsão: ${esc(p.dataAtestado)}</span>` : ""}</div>
         ${obsLinha(p)}<small class="hint">${esc(p.adm || "Sem ADM")}${p.cobradoEm ? ` · cobrado ${esc(quando(p.cobradoEm))}` : " · ainda não cobrado"}</small></div>
       ${waNumber(p.telefone) ? `<a class="wa" href="${waCobrar(p)}" target="_blank" rel="noopener" data-cobrar="${p.id}">${ico("wa")} Cobrar</a>` : `<span class="wa off">${ico("wa")} Sem telefone</span>`}
     </div>`).join("")}</div></section>`
@@ -3096,6 +3098,50 @@ function assinaturasForm(pre) {
     } catch (err) { console.error(err); $("#assPrev").innerHTML = `<div class="bad-text">Não consegui ler esse arquivo.</div>`; }
   });
 }
+/* Planilha de avaliações médicas (atestados): Documento "Recebido" = atestado confirmado; Status Avaliação "Apto" = Apto. O resto não muda. */
+const ehAvaliacoes = linhas => { const h = (linhas[0] || []).map(x => norm(String(x))); return h.some(x => /^status avalia/.test(x)) && h.some(x => /^documento/.test(x)); };
+function analisarAvaliacoes(linhas) {
+  const h = (linhas[0] || []).map(x => norm(String(x)));
+  const iN = h.findIndex(x => /^nome$/.test(x)), iD = h.findIndex(x => /^documento/.test(x)), iS = h.findIndex(x => /^status avalia/.test(x));
+  const out = { aptos: 0, recebidos: 0, outros: 0, marcar: [], ja: [], nao: [] }, vistos = new Set();
+  linhas.slice(1).filter(r => String(r[iN] || "").trim()).forEach(r => {
+    const nome = String(r[iN]).trim(), apto = /^apto/.test(norm(String(r[iS] || ""))), receb = /^recebid/.test(norm(String(r[iD] || "")));
+    if (!apto && !receb) { out.outros++; return; }
+    apto ? out.aptos++ : out.recebidos++;
+    const n = { nome, email: "", telefone: "" };
+    const a = acharNoApp({ ...n, tipo: "participante" }) || acharNoApp({ ...n, tipo: "legendario" });
+    if (!a) { out.nao.push({ ...n, novo: apto ? "apto" : "confirmado" }); return; }
+    if (vistos.has(a.p.id)) return; vistos.add(a.p.id);
+    const novo = apto ? "apto" : "confirmado";
+    // não rebaixa: quem já está Apto não volta para Confirmado
+    if (a.p.atestado === novo || a.p.atestado === "apto") out.ja.push({ p: a.p, novo }); else out.marcar.push({ p: a.p, novo });
+  });
+  return out;
+}
+function avaliacoesForm(linhas) {
+  const A = analisarAvaliacoes(linhas), lbl = v => (ATESTADO.find(t => t.v === v) || {}).l || "Pendente";
+  const li = (p, extra) => `<li><b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${extra || ""}</span></li>`;
+  modal(`
+    <h3>Importar atestados</h3>
+    <p class="hint" style="margin:0">Reconheci a planilha como <b>avaliações médicas</b>. Documento <b>Recebido</b> fica como atestado <b>Confirmado</b> (a pessoa enviou). Status <b>Apto</b> fica como <b>Apto</b> (a equipe médica liberou). Quem está só aguardando ou para avaliar não muda.</p>
+    <div class="imp-kpis">
+      <div class="ok"><b class="num">${A.marcar.length}</b><span>vão ser atualizados</span></div>
+      <div><b class="num">${A.aptos}</b><span>aptos na planilha</span></div>
+      <div><b class="num">${A.recebidos}</b><span>recebidos (ainda sem avaliação)</span></div>
+      <div class="bad"><b class="num">${A.nao.length}</b><span>não achei no app</span></div>
+    </div>
+    <details open><summary>Vão ser atualizados (${A.marcar.length})</summary><ul class="imp-list">${A.marcar.map(({ p, novo }) => li(p, ` · ${esc(lbl(p.atestado))} → <b>${esc(lbl(novo))}</b>`)).join("") || '<li class="hint">Ninguém novo.</li>'}</ul></details>
+    ${A.ja.length ? `<details><summary>Já estavam assim no app (${A.ja.length})</summary><ul class="imp-list">${A.ja.map(({ p }) => li(p, " · " + esc(lbl(p.atestado)))).join("")}</ul></details>` : ""}
+    ${A.nao.length ? `<details open><summary class="bad-text">Não achei no app (${A.nao.length})</summary><p class="hint" style="margin:6px 0">Confira se o nome está escrito diferente no app e mude o atestado na ficha.</p><ul class="imp-list">${A.nao.map(n => `<li><b>${esc(n.nome)}</b> <span class="hint">${esc(lbl(n.novo))}</span></li>`).join("")}</ul></details>` : ""}
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" ${A.marcar.length ? "" : "disabled"}>${A.marcar.length ? `Atualizar ${A.marcar.length}` : "Nada para atualizar"}</button></div></div>`,
+  () => {
+    if (!A.marcar.length) return;
+    closeModal();
+    const em = new Date().toISOString();
+    save(async () => { for (let i = 0; i < A.marcar.length; i += 8) await Promise.all(A.marcar.slice(i, i + 8).map(({ p, novo }) => api.update("pessoas", p.id, { atestado: novo, ...(novo === "apto" ? { aptoEm: em } : {}) }))); },
+      `Atestado: ${A.marcar.length} pessoa(s) atualizada(s)`);
+  });
+}
 function analisarAssinaturas(linhas) {
   const h = (linhas[0] || []).map(x => norm(String(x)));
   const col = re => h.findIndex(x => re.test(x));
@@ -3122,7 +3168,7 @@ function analisarAssinaturas(linhas) {
 function importForm(tipoAtual) {
   modal(`
     <h3>Importar relatório de inscrições</h3>
-    <p class="hint" style="margin:0">Envie a planilha de inscritos ou a de assinaturas do termo (.xlsx ou .csv): o app reconhece qual é. O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Só entram os que estão como Senderista ou Legendário. Inscrições canceladas são ignoradas. O CPF não é importado.</p>
+    <p class="hint" style="margin:0">Envie a planilha de inscritos, a de assinaturas do termo ou a de avaliações (atestados), em .xlsx ou .csv: o app reconhece qual é. O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Só entram os que estão como Senderista ou Legendário. Inscrições canceladas são ignoradas. O CPF não é importado.</p>
     <div class="field"><label for="f-arq">Planilha</label><input id="f-arq" type="file" accept=".xlsx,.xls,.csv"></div>
     <div id="impPrev" class="imp-prev"></div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="impBtn" disabled>Importar</button></div></div>`,
@@ -3145,6 +3191,7 @@ function importForm(tipoAtual) {
       const wb = X.read(await f.arrayBuffer(), { type: "array" });
       const linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" });
       if (ehAssinaturas(linhas)) { closeModal(); assinaturasForm(linhas); return; }
+      if (ehAvaliacoes(linhas)) { closeModal(); avaliacoesForm(linhas); return; }
       R = analisarImport(lerRelatorio(linhas)); R.arquivo = f.name;
       prev.innerHTML = previewImport(R);
       $("#impBtn").disabled = !R.novos.length && !R.ja.length && !R.canc.some(c => c.p) && !R.fora.length;
@@ -3617,7 +3664,7 @@ function conectarDados() {
   if (DEMO) S.online = "demo";
   // demonstração: simula um ADM atualizando para o dono ver o aviso chegar
   if (DEMO && S.isOwner && !S.demoAtiv) { S.demoAtiv = true; setTimeout(() => {
-    const p = (S.pessoas || []).find(x => x.tipo === "participante" && x.atestado !== "confirmado"); if (!p) return;
+    const p = (S.pessoas || []).find(x => x.tipo === "participante" && !atOk(x)); if (!p) return;
     const { id, ...antes } = p, novo = { ...antes, atestado: "confirmado", adm: "Thalisson", admId: "m-thal", admEm: new Date().toISOString() };
     api.update("pessoas", id, { atestado: "confirmado", adm: "Thalisson", admId: "m-thal", admEm: novo.admEm }).then(() => notificarAtividade("pessoas", id, novo, antes));
     novaNotif({ id: "sim1", em: new Date().toISOString(), ator: "m-thal", ator_nome: "Thalisson", publico: "dono", col: "pessoas", doc_id: id, acao: "alterou", nome: p.nome, mudancas: { atestado: [p.atestado || "pendente", "confirmado"] } });

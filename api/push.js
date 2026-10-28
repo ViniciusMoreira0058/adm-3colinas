@@ -11,7 +11,7 @@ const CAMPOS = { nome: "Nome", telefone: "Telefone", email: "E-mail", atestado: 
   cobradoEm: "Cobrado em", cobradoPagEm: "Avisado do boleto em", pagoEm: "Pagamento confirmado em" };
 const IGNORAR = ["adm", "admId", "admEm", "atualizado", "importId", "obsPor", "obsEm"];
 const VALORES = {
-  atestado: { pendente: "Pendente", enviada: "Msg enviada", aguardando: "Aguardando", confirmado: "Confirmado" },
+  atestado: { pendente: "Pendente", enviada: "Msg enviada", aguardando: "Aguardando", confirmado: "Confirmado", apto: "Apto" },
   termo: { pendente: "Pendente", enviada: "Msg enviada", aguardando: "Aguardando", assinado: "Assinado", nao: "Não assinou" },
   inscricao: { cancelada: "Compra cancelada", pendente: "Pagamento pendente", ativa: "Ativa" },
 };
