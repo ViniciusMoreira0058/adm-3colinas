@@ -492,7 +492,6 @@ function vPessoas(tipo) {
       ${S.isOwner && total ? `<button class="btn ${sel ? "primary" : ""}" type="button" data-act="selecionar" aria-pressed="${sel}">${ico("check")} ${sel ? "Concluir seleção" : "Selecionar"}</button>` : ""}
       <button class="btn" type="button" data-act="importar">${ico("upload")} Importar relatório</button>
       <button class="btn" type="button" data-act="colar">${ico("paste")} Colar lista</button>
-      <button class="btn" type="button" data-act="assinaturas">${ico("check")} Importar assinaturas</button>
       ${nLix ? `<button class="btn" type="button" data-act="lixeira">${ico("trash")} Excluídos (${nLix})</button>` : ""}
       <button class="btn primary" type="button" data-act="novo">${ico("plus")} ${lg ? "Novo legendário" : "Novo senderista"}</button>
     </div></div>
@@ -3048,11 +3047,13 @@ function analisarImport(lidos) {
   return { novos, ja, canc, ign, repPlan, fora, total: lidos.length + ign.length };
 }
 /* Importar assinaturas (CSV do termo, ZapSign): só quem está "Assinado" vira termo assinado; "Enviado" não muda nada */
-function assinaturasForm() {
+const ehAssinaturas = linhas => { const h = (linhas[0] || []).map(x => norm(String(x))); return h.some(x => /assinatura/.test(x)) && h.some(x => /^status/.test(x)); };
+function assinaturasForm(pre) {
   modal(`
     <h3>Importar assinaturas do termo</h3>
     <p class="hint" style="margin:0">Envie a planilha de assinaturas (.csv ou .xlsx, colunas Nome, E-mail, Status e Tipo). Só quem está como <b>Assinado</b> fica com o termo assinado no app. Quem está como Enviado não é alterado.</p>
-    <div class="field"><label for="f-ass">Planilha</label><input id="f-ass" type="file" accept=".csv,.xlsx,.xls"></div>
+    ${pre ? `<p class="hint" style="margin:0">Reconheci a planilha como <b>assinaturas do termo</b>.</p>` : ""}
+    <div class="field" ${pre ? "hidden" : ""}><label for="f-ass">Planilha</label><input id="f-ass" type="file" accept=".csv,.xlsx,.xls"></div>
     <div id="assPrev" class="imp-prev"></div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="assBtn" disabled>Atualizar</button></div></div>`,
   () => {
@@ -3063,13 +3064,9 @@ function assinaturasForm() {
       `Termo assinado: ${lista.length} pessoa(s) atualizada(s)`);
   });
   let A = null;
-  $("#f-ass").addEventListener("change", async e => {
-    const f = e.target.files[0]; if (!f) return;
-    const prev = $("#assPrev"); prev.innerHTML = `<div class="hint">Lendo ${esc(f.name)}…</div>`; $("#assBtn").disabled = true;
+  const mostrar = linhas => {
+    const prev = $("#assPrev");
     try {
-      let linhas;
-      if (/\.csv$/i.test(f.name)) linhas = lerCsv(await f.text());
-      else { const X = await carregarXlsx(); const wb = X.read(await f.arrayBuffer(), { type: "array" }); linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" }); }
       A = analisarAssinaturas(linhas);
       if (!A) { prev.innerHTML = `<div class="bad-text">Não achei as colunas Nome e Status nessa planilha.</div>`; return; }
       const li = (x, extra = "") => `<li><b>${esc(x.nome)}</b> <span class="hint">${x.tipo === "legendario" ? "Legendário" : "Senderista"}${extra}</span></li>`;
@@ -3086,6 +3083,17 @@ function assinaturasForm() {
       $("#assBtn").disabled = !A.marcar.length;
       $("#assBtn").textContent = A.marcar.length ? `Marcar ${A.marcar.length} como assinado` : "Nada para atualizar";
     } catch (err) { console.error(err); prev.innerHTML = `<div class="bad-text">Não consegui ler esse arquivo.</div>`; }
+  };
+  if (pre) mostrar(pre);
+  $("#f-ass").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    $("#assPrev").innerHTML = `<div class="hint">Lendo ${esc(f.name)}…</div>`; $("#assBtn").disabled = true;
+    try {
+      let linhas;
+      if (/\.csv$/i.test(f.name)) linhas = lerCsv(await f.text());
+      else { const X = await carregarXlsx(); const wb = X.read(await f.arrayBuffer(), { type: "array" }); linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" }); }
+      mostrar(linhas);
+    } catch (err) { console.error(err); $("#assPrev").innerHTML = `<div class="bad-text">Não consegui ler esse arquivo.</div>`; }
   });
 }
 function analisarAssinaturas(linhas) {
@@ -3097,11 +3105,11 @@ function analisarAssinaturas(linhas) {
     const st = norm(String(r[iS] || "")), tp = norm(String(iT >= 0 ? r[iT] : ""));
     const dt = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(iD >= 0 ? r[iD] : ""));
     return { nome: String(r[iN]).trim(), email: String(iE >= 0 ? r[iE] : "").trim().toLowerCase(), telefone: "", tipo: /legend/.test(tp) ? "legendario" : "participante",
-      assinado: /assinad/.test(st), data: dt ? `${dt[3]}-${dt[2]}-${dt[1]}` : "" };
+      assinado: /assinad/.test(st), enviado: /enviad/.test(st), data: dt ? `${dt[3]}-${dt[2]}-${dt[1]}` : "" };
   });
   const out = { assinados: 0, enviados: 0, marcar: [], ja: [], nao: [] }, vistos = new Set();
   rows.forEach(n => {
-    if (!n.assinado) { out.enviados++; return; }
+    if (!n.assinado) { if (n.enviado) out.enviados++; return; }
     out.assinados++;
     // e-mail repetido entre pessoas diferentes: acharNoApp só aceita e-mail se o primeiro nome também bate
     const a = acharNoApp(n);
@@ -3114,7 +3122,7 @@ function analisarAssinaturas(linhas) {
 function importForm(tipoAtual) {
   modal(`
     <h3>Importar relatório de inscrições</h3>
-    <p class="hint" style="margin:0">Envie a planilha de inscritos da plataforma (.xlsx ou .csv). O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Só entram os que estão como Senderista ou Legendário. Inscrições canceladas são ignoradas. O CPF não é importado.</p>
+    <p class="hint" style="margin:0">Envie a planilha de inscritos ou a de assinaturas do termo (.xlsx ou .csv): o app reconhece qual é. O app compara com quem já está cadastrado (pelo nome, telefone ou e-mail) e só adiciona quem ainda não está. Só entram os que estão como Senderista ou Legendário. Inscrições canceladas são ignoradas. O CPF não é importado.</p>
     <div class="field"><label for="f-arq">Planilha</label><input id="f-arq" type="file" accept=".xlsx,.xls,.csv"></div>
     <div id="impPrev" class="imp-prev"></div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="impBtn" disabled>Importar</button></div></div>`,
@@ -3136,6 +3144,7 @@ function importForm(tipoAtual) {
       const X = await carregarXlsx();
       const wb = X.read(await f.arrayBuffer(), { type: "array" });
       const linhas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" });
+      if (ehAssinaturas(linhas)) { closeModal(); assinaturasForm(linhas); return; }
       R = analisarImport(lerRelatorio(linhas)); R.arquivo = f.name;
       prev.innerHTML = previewImport(R);
       $("#impBtn").disabled = !R.novos.length && !R.ja.length && !R.canc.some(c => c.p) && !R.fora.length;
