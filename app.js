@@ -163,6 +163,7 @@ const VIEWS = [
   { id: "legendarios", l: "Legendários", i: "shield" },
   { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
+  { id: "nfc", l: "NFC 3COLINAS", c: "NFC", i: "nfc", need: ["participantes", "legendarios"], nfc: true },   // ficha de saúde + tag NFC
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
   { id: "aovivo", l: "Ao vivo", i: "flag", need: ["cronograma"] },   // painel para TV/celular
@@ -196,6 +197,7 @@ const canSee = v => {
   if (ORG()) v = VIEWS.find(x => x.id === v.id) || v;   // {id} sozinho também respeita need/owner da aba
   if (v.org && !ORG()) return false;
   if (v.extra && !EXTRA()) return false;
+  if (v.nfc && !NFC()) return false;
   if (!ME.acesso) return v.id === "painel";
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
   if (S.isOwner || (VIEWS.find(x => x.id === v.id) || v).all) return true;
@@ -931,7 +933,7 @@ const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca e
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
-const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "familias", "consagracao"]],
+const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "nfc", "familias", "consagracao"]],
   ["Operação", ["cronograma", "aovivo", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
@@ -1112,6 +1114,299 @@ function vGuia() {
   <section class="panel"><h3>A rotina em 4 passos</h3><div class="guia-rotina">${ROTINA.map(([q, t, v], i) => `<button type="button" class="guia-passo" data-go="${v}"><span class="imp-n num">${i + 1}</span><span><b>${q}</b><small>${t}</small></span><i aria-hidden="true">›</i></button>`).join("")}</div></section>
   <div class="guia-cards">${vs.map(v => `<section class="panel guia-card"><h3>${ico(v.i)} ${v.l}</h3><p class="guia-sub">${GUIA[v.id][0]}</p><ul>${GUIA[v.id][1].map(t => `<li>${esc(t)}</li>`).join("")}</ul>${v.id !== "guia" ? `<button class="linkbtn" type="button" data-go="${v.id}">abrir ›</button>` : ""}</section>`).join("")}</div>`;
 }
+
+/* ---------- NFC 3COLINAS: ficha de saúde de cada participante (formulário por link), tag NFC no pescoço e atendimento médico ----------
+   Dados em config/saude-<pessoaId> {token, r:{...respostas}, respondidoEm, tagEm, tagPor}. A tag guarda só um link com o código (token),
+   nunca os dados: a ficha abre no app para quem está logado. Atendimento vira uma ocorrência (tipo "Atendimento médico") com sinais vitais. */
+const NFC = () => DEMO;
+const COMORB = [["bariatrico", "Bariátrico"], ["diabetico", "Diabético"], ["convulsoes", "Tem convulsões"], ["desmaios", "Tem desmaios"],
+  ["alimentares", "Prob. alimentares"], ["depressao", "Tem depressão"], ["psiquiatrico", "Cuidados psiquiátricos"], ["respiratorio", "Prob. respiratórios"],
+  ["musculo", "Prob. musculoesqueléticos"], ["cardiaco", "Cardíaco"], ["renal", "Problemas renais"], ["morteSubita", "Morte súbita na família"],
+  ["pressao", "Pressão alta"], ["oncologico", "Histórico oncológico"], ["coluna", "Problemas na coluna"]];
+const SANGUE = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Não sei"];
+const BIOTIPO = ["Ectomorfo (magro)", "Mesomorfo (atlético)", "Endomorfo (mais pesado)"];
+const ATIV = ["Nenhuma", "1 a 2 vezes", "3 a 4 vezes", "5 ou mais vezes"];
+const saudeId = p => "saude-" + p.id;
+const saudeDoc = p => (S.cfgDocs || {})[saudeId(p)] || null;
+const saudeResp = p => (saudeDoc(p) || {}).r || null;
+const hashTxt = t => { let h = 2166136261; for (const c of String(t)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+const saudeToken = p => (saudeDoc(p) || {}).token || (hashTxt(p.id + "·3colinas") + hashTxt(p.nome || "")).slice(0, 12);
+const saudeLink = p => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}saude.html?t=${saudeToken(p)}`;
+const tagLink = p => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}?nfc=${saudeToken(p)}`;
+const idadeDe = d => { if (!d) return null; const n = new Date(d + "T00:00:00"), h = new Date(); let a = h.getFullYear() - n.getFullYear(); if (h < new Date(h.getFullYear(), n.getMonth(), n.getDate())) a--; return isNaN(a) ? null : a; };
+const imcDe = r => { const kg = Number(String(r.peso || "").replace(",", ".")), cm = Number(r.altura); return kg && cm ? (kg / ((cm / 100) ** 2)).toFixed(1).replace(".", ",") : ""; };
+const nada = v => !v || /^(n[aã]o|nenhum[a]?|-)\b/i.test(String(v).trim());
+// alertas de saúde: comorbidades marcadas Sim + alergia + remédio
+function saudeAlertas(r) {
+  if (!r) return [];
+  const a = COMORB.filter(([k]) => r.comorb && r.comorb[k] === "sim").map(([, l]) => l.replace(/^Tem /, "").replace(/^Prob\. /, "Prob. "));
+  if (!nada(r.alergias)) a.unshift("Alergia");
+  if (!nada(r.medicacoes)) a.push("Usa remédio");
+  return a;
+}
+// indicativo de saúde de 0 a 5 (como no Hakuna NFC): soma comorbidades, alergia, remédio e IMC alto; "—" = ainda sem ficha
+function nivelSaude(r) {
+  if (!r) return null;
+  const c = COMORB.filter(([k]) => r.comorb && r.comorb[k] === "sim").length, imc = Number((imcDe(r) || "").replace(",", "."));
+  return Math.min(5, c + (nada(r.alergias) ? 0 : 1) + (nada(r.medicacoes) ? 0 : 1) + (imc >= 30 ? 1 : 0));
+}
+const NIVEL_COR = ["#7c8794", "#46c486", "#f2c233", "#ff8a1a", "#ef4444", "#a855f7"];
+const nivelBadge = r => { const n = nivelSaude(r); return `<span class="nfc-nivel" style="background:${n == null ? "transparent" : NIVEL_COR[n]};${n == null ? "border:1px dashed var(--line);color:var(--muted)" : ""}" title="Indicativo de saúde ${n == null ? "sem ficha" : n + " de 5"}">${n == null ? "—" : n}</span>`; };
+const IMC_FAIXAS = [[0, 18.5, "Abaixo", "#60a5fa"], [18.5, 25, "Normal", "#46c486"], [25, 30, "Sobrepeso", "#f2c233"], [30, 35, "Obesidade I", "#ff8a1a"], [35, 40, "Obesidade II", "#ef4444"], [40, 99, "Obesidade III", "#a855f7"]];
+function imcBarra(r) {
+  const v = Number((imcDe(r) || "").replace(",", ".")); if (!v) return "";
+  const i = IMC_FAIXAS.findIndex(([a, b]) => v >= a && v < b);
+  return `<div class="imc-bar">${IMC_FAIXAS.map(([, , l, c], k) => `<span style="background:${c};${k === i ? "outline:2px solid var(--fg);outline-offset:1px" : "opacity:.45"}">${l}</span>`).join("")}</div>`;
+}
+const atendimentosDe = p => ocorrencias().filter(o => o.pessoaId === p.id && o.medico);
+function vNfc() {
+  const P = S.P.filter(p => !cancelado(p)), f = S.nfcF || "todos", q = norm(S.nfcQ || "");
+  const resp = P.filter(p => saudeResp(p)), alerta = resp.filter(p => saudeAlertas(saudeResp(p)).length), tags = P.filter(p => (saudeDoc(p) || {}).tagEm);
+  const atend = ocorrencias().filter(o => o.medico);
+  const lista = P.filter(p => f === "todos" || (f === "falta" ? !saudeResp(p) : f === "alerta" ? saudeAlertas(saudeResp(p)).length : f === "semtag" ? saudeResp(p) && !(saudeDoc(p) || {}).tagEm : true))
+    .filter(p => !q || norm(p.nome).includes(q)).sort((a, b) => (saudeAlertas(saudeResp(b)).length - saudeAlertas(saudeResp(a)).length) || norm(a.nome).localeCompare(norm(b.nome)));
+  const seg = (v, l, n) => `<button type="button" data-nfc-f="${v}" aria-pressed="${f === v}">${l} <span class="num" style="opacity:.75">${n}</span></button>`;
+  return `
+  <div class="head"><div><h2>NFC 3COLINAS</h2><p>A ficha de saúde de cada participante. Ele responde pelo link, os dados caem aqui, e no check-in a equipe grava a tag NFC que vai no pescoço. Encostou o celular na tag, abre a ficha de emergência.</p></div>
+    <div class="actions"><button class="btn" type="button" data-act="nfc-ler">${ico("search")} Ler tag NFC</button>${podeEditar() ? `<button class="btn primary" type="button" data-act="nfc-seq">${ico("wa")} Enviar link para quem falta (${P.filter(p => !saudeResp(p) && waNumber(p.telefone)).length})</button>` : ""}</div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Fichas respondidas</span><span class="val num">${resp.length}<small style="font-size:.5em;opacity:.7"> / ${P.length}</small></span><span class="sub">${P.length - resp.length} ainda faltam</span></div>
+    <div class="kpi ${alerta.length ? "alert" : ""}"><span class="lbl">Com alerta de saúde</span><span class="val num">${alerta.length}</span><span class="sub">alergia, remédio ou comorbidade</span></div>
+    <div class="kpi"><span class="lbl">Tags gravadas</span><span class="val num">${tags.length}</span><span class="sub">de ${resp.length} com ficha</span></div>
+    <div class="kpi"><span class="lbl">Atendimentos</span><span class="val num">${atend.length}</span><span class="sub">registrados no TOP</span></div>
+  </div>
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Filtro">${seg("todos", "Todos", P.length)}${seg("falta", "Falta responder", P.length - resp.length)}${seg("alerta", "Com alerta", alerta.length)}${seg("semtag", "Sem tag", resp.length - resp.filter(p => (saudeDoc(p) || {}).tagEm).length)}</div>
+    <label class="search">${ico("search")}<input id="nq" type="search" placeholder="Buscar pelo nome" value="${esc(S.nfcQ || "")}" aria-label="Buscar no NFC"></label>
+  </div>
+  <div class="nivel-leg"><span>Indicativo de saúde:</span>${NIVEL_COR.map((c, n) => `<span><i style="background:${c}"></i>${n}</span>`).join("")}<span class="hint">0 = nada informado · 5 = mais pontos de atenção</span></div>
+  <section class="panel"><div class="list">${lista.map(p => { const r = saudeResp(p), d = saudeDoc(p) || {}, al = saudeAlertas(r);
+    return `<div class="li nfc-row">
+      ${nivelBadge(r)}
+      <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}${p.familia ? ` <span class="tag">F.${esc(p.familia)}</span>` : ""}${r && r.sangue && r.sangue !== "Não sei" ? ` <span class="tag sangue">${esc(r.sangue)}</span>` : ""}
+        <div class="pendtags">${r ? (al.length ? al.slice(0, 4).map(a => `<span class="chip bad">${esc(a)}</span>`).join("") + (al.length > 4 ? `<span class="hint">+${al.length - 4}</span>` : "") : '<span class="chip ok">Sem alerta</span>') : '<span class="chip wait">Falta responder</span>'}
+          ${d.tagEm ? '<span class="chip sent">Tag gravada</span>' : ""}</div>
+        <small class="hint">${r ? "respondida " + esc(quando(d.respondidoEm)) : d.linkEm ? "link enviado " + esc(quando(d.linkEm)) : "link ainda não enviado"}</small></div>
+      <div class="actions">${r ? `<button class="btn sm" type="button" data-nfc-ficha="${p.id}">${ico("heart")} Ficha</button>${podeEditar() ? `<button class="btn sm" type="button" data-nfc-tag="${p.id}">${ico("nfc")} ${d.tagEm ? "Regravar" : "Gravar tag"}</button>` : ""}`
+        : `${waNumber(p.telefone) && podeEditar() ? `<a class="wa" href="${waCobrar(p, textoLinkSaude(p))}" target="_blank" rel="noopener" data-nfc-link="${p.id}">${ico("wa")} Enviar link</a>` : ""}<button class="btn sm" type="button" data-nfc-form="${p.id}">Abrir formulário</button>`}</div>
+    </div>`; }).join("") || `<div class="empty">Ninguém neste filtro.</div>`}</div></section>
+  ${atend.length ? `<section class="panel"><h3>Atendimentos médicos <small>${atend.length}</small></h3><div class="list">${atend.map(o => `<button type="button" class="li nfc-at" data-nfc-ficha="${o.pessoaId}"><span class="chip ${(OC_GRAV.find(g => g.v === o.grav) || {}).c || ""}">${(OC_GRAV.find(g => g.v === o.grav) || {}).l || ""}</span><span class="grow"><b>${esc(o.nome || "")}</b><small class="hint"> · ${esc(quando(o.em))}</small><br><small>${esc(String(o.desc || "").slice(0, 110))}</small></span></button>`).join("")}</div></section>` : ""}`;
+}
+const textoLinkSaude = p => `Olá, ${String(p.nome || "").split(" ")[0]}! Aqui é ${ME.adm ? ME.adm.split(" ")[0] + ", " : ""}da equipe ADM do ${topName()}.\n\nPreencha a sua *ficha de saúde* pelo link abaixo (leva uns 3 minutos). Ela é muito importante caso você precise de atendimento durante o TOP:\n${saudeLink(p)}`;
+function saudeForm(p) {
+  if (!p) return;
+  const r = saudeResp(p) || {}, c = r.comorb || {}, f = p.ficha || {};
+  const v = (k, d = "") => esc(r[k] != null ? r[k] : d);
+  const opts = (l, cur) => `<option value="">Selecione</option>` + l.map(x => `<option ${x === cur ? "selected" : ""}>${esc(x)}</option>`).join("");
+  modal(`
+    <div class="sf-top"><span class="eyebrow">NFC 3COLINAS · Ficha de saúde</span><h3>${esc(p.nome)}</h3><p class="hint" style="margin:0">É isto que o participante vê ao abrir o link. Preencha com cuidado: estas informações são usadas se ele precisar de atendimento no TOP.</p></div>
+    <div class="sf-foto"><img id="sfFotoImg" ${r.foto ? `src="${esc(r.foto)}"` : "hidden"} alt="Foto"><span id="sfFotoVazio" ${r.foto ? "hidden" : ""}>${ico("users")}</span>
+      <label class="btn sm">${ico("upload")} Tirar uma selfie<input type="file" accept="image/*" capture="user" id="sfFoto" hidden></label></div>
+    <h4 class="sf-h">Dados pessoais</h4>
+    <div class="form">
+      <div class="field full"><label for="sf-nome">Nome</label><input id="sf-nome" name="nome" value="${v("nome", p.nome)}" required></div>
+      <div class="field"><label for="sf-prof">Profissão</label><input id="sf-prof" name="profissao" value="${v("profissao")}"></div>
+      <div class="field"><label for="sf-cel">Celular</label><input id="sf-cel" name="celular" inputmode="tel" value="${v("celular", p.telefone || "")}"></div>
+      <div class="field"><label for="sf-cid">Cidade</label><input id="sf-cid" name="cidade" value="${v("cidade", p.cidade || "")}"></div>
+      <div class="field"><label for="sf-uf">UF</label><input id="sf-uf" name="uf" value="${v("uf", "SP")}" maxlength="2"></div>
+      <div class="field"><label for="sf-nasc">Data de nascimento</label><input id="sf-nasc" name="nascimento" type="date" value="${v("nascimento")}"></div>
+      <div class="field"><label>Idade</label><output class="sf-calc" id="sfIdade">${idadeDe(r.nascimento) ?? (p.idade || "—")}</output></div>
+      <div class="field"><label for="sf-peso">Peso (kg)</label><input id="sf-peso" name="peso" inputmode="decimal" value="${v("peso")}"></div>
+      <div class="field"><label for="sf-alt">Altura (cm)</label><input id="sf-alt" name="altura" inputmode="numeric" value="${v("altura")}"></div>
+      <div class="field"><label>IMC</label><output class="sf-calc" id="sfImc">${imcDe(r) || "—"}</output></div>
+      <div class="field"><label for="sf-sang">Tipo sanguíneo</label><select id="sf-sang" name="sangue">${opts(SANGUE, r.sangue)}</select></div>
+      <div class="field"><label for="sf-bio">Biotipo</label><select id="sf-bio" name="biotipo">${opts(BIOTIPO, r.biotipo)}</select></div>
+      <div class="field"><label for="sf-ativ">Atividades físicas por semana</label><select id="sf-ativ" name="atividade">${opts(ATIV, r.atividade)}</select></div>
+      <div class="field full"><label for="sf-plano">Plano de saúde</label><input id="sf-plano" name="plano" value="${v("plano")}" placeholder="nome do plano e número da carteirinha, ou Não tenho"></div>
+    </div>
+    <h4 class="sf-h">Comorbidades</h4>
+    <div class="sf-comorb">${COMORB.map(([k, l]) => `<div class="sf-c"><span>${l}</span><div class="sf-sn"><label><input type="radio" name="c-${k}" value="sim" ${c[k] === "sim" ? "checked" : ""}><span>Sim</span></label><label><input type="radio" name="c-${k}" value="nao" ${c[k] !== "sim" ? "checked" : ""}><span>Não</span></label></div></div>`).join("")}</div>
+    <h4 class="sf-h">Informações médicas</h4>
+    <div class="form">
+      <div class="field full"><label for="sf-med">Medicações em uso</label><textarea id="sf-med" name="medicacoes" placeholder="nome, dose e horário">${v("medicacoes", nada(f.medicamento) ? "" : f.medicamento || "")}</textarea></div>
+      <div class="field full"><label for="sf-cir">Fez ou vai fazer cirurgia(s)</label><textarea id="sf-cir" name="cirurgias">${v("cirurgias")}</textarea></div>
+      <div class="field full"><label for="sf-ale">Alergias</label><textarea id="sf-ale" name="alergias" placeholder="remédios, alimentos, picada de inseto…">${v("alergias", nada(f.restricaoAlimentar) ? "" : f.restricaoAlimentar || "")}</textarea></div>
+      <div class="field full"><label for="sf-out">Outras informações médicas</label><textarea id="sf-out" name="outras">${v("outras", nada(f.condicaoMedica) ? "" : f.condicaoMedica || "")}</textarea></div>
+    </div>
+    <h4 class="sf-h sf-red">Contatos de emergência</h4>
+    <div class="form">
+      <div class="field full"><label for="sf-conj">Nome do cônjuge</label><input id="sf-conj" name="conjuge" value="${v("conjuge")}"></div>
+      <div class="field"><label for="sf-conjt">Telefone</label><input id="sf-conjt" name="conjugeTel" inputmode="tel" value="${v("conjugeTel")}"></div>
+      <div class="field"><label for="sf-conje">E-mail</label><input id="sf-conje" name="conjugeEmail" type="email" value="${v("conjugeEmail")}"></div>
+      <div class="field full"><label for="sf-emn">Nome da pessoa de emergência</label><input id="sf-emn" name="emergNome" value="${v("emergNome")}"></div>
+      <div class="field"><label for="sf-emt">Telefone</label><input id="sf-emt" name="emergTel" inputmode="tel" value="${v("emergTel")}"></div>
+      <div class="field"><label for="sf-emp">Parentesco</label><input id="sf-emp" name="emergParent" value="${v("emergParent")}"></div>
+    </div>
+    <label class="selall sf-lgpd"><input type="checkbox" name="consent" ${r.consent ? "checked" : ""} required> Autorizo a equipe do ${esc(topName())} a usar estes dados só para cuidar da minha saúde durante o evento.</label>
+    <span class="err" id="sfErr" hidden></span>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button><button class="btn primary" type="submit">Enviar ficha</button></div></div>`,
+  fd => {
+    if (!fd.get("consent")) { const e = $("#sfErr"); e.textContent = "Marque a autorização no final para enviar."; e.hidden = false; return; }
+    const out = {}; ["nome", "profissao", "celular", "cidade", "uf", "nascimento", "peso", "altura", "sangue", "biotipo", "atividade", "plano", "medicacoes", "cirurgias", "alergias", "outras",
+      "conjuge", "conjugeTel", "conjugeEmail", "emergNome", "emergTel", "emergParent"].forEach(k => { out[k] = String(fd.get(k) || "").trim(); });
+    out.comorb = Object.fromEntries(COMORB.map(([k]) => [k, fd.get("c-" + k) || "nao"]));
+    out.foto = $("#sfFotoImg").hidden ? "" : $("#sfFotoImg").src; out.consent = true;
+    closeModal();
+    const d = saudeDoc(p) || {};
+    save(() => api.set("config", saudeId(p), { ...d, token: saudeToken(p), pessoaId: p.id, r: out, respondidoEm: new Date().toISOString(), top: curTopId() }), "Ficha de saúde enviada").then(render);
+  });
+  const calc = () => { const nasc = $("#sf-nasc").value; $("#sfIdade").textContent = idadeDe(nasc) ?? (p.idade || "—"); $("#sfImc").textContent = imcDe({ peso: $("#sf-peso").value, altura: $("#sf-alt").value }) || "—"; };
+  ["sf-nasc", "sf-peso", "sf-alt"].forEach(id => $("#" + id).addEventListener("input", calc));
+  $("#sfFoto").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return; try { const u = await reduzirFoto(fl, 360); $("#sfFotoImg").src = u; $("#sfFotoImg").hidden = false; $("#sfFotoVazio").hidden = true; } catch { toast("Não consegui abrir a foto."); } });
+}
+// diminui a foto antes de guardar (selfie e foto do atendimento)
+function reduzirFoto(fl, lado) {
+  return new Promise((ok, erro) => { const img = new Image(), url = URL.createObjectURL(fl);
+    img.onload = () => { const k = Math.min(1, lado / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", .78)); };
+    img.onerror = erro; img.src = url; });
+}
+// ficha de emergência: o que abre ao encostar o celular na tag
+function fichaNfc(p) {
+  if (!p) return;
+  const r = saudeResp(p), d = saudeDoc(p) || {};
+  if (!r) { saudeForm(p); return; }
+  const al = saudeAlertas(r), sim = COMORB.filter(([k]) => r.comorb && r.comorb[k] === "sim").map(([, l]) => l);
+  const tel = t => t ? `<a class="btn sm" href="tel:${esc(String(t).replace(/[^\d+]/g, ""))}">Ligar</a>${waNumber(t) ? `<a class="wa" href="https://wa.me/${waNumber(t)}" target="_blank" rel="noopener">${ico("wa")}</a>` : ""}` : "";
+  const bloco = (l, val, alerta) => `<div class="nf-item ${alerta ? "alerta" : ""}"><span>${l}</span><b>${nada(val) ? "Não" : esc(val)}</b></div>`;
+  const at = atendimentosDe(p);
+  modal(`
+    <div class="nf-head"><span>${ico("heart")} Ficha de emergência · NFC 3COLINAS</span></div>
+    <div class="nf-id">${r.foto ? `<img src="${esc(r.foto)}" alt="">` : `<span class="nfc-foto vazio grande">${esc((p.nome || "?")[0])}</span>`}
+      <div><h3>${esc(r.nome || p.nome)}</h3><p class="hint" style="margin:0">${tipoNome(p)}${p.equipe ? " · " + esc(equipeTxt(p)) : ""} · ${idadeDe(r.nascimento) ?? p.idade ?? "—"} anos${r.cidade ? " · " + esc(r.cidade) + (r.uf ? "/" + esc(r.uf) : "") : ""}</p>
+        <div class="nf-nums">${nivelBadge(r)}<span class="sangue-big">${esc(r.sangue || "—")}</span><span><b class="num">${esc(r.peso || "—")}</b> kg</span><span><b class="num">${esc(r.altura || "—")}</b> cm</span><span>IMC <b class="num">${imcDe(r) || "—"}</b></span></div></div></div>
+    ${imcBarra(r)}
+    ${al.length ? `<div class="nf-alertas">${al.map(a => `<span class="chip bad">${esc(a)}</span>`).join("")}</div>` : `<div class="nf-alertas"><span class="chip ok">Nenhum alerta de saúde informado</span></div>`}
+    <div class="nf-grid">
+      ${bloco("Alergias", r.alergias, !nada(r.alergias))}
+      ${bloco("Medicações em uso", r.medicacoes, !nada(r.medicacoes))}
+      ${bloco("Comorbidades", sim.join(", ") || "Não", sim.length)}
+      ${bloco("Cirurgias", r.cirurgias)}
+      ${bloco("Outras informações", r.outras, !nada(r.outras))}
+      ${bloco("Plano de saúde", r.plano)}
+    </div>
+    <h4 class="sf-h sf-red">Contatos de emergência</h4>
+    <div class="nf-contatos">
+      ${r.emergNome || r.emergTel ? `<div class="nf-ct"><div><b>${esc(r.emergNome || "Contato")}</b><small>${esc(r.emergParent || "")} ${esc(r.emergTel || "")}</small></div><div class="actions">${tel(r.emergTel)}</div></div>` : ""}
+      ${r.conjuge || r.conjugeTel ? `<div class="nf-ct"><div><b>${esc(r.conjuge || "Cônjuge")}</b><small>cônjuge ${esc(r.conjugeTel || "")}</small></div><div class="actions">${tel(r.conjugeTel)}</div></div>` : ""}
+      ${!(r.emergNome || r.emergTel || r.conjuge || r.conjugeTel) ? `<div class="hint">Nenhum contato informado.</div>` : ""}
+    </div>
+    ${at.length ? `<h4 class="sf-h">Atendimentos no TOP (${at.length})</h4><div class="nf-ats">${at.map(o => `<div class="nf-at"><div><span class="chip ${(OC_GRAV.find(g => g.v === o.grav) || {}).c || ""}">${(OC_GRAV.find(g => g.v === o.grav) || {}).l || ""}</span> <b>${esc(quando(o.em))}</b>${o.atualizadoPor ? ` <span class="hint">· ${esc(o.atualizadoPor)}</span>` : ""}</div>
+      ${o.sinais ? `<div class="nf-sinais">${Object.entries(o.sinais).filter(([, x]) => x).map(([k, x]) => `<span><small>${SINAIS_L[k] || k}</small><b>${esc(x)}</b></span>`).join("")}</div>` : ""}
+      <p>${esc(o.desc || "")}</p>${o.prov ? `<p class="hint">Conduta: ${esc(o.prov)}</p>` : ""}${o.foto ? `<img class="nf-atfoto" src="${esc(o.foto)}" alt="Registro fotográfico">` : ""}
+      ${o.lat ? `<a class="linkbtn" href="https://www.google.com/maps?q=${o.lat},${o.lng}" target="_blank" rel="noopener">${ico("route")} Ver no mapa (${Number(o.lat).toFixed(4)}, ${Number(o.lng).toFixed(4)})</a>` : ""}</div>`).join("")}</div>` : ""}
+    <p class="hint" style="margin:0">Respondida ${esc(quando(d.respondidoEm))}${d.tagEm ? ` · tag gravada ${esc(quando(d.tagEm))}${d.tagPor ? " por " + esc(d.tagPor) : ""}` : " · tag ainda não gravada"}</p>
+    <div class="modal-foot"><div>${podeEditar() ? `<button class="btn ghost" type="button" id="nfEditar">Editar ficha</button>` : ""}</div><div class="actions"><button class="btn" type="button" data-close-btn>Fechar</button>${podeEditar() ? `<button class="btn primary" type="button" id="nfAtender">${ico("plus")} Registrar atendimento</button>` : ""}</div></div>`, () => {});
+  const ed = $("#nfEditar"); if (ed) ed.onclick = () => saudeForm(p);
+  const atb = $("#nfAtender"); if (atb) atb.onclick = () => atendimentoForm(p);
+}
+const SINAIS_L = { pa: "PA", fc: "FC", fr: "FR", sat: "Sat O₂", temp: "Temp.", glasgow: "Glasgow", hgt: "Glicemia" };
+function atendimentoForm(p) {
+  let foto = "", pos = null;
+  modal(`
+    <h3>Atendimento · ${esc(p.nome)}</h3>
+    <p class="hint" style="margin:0">Fica na ficha da pessoa e em Ocorrências, e entra no Relatório final.</p>
+    <div class="form">
+      <div class="field"><label for="at-grav">Gravidade</label>${sel("grav", OC_GRAV, "leve")}</div>
+      <div class="field"><label for="at-hakuna">Hakuna / quem atendeu</label><input id="at-hakuna" name="hakuna" value="${esc(ME.adm || "")}"></div>
+      <div class="field full"><label for="at-desc">Descrição da ocorrência</label><textarea id="at-desc" name="desc" style="min-height:90px" required placeholder="ex.: dor no tornozelo direito após queda na trilha"></textarea></div>
+    </div>
+    <h4 class="sf-h">Sinais vitais</h4>
+    <div class="at-sinais">${Object.entries(SINAIS_L).map(([k, l]) => `<div class="field"><label for="at-${k}">${l}</label><input id="at-${k}" name="s-${k}" placeholder="${{ pa: "120x80", fc: "81", fr: "16", sat: "97%", temp: "36,5", glasgow: "15", hgt: "98" }[k]}"></div>`).join("")}</div>
+    <div class="form">
+      <div class="field full"><label for="at-prov">Medicação e conduta</label><textarea id="at-prov" name="prov" style="min-height:70px" placeholder="ex.: dipirona 1g, imobilização com tala, extração"></textarea></div>
+    </div>
+    <div class="at-extras">
+      <label class="btn">${ico("upload")} Registro fotográfico<input type="file" accept="image/*" capture="environment" id="atFoto" hidden></label>
+      <button class="btn" type="button" id="atGps">${ico("route")} Marcar localização</button>
+    </div>
+    <img id="atFotoPrev" class="nf-atfoto" hidden alt=""><span class="hint" id="atGpsTxt"></span>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" id="atVoltar">Voltar</button><button class="btn primary" type="submit">Salvar atendimento</button></div></div>`,
+  fd => {
+    const desc = String(fd.get("desc") || "").trim(); if (!desc) { $("#at-desc").focus(); return; }
+    const sinais = Object.fromEntries(Object.keys(SINAIS_L).map(k => [k, String(fd.get("s-" + k) || "").trim()]));
+    closeModal();
+    salvarOcorr(ocPref() + Date.now().toString(36), { nome: p.nome, pessoaId: p.id, tipo: "Atendimento médico", medico: true, grav: fd.get("grav"), desc, prov: String(fd.get("prov") || "").trim(),
+      hakuna: String(fd.get("hakuna") || "").trim(), sinais, foto, ...(pos ? { lat: pos.lat, lng: pos.lng } : {}), em: new Date().toISOString(), status: "aberta" }, "Atendimento registrado");
+    setTimeout(() => { render(); fichaNfc(p); }, 300);
+  });
+  $("#atVoltar").onclick = () => fichaNfc(p);
+  $("#atFoto").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return; try { foto = await reduzirFoto(fl, 900); $("#atFotoPrev").src = foto; $("#atFotoPrev").hidden = false; } catch { toast("Não consegui abrir a foto."); } });
+  $("#atGps").onclick = () => {
+    const ok = (lat, lng) => { pos = { lat, lng }; $("#atGpsTxt").textContent = `Localização marcada: ${lat.toFixed(5)}, ${lng.toFixed(5)}`; };
+    if (!navigator.geolocation) { if (DEMO) ok(-20.2028, -47.2706); else toast("Este aparelho não dá a localização."); return; }
+    $("#atGpsTxt").textContent = "Pegando a localização…";
+    navigator.geolocation.getCurrentPosition(g => ok(g.coords.latitude, g.coords.longitude), () => { if (DEMO) ok(-20.2028, -47.2706); else $("#atGpsTxt").textContent = "Não consegui a localização. Confira a permissão."; }, { enableHighAccuracy: true, timeout: 10000 });
+  };
+}
+// gravar a tag: Android (Chrome) grava direto pelo navegador; iPhone precisa de um app como o NFC Tools
+function tagForm(p) {
+  const pode = "NDEFReader" in window, url = tagLink(p);
+  const marcar = () => { const d = saudeDoc(p) || {}; save(() => api.set("config", saudeId(p), { ...d, token: saudeToken(p), pessoaId: p.id, tagEm: new Date().toISOString(), tagPor: ME.adm || "" }), "Tag gravada").then(render); };
+  modal(`
+    <h3>Gravar tag NFC · ${esc(p.nome)}</h3>
+    <p class="hint" style="margin:0">A tag guarda só um link com um código. Os dados de saúde não ficam na tag: a ficha abre no app para quem está logado.</p>
+    <div class="nf-link"><code>${esc(url)}</code><button class="btn sm" type="button" id="tgCopiar">${ico("paste")} Copiar</button></div>
+    ${pode ? `<div class="banner"><span>${ico("nfc")} Toque em <b>Gravar agora</b> e encoste a tag nas costas do celular.</span></div>`
+      : `<div class="banner aviso"><span>Este aparelho não grava NFC pelo navegador (iPhone ou computador). Use o app <b>NFC Tools</b>: Escrever → Adicionar registro → URL → cole o link acima → Escrever. Depois toque em <b>Já gravei</b>.</span></div>`}
+    <span class="hint" id="tgTxt"></span>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button>
+      ${pode ? `<button class="btn primary" type="button" id="tgGravar">${ico("nfc")} Gravar agora</button>` : `<button class="btn primary" type="button" id="tgJa">${ico("check")} Já gravei</button>`}
+      ${DEMO ? `<button class="btn" type="button" id="tgSim">Simular gravação</button>` : ""}</div></div>`, () => {});
+  $("#tgCopiar").onclick = () => copiarTexto(url, "Link da tag copiado");
+  const ja = $("#tgJa"); if (ja) ja.onclick = () => { closeModal(); marcar(); };
+  const sim = $("#tgSim"); if (sim) sim.onclick = () => { closeModal(); marcar(); };
+  const gv = $("#tgGravar"); if (gv) gv.onclick = async () => {
+    $("#tgTxt").textContent = "Encoste a tag no celular…";
+    try { await new NDEFReader().write({ records: [{ recordType: "url", data: url }] }); closeModal(); marcar(); }
+    catch (e) { $("#tgTxt").textContent = "Não gravou: " + (e.message || e) + ". Tente de novo."; }
+  };
+}
+// ler a tag dentro do app (Android); no iPhone, encostar na tag já abre o link sozinho
+function lerNfc() {
+  const pode = "NDEFReader" in window, comTag = S.P.filter(p => (saudeDoc(p) || {}).tagEm);
+  modal(`
+    <h3>Ler tag NFC</h3>
+    <p class="hint" style="margin:0">${pode ? "Encoste a tag nas costas do celular." : "No iPhone, com a tela desbloqueada, é só encostar o celular na tag: aparece um aviso para abrir a ficha. No Android, use o botão abaixo."}</p>
+    <span class="hint" id="lnTxt"></span>
+    ${DEMO && comTag.length ? `<div class="field"><label for="lnSim">Simular leitura (demonstração)</label><select id="lnSim">${comTag.map(p => `<option value="${p.id}">${esc(p.nome)}</option>`).join("")}</select></div>` : ""}
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button>${DEMO && comTag.length ? `<button class="btn" type="button" id="lnSimBtn">Simular</button>` : ""}${pode ? `<button class="btn primary" type="button" id="lnLer">${ico("nfc")} Ler agora</button>` : ""}</div></div>`, () => {});
+  const sb = $("#lnSimBtn"); if (sb) sb.onclick = () => fichaNfc(S.P.find(p => p.id === $("#lnSim").value));
+  const lb = $("#lnLer"); if (lb) lb.onclick = async () => {
+    try { const r = new NDEFReader(); await r.scan(); $("#lnTxt").textContent = "Aguardando a tag…";
+      r.onreading = ev => { const rec = [...ev.message.records].find(x => x.recordType === "url"); const url = rec ? new TextDecoder().decode(rec.data) : ""; abrirPorToken((/[?&]nfc=([\w-]+)/.exec(url) || [])[1]); };
+    } catch (e) { $("#lnTxt").textContent = "Não consegui ler: " + (e.message || e); }
+  };
+}
+function abrirPorToken(t) {
+  if (!t) { toast("Essa tag não é do NFC 3COLINAS."); return; }
+  const p = S.P.find(x => saudeToken(x) === t);
+  if (!p) { toast("Não achei essa pessoa neste TOP."); return; }
+  fichaNfc(p);
+}
+function nfcSequencia() {
+  const fila = S.P.filter(p => !cancelado(p) && !saudeResp(p) && waNumber(p.telefone));
+  if (!fila.length) { toast("Todo mundo com telefone já respondeu."); return; }
+  let i = 0;
+  const passo = () => {
+    if (i >= fila.length) { closeModal(); toast(`Link enviado para ${fila.length} pessoa(s)`); return; }
+    const p = fila[i];
+    modal(`
+      <h3>Enviar link ${i + 1} de ${fila.length}</h3>
+      <div class="bar"><i style="width:${pct(i, fila.length)}%"></i></div>
+      <b style="font-size:18px">${esc(p.nome)}</b><small class="hint">${esc(p.telefone || "")}</small>
+      <div class="field"><label for="f-txt">Mensagem</label><textarea id="f-txt" style="min-height:150px">${esc(textoLinkSaude(p))}</textarea></div>
+      <div class="modal-foot"><div><button class="btn ghost" type="button" data-close-btn>Parar</button></div>
+        <div class="actions"><button class="btn" type="button" id="seqPular">Pular</button><a class="btn primary" id="seqWa" href="#" target="_blank" rel="noopener">${ico("wa")} Abrir WhatsApp</a></div></div>`, () => {});
+    const wa = $("#seqWa"), atual = () => { wa.href = waCobrar(p, $("#f-txt").value); };
+    atual(); $("#f-txt").addEventListener("input", atual);
+    wa.addEventListener("click", () => { linkEnviado(p); i++; setTimeout(passo, 400); });
+    $("#seqPular").onclick = () => { i++; passo(); };
+  };
+  passo();
+}
+function linkEnviado(p) { if (!podeEditar()) return; const d = saudeDoc(p) || {}; api.set("config", saudeId(p), { ...d, token: saudeToken(p), pessoaId: p.id, linkEm: new Date().toISOString(), top: curTopId() }).then(render).catch(e => console.error(e)); }
+var nfcPendente = (new URLSearchParams(location.search).get("nfc") || "");
 
 /* Período do backup: dia, semana (7 dias), mês (30 dias) ou o TOP todo. Num período, entra o que foi criado ou alterado dentro dele. */
 const BK_PER = [{ v: "dia", l: "Diário", d: "o que mudou hoje", dias: 1 }, { v: "semana", l: "Semanal", d: "o que mudou nos últimos 7 dias", dias: 7 },
@@ -2925,13 +3220,14 @@ function render() {
     : v === "estoque" ? vEstoque()
     : v === "importacao" ? vImportacao()
     : v === "postop" ? vPosTop()
+    : v === "nfc" ? vNfc()
     : v === "guia" ? vGuia()
     : vPista());
   // padrão das telas: o nome do grupo do menu aparece em cima do título de cada tela
   if (ORG()) { const g = (MENU_GRUPOS.find(([, ids]) => ids.includes(v)) || [])[0]; if (g) html = html.replace('<div class="head"><div><h2>', `<div class="head"><div><span class="eyebrow">${g}</span><h2>`); }
   const view = $("#view");
   const focusId = document.activeElement && document.activeElement.id;
-  const caret = focusId === "q" || focusId === "hq" || focusId === "pq" ? document.activeElement.selectionStart : null;
+  const caret = focusId === "q" || focusId === "hq" || focusId === "pq" || focusId === "nq" ? document.activeElement.selectionStart : null;
   // só troca a tela se algo mudou: evita a tela piscar (logo "tremendo") quando chega atualização de outro ADM sem mudança visível
   if (view._html !== html || !view.firstChild) { view.innerHTML = html; view._html = html; }
   botaoPdf();
@@ -2940,7 +3236,8 @@ function render() {
   if (S.view !== "aovivo") S.mapaCheio = false;
   document.body.classList.toggle("av-mapa-cheio", !!S.mapaCheio);
   if (S.view === "aovivo") montarMapaVivo(); else if (mapaAV) { try { mapaAV.map.remove(); } catch (e) {} mapaAV = null; }
-  if ((focusId === "q" || focusId === "hq" || focusId === "pq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
+  if (nfcPendente && ME.acesso && S.P.length && !$("#modalRoot").innerHTML) { const t = nfcPendente; nfcPendente = ""; try { history.replaceState(null, "", location.pathname + location.search.replace(/[?&]nfc=[\w-]+/, "").replace(/^&/, "?") + location.hash); } catch {} setTimeout(() => abrirPorToken(t), 200); }
+  if ((focusId === "q" || focusId === "hq" || focusId === "pq" || focusId === "nq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
 }
 
 /* ---------- Formulários ---------- */
@@ -3496,6 +3793,8 @@ function debounceWrite(key, fn, ms = 500) { clearTimeout(pending.get(key)); pend
 document.addEventListener("click", e => {
   const cob = e.target.closest("a[data-cobrar]");
   if (cob) { const p = S.P.find(x => x.id === cob.dataset.cobrar); if (p) registrarCobranca(p); return; }
+  const nl = e.target.closest("a[data-nfc-link]");
+  if (nl) { const p = S.P.find(x => x.id === nl.dataset.nfcLink); if (p) linkEnviado(p); return; }
   const cobPag = e.target.closest("a[data-cobrar-pag]");
   if (cobPag) { const p = S.P.find(x => x.id === cobPag.dataset.cobrarPag); if (p) registrarAvisoPag(p); return; }
   const t = e.target.closest("button, [data-close], [data-hist-ver]");
@@ -3545,6 +3844,12 @@ document.addEventListener("click", e => {
   if (d.pvDesf != null && podeEditar()) { if (confirm("Desfazer a marcação deste trecho?")) marcarTrecho(+d.pvDesf, "desf"); return; }
   if (d.act === "saude") { saudeBusca(); return; }
   if (d.act === "busca") { buscaGeral(); return; }
+  if (d.nfcF) { S.nfcF = d.nfcF; render(); return; }
+  if (d.nfcFicha) { fichaNfc(S.P.find(p => p.id === d.nfcFicha)); return; }
+  if (d.nfcTag) { tagForm(S.P.find(p => p.id === d.nfcTag)); return; }
+  if (d.nfcForm) { saudeForm(S.P.find(p => p.id === d.nfcForm)); return; }
+  if (d.act === "nfc-ler") { lerNfc(); return; }
+  if (d.act === "nfc-seq") { if (podeEditar()) nfcSequencia(); return; }
   if (d.act === "guia-ok") { store.set("adm3-guia-visto", "1"); render(); return; }
   if (d.act === "pt-responder") { posTopForm(); return; }
   if (d.act === "pt-licoes") { licoesForm(); return; }
@@ -3658,6 +3963,7 @@ document.addEventListener("input", e => {
   if (e.target.id === "q") { S.f.q = e.target.value; render(); }
   if (e.target.id === "hq") { S.hf.q = e.target.value; render(); }
   if (e.target.id === "pq") { S.pf.q = e.target.value; render(); }
+  if (e.target.id === "nq") { S.nfcQ = e.target.value; render(); }
   if (e.target.id === "pinQ") { S.pinf.q = e.target.value; render(); const q = $("#pinQ"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   if (e.target.id === "csgQ") { S.csg.q = e.target.value; render(); const q = $("#csgQ"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
 });
