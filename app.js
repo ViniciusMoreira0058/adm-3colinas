@@ -352,11 +352,14 @@ function retratoHoje() {
   const s = stats(), P = S.P.filter(p => !cancelado(p));
   return { n: s.n, lg: s.lg.length, atestado: s.atestado, termo: s.termo, grupo: s.grupo, prontos: P.filter(prontoTop).length, total: P.length };
 }
-let dashGravando = false;
+let dashGravando = false, dashUltimo = "";
 function registrarDia() {
   if (!DASH_NOVO() || !podeEditar() || dashGravando) return;
   const H = dashHist(), r = retratoHoje(), d = diaHoje();
-  if (JSON.stringify(H[d]) === JSON.stringify(r)) return;
+  // compara campo a campo: o banco devolve o JSON com as chaves em outra ordem
+  const ant = H[d] || {}; if (Object.keys(r).every(k => ant[k] === r[k])) return;
+  if (dashUltimo === d + JSON.stringify(r)) return;   // já mandei este retrato, esperando o banco devolver
+  dashUltimo = d + JSON.stringify(r);
   const dias = { ...H, [d]: r }; Object.keys(dias).sort().slice(0, -90).forEach(k => delete dias[k]);   // guarda 90 dias
   dashGravando = true; api.set("config", dashHistId(), { dias, top: curTopId() }).catch(() => {}).finally(() => { dashGravando = false; });
 }
@@ -2672,7 +2675,8 @@ function render() {
   const view = $("#view");
   const focusId = document.activeElement && document.activeElement.id;
   const caret = focusId === "q" || focusId === "hq" || focusId === "pq" ? document.activeElement.selectionStart : null;
-  view.innerHTML = html;
+  // só troca a tela se algo mudou: evita a tela piscar (logo "tremendo") quando chega atualização de outro ADM sem mudança visível
+  if (view._html !== html || !view.firstChild) { view.innerHTML = html; view._html = html; }
   botaoPdf();
   if (S.view === "painel") setTimeout(registrarDia, 0);
   document.body.classList.toggle("av-tv", modoTv());

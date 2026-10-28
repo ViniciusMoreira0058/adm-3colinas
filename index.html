@@ -426,7 +426,7 @@ tbody tr:hover td { background: var(--accent-soft); }
   .cards { display: flex; }
   .head h2 { font-size: 28px; }
 }
-.main { padding-top: 0; }
+.main { padding-top: env(safe-area-inset-top, 0px); }   /* no app instalado (iPhone), o cabeçalho fixo começa abaixo da barra de status e não cobre o primeiro card */
 .mtop { display: flex; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); align-items: center; justify-content: space-between; gap: 12px; padding-block: 10px; border-bottom: 1px solid var(--line); margin: 0 auto 20px; max-width: 1180px; }
 .mtop .brand-mark { width: 34px; height: 34px; }
 /* Computador: tela inteira, menu fixo do lado (recolhe pelo botão ☰ ou pelo X) */
