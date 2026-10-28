@@ -165,7 +165,7 @@ const VIEWS = [
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "familias", l: "Famílias", i: "fam" },
   { id: "cronograma", l: "Cronograma", i: "clock" },
-  { id: "aovivo", l: "Ao vivo", i: "flag", need: ["cronograma"], demo: true },   // painel para TV/celular (em teste, só na demo)
+  { id: "aovivo", l: "Ao vivo", i: "flag", need: ["cronograma"] },   // painel para TV/celular
   { id: "consagracao", l: "Consagração", i: "group" },
   { id: "pins", l: "Pins", i: "check" },
   { id: "checklist", l: "Checklist", i: "list" },
@@ -2874,8 +2874,8 @@ document.addEventListener("keydown", e => {
 
 /* ---------- Pendências: quem ainda deve atestado, termo ou entrar no grupo, com cobrança pelo WhatsApp ---------- */
 const PEND = { pagamento: "pagamento do boleto", atestado: "atestado médico", termo: "assinatura do termo", grupo: "entrar no grupo de senderistas" };
-/* Novidades em teste (semáforo, cobrança única, ficha de saúde rápida, painel ao vivo): só na demonstração até o Vinicius aprovar */
-const NOVO = () => DEMO;
+/* Semáforo, cobrança única, ficha de saúde rápida e painel ao vivo: aprovados pelo Vinicius em 28/10 (NOVO liga tudo) */
+const NOVO = () => true;
 // Semáforo "pronto para o TOP": pago + termo assinado + atestado Apto (liberado pela equipe médica)
 const FALTA = { pagamento: "Pagamento", termo: "Termo", apto: "Atestado Apto" };
 const faltaTop = p => cancelado(p) ? [] : [pagPendente(p) && "pagamento", p.termo !== "assinado" && "termo", p.atestado !== "apto" && "apto"].filter(Boolean);
