@@ -407,6 +407,61 @@ function graficoEvolucao() {
   return `<svg class="grafico" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Evolução de atestados, termos e prontos por dia">${grade}${rot}${linhas}</svg>
     <div class="g-leg">${serie.map(([k, c, l]) => `<span><i style="background:${c}"></i>${l} <b class="num">${H[dias[dias.length - 1]][k] || 0}</b></span>`).join("")}<span class="hint">de ${max} pessoas · últimos ${dias.length} dias</span></div>`;
 }
+// Visual 2: gráfico com área, curva suave, meta, legenda que liga/desliga e dedo/mouse mostrando o dia
+const curva = pts => pts.map((p, i) => { if (!i) return `M${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+  const a = pts[i - 2] || pts[i - 1], b = pts[i - 1], c = p, d = pts[i + 1] || p, k = 1 / 6;
+  return `C${(b[0] + (c[0] - a[0]) * k).toFixed(1)},${(b[1] + (c[1] - a[1]) * k).toFixed(1)} ${(c[0] - (d[0] - b[0]) * k).toFixed(1)},${(c[1] - (d[1] - b[1]) * k).toFixed(1)} ${c[0].toFixed(1)},${c[1].toFixed(1)}`; }).join("");
+function graficoEvolucao2() {
+  const H = { ...dashHist(), [diaHoje()]: retratoHoje() }, dias = Object.keys(H).sort().slice(-21);
+  if (dias.length < 2) return `<div class="empty">O gráfico começa a aparecer a partir de amanhã: o app guarda um retrato por dia.</div>`;
+  const aba = S.gAba || "docs", off = S.gOff || {};
+  const W = innerWidth < 600 ? 400 : 640, Ht = innerWidth < 600 ? 240 : 230, pl = 30, pr = 12, pt = 18, pb = 28;
+  const x = i => pl + i * (W - pl - pr) / (dias.length - 1);
+  const rotulos = (y) => { const passo = Math.ceil(dias.length / 7); return dias.map((d, i) => i % passo && i !== dias.length - 1 ? "" : `<text x="${x(i)}" y="${Ht - 8}" text-anchor="${i === dias.length - 1 ? "end" : i === 0 ? "start" : "middle"}" class="g-t">${d.slice(8, 10)}/${d.slice(5, 7)}</text>`).join(""); };
+  const fd = d => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  let corpo = "", leg = "", dados;
+  if (aba === "docs") {
+    const max = Math.max(1, ...dias.map(d => H[d].total || H[d].n || 0)), y = v => pt + (Ht - pt - pb) * (1 - v / max);
+    const serie = [["atestado", "#ff7a1a", "Atestado OK"], ["termo", "#f2b233", "Termo assinado"], ["prontos", "#46c486", "Prontos p/ o TOP"]];
+    const grade = [0, .25, .5, .75, 1].map(f => { const v = Math.round(max * f); return `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" class="g-grade"/><text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end" class="g-t">${v}</text>`; }).join("");
+    const defs = serie.map(([k, c]) => `<linearGradient id="g2-${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".32"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient>`).join("");
+    corpo = `<defs>${defs}</defs>${grade}<line x1="${pl}" x2="${W - pr}" y1="${y(max)}" y2="${y(max)}" class="g-meta"/><text x="${W - pr}" y="${y(max) - 6}" text-anchor="end" class="g-t g-meta-t">meta: ${max} pessoas</text>
+      ${serie.filter(([k]) => !off[k]).map(([k, c]) => { const pts = dias.map((d, i) => [x(i), y(H[d][k] || 0)]), l = curva(pts);
+        return `<path d="${l} L${pts[pts.length - 1][0]},${y(0)} L${pts[0][0]},${y(0)} Z" fill="url(#g2-${k})" class="g-area"/><path d="${l}" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round" class="g-linha"/>
+          <circle cx="${pts[pts.length - 1][0]}" cy="${pts[pts.length - 1][1]}" r="5" fill="${c}" stroke="var(--surface)" stroke-width="2"/>`; }).join("")}${rotulos()}`;
+    leg = serie.map(([k, c, l]) => `<button type="button" class="g-chave ${off[k] ? "off" : ""}" data-g-off="${k}" aria-pressed="${!off[k]}"><i style="background:${c}"></i>${l} <b class="num">${H[dias[dias.length - 1]][k] || 0}</b></button>`).join("") + `<span class="hint">toque na legenda para esconder uma linha</span>`;
+    dados = dias.map(d => ({ d: fd(d), v: serie.filter(([k]) => !off[k]).map(([k, c, l]) => [l, H[d][k] || 0, c]) }));
+  } else {
+    const tot = dias.map(d => H[d].n || 0), novos = tot.map((v, i) => i ? Math.max(0, v - tot[i - 1]) : 0);
+    const max = Math.max(1, ...tot), y = v => pt + (Ht - pt - pb) * (1 - v / max), bw = Math.max(6, (W - pl - pr) / dias.length * .55);
+    const maxN = Math.max(1, ...novos), yN = v => (Ht - pb) - (Ht - pt - pb) * .45 * v / maxN;
+    const grade = [0, .5, 1].map(f => { const v = Math.round(max * f); return `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" class="g-grade"/><text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end" class="g-t">${v}</text>`; }).join("");
+    const pts = tot.map((v, i) => [x(i), y(v)]);
+    corpo = `<defs><linearGradient id="g2-n" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#60a5fa" stop-opacity=".3"/><stop offset="1" stop-color="#60a5fa" stop-opacity="0"/></linearGradient></defs>${grade}
+      ${novos.map((v, i) => v ? `<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${yN(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(Ht - pb - yN(v)).toFixed(1)}" rx="3" fill="var(--accent)" opacity=".85" class="g-barra"/>` : "").join("")}
+      <path d="${curva(pts)} L${pts[pts.length - 1][0]},${y(0)} L${pts[0][0]},${y(0)} Z" fill="url(#g2-n)" class="g-area"/><path d="${curva(pts)}" fill="none" stroke="#60a5fa" stroke-width="3" class="g-linha"/>${rotulos()}`;
+    leg = `<span class="g-chave"><i style="background:#60a5fa"></i>Senderistas inscritos <b class="num">${tot[tot.length - 1]}</b></span><span class="g-chave"><i style="background:var(--accent)"></i>Novos no dia</span>`;
+    dados = dias.map((d, i) => ({ d: fd(d), v: [["Inscritos", tot[i], "#60a5fa"], ["Novos no dia", novos[i], "#ff7a1a"]] }));
+  }
+  return `<div class="g2-abas seg"><button type="button" data-g-aba="docs" aria-pressed="${aba === "docs"}">Documentos</button><button type="button" data-g-aba="insc" aria-pressed="${aba === "insc"}">Inscrições</button></div>
+    <div class="g2" data-g2='${esc(JSON.stringify({ x: dias.map((_, i) => +(x(i) / W * 100).toFixed(2)), dados }))}'>
+      <svg class="grafico g2-svg" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Evolução por dia">${corpo}</svg>
+      <i class="g2-cursor" hidden></i><div class="g2-tip" hidden></div></div>
+    <div class="g-leg">${leg}</div>`;
+}
+// passar o dedo ou o mouse no gráfico mostra os números do dia
+function g2Mover(e) {
+  const box = e.target.closest && e.target.closest(".g2"); if (!box) return;
+  const info = box._g2 || (box._g2 = JSON.parse(box.dataset.g2)), r = box.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * 100;
+  let i = 0; info.x.forEach((v, k) => { if (Math.abs(v - px) < Math.abs(info.x[i] - px)) i = k; });
+  const cur = box.querySelector(".g2-cursor"), tip = box.querySelector(".g2-tip"), dd = info.dados[i];
+  cur.hidden = tip.hidden = false; cur.style.left = info.x[i] + "%";
+  tip.innerHTML = `<b>${dd.d}</b>${dd.v.map(([l, v, c]) => `<span><i style="background:${c}"></i>${esc(l)} <b class="num">${v}</b></span>`).join("")}`;
+  tip.style.left = Math.min(Math.max(info.x[i], 18), 82) + "%";
+}
+document.addEventListener("pointermove", e => { if (D2()) g2Mover(e); });
+document.addEventListener("pointerdown", e => { if (D2()) g2Mover(e); });
+document.addEventListener("pointerleave", e => { const b = e.target.closest && e.target.closest(".g2"); if (b) { b.querySelector(".g2-cursor").hidden = b.querySelector(".g2-tip").hidden = true; } }, true);
 // visão do ADM: as pessoas que estão com ele e o que falta de cada uma
 function painelMeu() {
   const eu = ME.adm; if (!eu) return "";
@@ -477,7 +532,7 @@ function vPainelNovo() {
       ${pins.length ? mini("Pins", `${pinsOk}<small>/${pins.length}</small>`, `${pins.length - pinsOk} pendentes`, "pins", ` data-pin-ir="pendente"`) : mini("Pista", (s.pistaM / 1000).toFixed(1).replace(".", ",") + " km", "3 dias", "pista")}</div>`, "estoque")}
   </div>
   <div class="dash-meio">
-    <section class="panel"><h3>${ico("chart")} Evolução até o TOP <small>atestados, termos e prontos por dia</small></h3>${graficoEvolucao()}</section>
+    <section class="panel"><h3>${ico("chart")} Evolução até o TOP <small>atestados, termos e prontos por dia</small></h3>${D2() ? graficoEvolucao2() : graficoEvolucao()}</section>
     ${painelMeu()}
   </div>
   ${NOVO() ? painelPronto() : ""}
@@ -2307,10 +2362,12 @@ function pdfSimples(sp) {
 async function gerarListaPdf(sp, wa) {
   const jsPDF = await carregarPdf();
   const C = PDF_COR, retrato = sp.orient !== "landscape";
-  const [logo, faixa] = await Promise.all([imagemDataUrl("assets/logo.png"), faixaPdf()]);
+  const [logo, faixa, fundo] = await Promise.all([imagemDataUrl("assets/logo.png"), faixaPdf(), sp.capa ? imagemDataUrl("assets/bg.jpg") : null]);
   const doc = new jsPDF({ orientation: retrato ? "portrait" : "landscape", unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   const adm = ME.adm || "-", gerado = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const p1 = sp.capa ? 2 : 1;   // com capa, a lista começa na página 2
+  if (sp.capa) { capaPdf(doc, sp, { logo, fundo, W, H, adm, gerado }); doc.addPage(); }
   const titulo = sp.titulo.toUpperCase(), sub = (sp.sub || topName()).toUpperCase();
   const resumo = [["ADM responsável", adm, true], ...(sp.resumo || [])].slice(0, retrato ? 4 : 6);
   const cabecalho = primeira => {
@@ -2368,19 +2425,52 @@ async function gerarListaPdf(sp, wa) {
       const col = cols[c.column.index]; if (!col || !col.status || c.cell.colSpan > 1) return;
       const cor = corStatus(String(c.cell.raw || "")); if (cor) { c.cell.styles.textColor = cor; c.cell.styles.fontStyle = "bold"; }
     },
-    didDrawPage: () => { if (doc.internal.getCurrentPageInfo().pageNumber > 1) cabecalho(false); },
+    didDrawPage: () => { if (doc.internal.getCurrentPageInfo().pageNumber > p1) cabecalho(false); },
   });
   const pg = doc.getNumberOfPages();
-  for (let i = 1; i <= pg; i++) {
+  for (let i = p1; i <= pg; i++) {
     doc.setPage(i);
     doc.setDrawColor(...C.LARANJA); doc.setLineWidth(0.5); doc.line(12, H - 9.5, W - 12, H - 9.5);
     doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...C.TINTA); doc.text("ADM 3COLINAS", 12, H - 5.5);
     doc.setFont("helvetica", "normal"); doc.setTextColor(...C.CINZA); doc.text(`${sp.titulo} · ${topName()} · ADM ${adm}`, 12 + doc.getTextWidth("ADM 3COLINAS") + 3, H - 5.5);
-    doc.text(`Página ${i} de ${pg}`, W - 12, H - 5.5, { align: "right" });
+    doc.text(`Página ${i - p1 + 1} de ${pg - p1 + 1}`, W - 12, H - 5.5, { align: "right" });
   }
   const hoje = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
   const arq = `${sp.arquivo || sp.titulo} ${hoje}.pdf`.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w .-]/g, "");
   await entregarPdf(doc.output("blob"), arq, `${sp.titulo} · ${topName()}`, wa);
+}
+// Visual 2 (demo): capa do relatório, com a montanha, o brasão, os números principais e o que tem dentro
+function capaPdf(doc, sp, { logo, fundo, W, H, adm, gerado }) {
+  const C = PDF_COR, opac = o => { try { doc.setGState(new doc.GState({ opacity: o })); } catch (e) {} };
+  doc.setFillColor(...C.NAVY); doc.rect(0, 0, W, H, "F");
+  if (fundo) try { const ih = W * 1308 / 736; doc.addImage(fundo, "JPEG", 0, (H - ih) * .35, W, ih, "fundo", "FAST"); } catch (e) {}
+  opac(.4); doc.setFillColor(...C.NAVY); doc.rect(0, 0, W, H, "F");
+  for (let k = 0; k < 24; k++) { opac(.035 + k * .0015); doc.rect(0, H * .36 + k * H * .012, W, H, "F"); }   // escurece aos poucos para baixo
+  opac(1);
+  doc.setFillColor(...C.LARANJA); doc.rect(0, 0, W, 2.2, "F");
+  if (logo) try { doc.addImage(logo, "PNG", W / 2 - 19, 32, 38, 48, "logo"); } catch (e) {}
+  doc.setFont("helvetica", "bold"); doc.setTextColor(...C.LARANJA); doc.setFontSize(9);
+  doc.text("ADM 3COLINAS  ·  LEGENDÁRIOS BASE 3 COLINAS", W / 2, 96, { align: "center" });
+  doc.setTextColor(255, 255, 255); doc.setFontSize(34); doc.text(sp.titulo.toUpperCase(), W / 2, 112, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(12); doc.setTextColor(235, 225, 215); doc.text((sp.sub || topName()).toUpperCase(), W / 2, 122, { align: "center", maxWidth: W - 40 });
+  // números principais
+  const R = (sp.resumo || []).slice(0, 4), wc = 42, gap = 6, x0 = W / 2 - (R.length * wc + (R.length - 1) * gap) / 2;
+  R.forEach(([l, v], k) => { const x = x0 + k * (wc + gap);
+    opac(.14); doc.setFillColor(255, 255, 255); doc.roundedRect(x, 150, wc, 30, 3, 3, "F"); opac(1);
+    doc.setDrawColor(...C.LARANJA); doc.setLineWidth(0.7); doc.line(x + 8, 154, x + wc - 8, 154);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(22); doc.setTextColor(255, 255, 255); doc.text(String(v), x + wc / 2, 168, { align: "center" });
+    doc.setFontSize(7); doc.setTextColor(255, 200, 150); doc.text(String(l).toUpperCase(), x + wc / 2, 175, { align: "center" }); });
+  // o que tem dentro
+  const sec = (sp.secoes || []).map(s => s.titulo).filter(Boolean);
+  if (sec.length) {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...C.LARANJA); doc.text("NESTE RELATÓRIO", 30, 200, { charSpace: 0.6 });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(240, 232, 224);
+    sec.forEach((s, i) => { const col = i % 2, lin = Math.floor(i / 2), x = 30 + col * (W - 60) / 2, y = 209 + lin * 8;
+      doc.setFillColor(...C.LARANJA); doc.circle(x + 1.2, y - 1.3, 1, "F"); doc.text(s, x + 5, y, { maxWidth: (W - 60) / 2 - 8 }); });
+  }
+  doc.setDrawColor(255, 255, 255); doc.setLineWidth(0.2); doc.line(30, H - 26, W - 30, H - 26);
+  doc.setFontSize(8.5); doc.setTextColor(200, 190, 180);
+  doc.text(`Gerado em ${gerado} por ${adm}`, 30, H - 19); if (sp.legenda) { doc.setFontSize(7.5); doc.setTextColor(160, 150, 140); doc.text(sp.legenda, 30, H - 14); }
 }
 // o que cada página exporta (a lista como está na tela)
 const filtroTxt = partes => partes.filter(Boolean).join(" · ") || "lista completa";
@@ -2991,7 +3081,7 @@ function relatorioPdf(R) {
   const { s, td } = R, km = (s.pistaM / 1000).toFixed(1).replace(".", ",");
   const hm = iso => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const per = [td.inicio && fmtDate(td.inicio), td.fim && fmtDate(td.fim)].filter(Boolean).join(" a ");
-  return { titulo: "Relatório final", arquivo: "Relatorio final " + topName(), orient: "portrait",
+  return { titulo: "Relatório final", arquivo: "Relatorio final " + topName(), orient: "portrait", capa: D2(),
     sub: [topName(), td.local, per].filter(Boolean).join(" · "), legenda: "Números do TOP no momento em que o relatório foi gerado",
     resumo: [["Senderistas", s.n], ["Ocorrências", R.oc.length], ["MREs", R.kits]],
     colunas: [{ t: "Item", bold: true }, { t: "Resultado", w: 92 }],
@@ -3849,6 +3939,32 @@ const pending = new Map();
 const WRITE_KEYS = ["editDia", "act", "edit", "obs", "editTask", "editItem", "editTop", "topFin", "cyc", "tog", "task", "step", "kits", "editAdm", "cronoIni", "cronoFim", "cronoItem", "pagOk", "pinOk", "pinDesfaz"];
 function debounceWrite(key, fn, ms = 500) { clearTimeout(pending.get(key)); pending.set(key, setTimeout(() => { pending.delete(key); fn(); }, ms)); }
 
+/* Visual 2 (demo): comemoração curta quando algo fica pronto (tarefa, atestado, termo, pagamento, pin, ocorrência, horário) */
+function comemorar(x, y, sel) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const b = document.createElement("div"); b.className = "festa"; b.style.left = x + "px"; b.style.top = y + "px";
+  const cores = ["#ff7a1a", "#46c486", "#f2c233", "#60a5fa", "#fff6ee"];
+  b.innerHTML = `<span class="festa-ok">${ico("check")}</span>` + Array.from({ length: 14 }, (_, i) => { const ang = i / 14 * Math.PI * 2 + Math.random() * .4, r = 38 + Math.random() * 34;
+    return `<i style="--dx:${(Math.cos(ang) * r).toFixed(0)}px;--dy:${(Math.sin(ang) * r).toFixed(0)}px;background:${cores[i % cores.length]};${i % 3 ? "" : "border-radius:2px;width:8px;height:4px;"}"></i>`; }).join("");
+  document.body.appendChild(b); setTimeout(() => b.remove(), 900);
+  try { navigator.vibrate && navigator.vibrate(12); } catch {}
+  if (sel) setTimeout(() => { const el = document.querySelector(sel); const alvo = el && (el.closest("tr, .pcard, .task, .li, .oc, .card, .row") || el); if (alvo) { alvo.classList.remove("feito-agora"); void alvo.offsetWidth; alvo.classList.add("feito-agora"); } }, 60);
+}
+document.addEventListener("click", e => {
+  if (!D2()) return;
+  const t = e.target.closest("button, a, [data-task], [data-cyc]"); if (!t) return;
+  const d = t.dataset, css = (k, v) => `[data-${k}="${CSS.escape(v)}"]`;
+  let ok = false, sel = "";
+  if (d.task) { const tk = S.T.find(x => x.id === d.task); ok = tk && tk.status === "andamento"; sel = css("task", d.task); }
+  else if (d.cyc && d.id) { const p = S.P.find(x => x.id === d.id); if (p) { const l = (d.cyc === "atestado" ? ATESTADO : TERMO).filter(o => o.v !== "nao"), i = l.findIndex(o => o.v === p[d.cyc]), nx = l[(i + 1) % l.length]; ok = nx.c === "ok" && (l[i] || {}).c !== "ok"; sel = `[data-cyc="${d.cyc}"][data-id="${CSS.escape(d.id)}"]`; } }
+  else if (d.tog && d.id) { const p = S.P.find(x => x.id === d.id); ok = p && !p[d.tog]; sel = `[data-tog="${d.tog}"][data-id="${CSS.escape(d.id)}"]`; }
+  else if (d.pagOk) { ok = true; }
+  else if (d.pinOk) { ok = true; sel = css("pin-desfaz", d.pinOk); }
+  else if (d.cronoFim) { ok = true; }
+  else if (d.ocResolver) { const o = ocorrencias().find(x => x.id === d.ocResolver); ok = o && o.status !== "resolvida"; sel = css("oc-resolver", d.ocResolver); }
+  if (!ok) return;
+  const r = t.getBoundingClientRect(); comemorar(r.left + r.width / 2, r.top + r.height / 2, sel);
+}, true);
 document.addEventListener("click", e => {
   const cob = e.target.closest("a[data-cobrar]");
   if (cob) { const p = S.P.find(x => x.id === cob.dataset.cobrar); if (p) registrarCobranca(p); return; }
@@ -3910,6 +4026,8 @@ document.addEventListener("click", e => {
   if (d.act === "nfc-ler") { lerNfc(); return; }
   if (d.act === "nfc-seq") { if (podeEditar()) nfcSequencia(); return; }
   if (d.act === "nfc-codigo") { if (podeEditar()) codigoForm(); return; }
+  if (d.gAba) { S.gAba = d.gAba; render(); return; }
+  if (d.gOff) { S.gOff = { ...(S.gOff || {}), [d.gOff]: !(S.gOff || {})[d.gOff] }; render(); return; }
   if (d.act === "guia-ok") { store.set("adm3-guia-visto", "1"); render(); return; }
   if (d.act === "pt-responder") { posTopForm(); return; }
   if (d.act === "pt-licoes") { licoesForm(); return; }
