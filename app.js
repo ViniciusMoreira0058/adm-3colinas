@@ -2300,12 +2300,12 @@ function vFinanceiro() {
   return `
   <div class="head"><div><h2>Financeiro</h2><p>Saídas e entradas do TOP com a foto do recibo. No fim sai a prestação de contas em PDF.</p></div>
     <div class="actions">${ed ? `<button class="btn primary" type="button" data-fin="">${ico("plus")} Lançar</button>` : ""}${VENDAS() && ed ? `<label class="btn">${ico("upload")} Importar vendas<input type="file" accept=".xlsx,.xls,.csv" id="vendasArq" hidden></label>` : ""}<button class="btn" type="button" data-act="fin-pdf">${ico("upload")} Prestação de contas</button></div></div>
-  <div class="kpis ${TAXA_GLOBAL() && VR.coprod ? "kpis-5" : ""}">
+  <div class="kpis">
     <button type="button" class="kpi kpi-btn" data-fin-det="saidas"><span class="lbl">Saídas</span><span class="val num" style="font-size:24px">${brl(sg)}</span><span class="sub">${g.length} lançamento(s)${feqAprovados().length ? ` · ${feqAprovados().length} das equipes` : ""}</span></button>
     <button type="button" class="kpi kpi-btn" data-fin-det="entradas"><span class="lbl">Entradas</span><span class="val num" style="font-size:24px">${brl(se)}</span><span class="sub">${vl ? `vendas ${brl(vl)} + doações` : "doações e repasses"}</span></button>
     ${TAXA_GLOBAL() ? `<button type="button" class="kpi kpi-btn ${se - sg < 0 ? "alert" : "lucro"}" data-fin-det="saldo"><span class="lbl">${se - sg < 0 ? "Faltando no TOP" : "Sobrando no TOP"}</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">${se ? `lucro de ${pct(Math.max(0, se - sg), se)}% das entradas` : "entradas menos saídas"}</span></button>`
       : `<button type="button" class="kpi kpi-btn ${se - sg < 0 ? "alert" : ""}" data-fin-det="saldo"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos saídas</span></button>`}
-    ${TAXA_GLOBAL() && VR.coprod ? `<button type="button" class="kpi kpi-btn" data-fin-det="v:coprod"><span class="lbl">Taxa Legendários Global</span><span class="val num" style="font-size:24px">${brl(VR.coprod)}</span><span class="sub">${pct(VR.coprod, VR.bruto)}% do vendido</span></button>` : ""}
+
     <button type="button" class="kpi kpi-btn ${totOrc && sg > totOrc ? "alert" : ""}" data-fin-det="orc"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></button>
   </div>
   <section class="panel"><h3>Por área ${S.isOwner ? `<button class="linkbtn" type="button" data-act="fin-orc">orçamento ›</button>` : ""}</h3>
@@ -2351,6 +2351,7 @@ function finDetalhe(key) {
     titulo = "Parcelas a vencer"; const porTx = {}; ap.filter(x => /^\d+x\d+$/.test(x.parc || "")).forEach(x => (porTx[x.tx] = porTx[x.tx] || []).push(x));
     L = Object.values(porTx).map(A => { const n = Math.max(...A.map(x => +x.parc.split("x")[1])), falta = n - A.length, u = A[A.length - 1]; return falta > 0 ? { d: u.data, t: u.nome || "Comprador", s: `${u.oferta} · pagou ${A.length} de ${n} · faltam ${falta}`, v: falta * (+u.liq || 0), sn: 1 } : null; }).filter(Boolean);
   }
+  else if (key === "v:cort") { titulo = "Cortesias"; L = vend(ap.filter(x => x.tipo === "cortesia")); nota = "Ingressos gratuitos (prêmios, sorteios, convidados)."; }
   else if (key === "v:canc") { titulo = "Canceladas e estornadas"; L = VL.filter(x => x.stat === "cancelado" || x.stat === "estornado").map(x => ({ ...vend([x])[0], v: +x.pend || +x.bruto || 0, sn: 0 })); nota = "Não entram no Financeiro."; }
   if (campo === "bruto") L.forEach(x => x.v = x.bruto);
   L.sort((a, b) => (b.d || "").localeCompare(a.d || "") || b.v - a.v);
@@ -2530,13 +2531,15 @@ function vendasPainel(ed) {
   const TIPO = { participante: "Senderistas", legendario: "Legendários servidores", cortesia: "Cortesias" };
   return `<section class="panel vend"><h3>Vendas do TOP <small>TicketAndGo</small></h3>
     <p class="hint" style="margin:0 0 10px">Importado ${D.importadoEm ? new Date(D.importadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}${D.por ? " por " + esc(D.por) : ""} · ${V.linhas} linha(s) da planilha.</p>
-    <div class="kpis kpis-3 vend-cards">
+    <div class="kpis vend-cards">
       ${[["v:vendido", "Vendido", brl(V.bruto), `${V.nAp} venda(s) aprovada(s)`, ""],
+        ["v:coprod", "Taxa Legendários Global", brl(V.coprod), V.bruto ? pct(V.coprod, V.bruto) + "% do vendido" : "comissão do coprodutor", ""],
         ["v:liq", "Fica com a base", brl(V.liq), "entra no Financeiro", "lucro"],
         ["v:repassado", "Já repassado", brl(V.repassado), `${brl(V.aReceber)} a liberar`, ""],
         ["v:aberto", "Boletos em aberto", String(V.aberto), V.aberto ? brl(V.abertoV) + " para pagar" : "nenhum", V.aberto ? "alert" : ""],
         ["v:parc", "Parcelas a vencer", brl(V.parcFut), V.parcN ? V.parcN + " parcela(s) do parcelamento" : "nenhuma", ""],
-        ["v:canc", "Canceladas / estornadas", String(V.canc + V.est), `${V.canc} cancelada(s) · ${V.est} estorno(s)`, ""]]
+        ["v:canc", "Canceladas / estornadas", String(V.canc + V.est), `${V.canc} cancelada(s) · ${V.est} estorno(s)`, ""],
+        ["v:cort", "Cortesias", String(V.cortesias), "ingressos gratuitos", ""]]
         .map(([k, l, v, sub, cl]) => `<button type="button" class="kpi kpi-btn ${cl}" data-fin-det="${k}"><span class="lbl">${l}</span><span class="val num" style="font-size:24px">${v}</span><span class="sub">${sub}</span></button>`).join("")}
     </div>
     <div class="vend-grid">
