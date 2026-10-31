@@ -1807,3 +1807,16 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
   const fin = D.find(x => x.col === "config" && x.id === "fin-top1922"); if (fin) fin.data.itens = fin.data.itens.filter(i => !/inscri/i.test(i.desc));   // as inscrições agora vêm das vendas
   D.push({ col: "config", id: "vendas-top1922", data: { top: "top1922", linhas: L, importadoEm: new Date(Date.now() - 36e5).toISOString(), por: "Vinicius Moreira", arquivo: "Relatorio_de_vendas_TicketAndGo.xlsx" } });
 })();
+// CONTAS A PAGAR: forma de pagamento, parcelas e vencimentos em algumas saídas fictícias
+(function () {
+  const D = window.ADM_DEMO.docs, fin = D.find(x => x.col === "config" && x.id === "fin-top1922"); if (!fin) return;
+  const dia = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const mes = (iso, n) => { const d = new Date(iso + "T12:00"); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 10); };
+  const it = t => fin.data.itens.find(i => i.desc.startsWith(t)); let x;
+  if ((x = it("Compra no atacado"))) Object.assign(x, { pag: "Cartão de crédito", fornecedor: "Atacadão Franca", sit: "parcelado",
+    parcelas: [1, 2, 3].map(n => ({ n, de: 3, venc: mes(dia(-20), n - 1), valor: n === 3 ? 793.5 : 793.5, pago: n === 1, ...(n === 1 ? { pagoEm: new Date().toISOString(), pagoPor: "Vinicius Moreira" } : {}) })) });
+  if ((x = it("Lonas e cordas"))) Object.assign(x, { pag: "Boleto", fornecedor: "Casa do Campo", sit: "apagar", parcelas: [{ n: 1, de: 1, venc: dia(3), valor: 540, pago: false }] });
+  if ((x = it("Pulseiras numeradas"))) Object.assign(x, { pag: "Boleto", fornecedor: "Gráfica Rápida", sit: "apagar", parcelas: [{ n: 1, de: 1, venc: dia(-2), valor: 185, pago: false }] });
+  if ((x = it("40 kg de gelo"))) Object.assign(x, { pag: "Dinheiro", sit: "pago", parcelas: [] });
+  if ((x = it("Combustível"))) Object.assign(x, { pag: "Cartão de débito", sit: "pago", parcelas: [] });
+})();

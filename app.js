@@ -2312,9 +2312,10 @@ function vFinanceiro() {
     <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<button type="button" class="fin-a" data-fin-det="${esc("area:" + a)}"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></button>`; }).join("") || `<div class="empty">Nenhuma saída ainda.</div>`}</div></section>
   ${VENDAS() ? vendasPainel(ed) : ""}
   ${COORD() ? feqPainel(ed) : ""}
+  ${CONTAS() ? contasPainel(ed) : ""}
   <section class="panel"><h3>Lançamentos <small>${I.length}</small></h3><div class="cel-lista">${I.map(i => `<div class="cel-li ${i.tipo === "entrada" ? "guardado" : ""}">
     ${i.foto || i.fotoPath ? `<button type="button" class="cel-foto" data-fin-foto="${esc(i.id)}" aria-label="Ver recibo">${celFotoSrc(i) ? `<img src="${esc(celFotoSrc(i))}" alt="">` : "🧾"}</button>` : `<span class="cel-foto vazia">${i.tipo === "entrada" ? "＋" : "🧾"}</span>`}
-    <button type="button" class="cel-info" ${ed ? `data-fin="${esc(i.id)}"` : "disabled"}><b>${esc(i.desc)}</b><small>${esc(i.area || "")} · ${i.data ? new Date(i.data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""} · ${esc(i.por || "")}</small></button>
+    <button type="button" class="cel-info" ${ed ? `data-fin="${esc(i.id)}"` : "disabled"}><b>${esc(i.desc)}</b><small>${esc(i.area || "")} · ${i.data ? new Date(i.data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""} · ${esc(i.por || "")}${CONTAS() && i.pag ? " · " + esc(i.pag) : ""}</small>${CONTAS() ? contaChip(i) : ""}</button>
     <b class="num fin-v ${i.tipo === "entrada" ? "ent" : ""}">${i.tipo === "entrada" ? "+" : "−"} ${brl(i.valor)}</b></div>`).join("") || `<div class="empty">Toque em Lançar para registrar a primeira saída.</div>`}</div></section>`;
 }
 /* Detalhe de um card do Financeiro: todas as entradas ou saídas que formam aquele número */
@@ -2369,8 +2370,9 @@ function finForm(id) {
     <div class="form">
       <div class="field full"><label for="f-fd">Descrição</label><input id="f-fd" name="desc" value="${esc(it.desc || "")}" placeholder="ex.: 40 kg de gelo, combustível da van" required></div>
       <div class="field"><label for="f-fv">Valor (R$)</label><input id="f-fv" name="valor" inputmode="decimal" value="${it.valor != null ? String(it.valor).replace(".", ",") : ""}" required></div>
-      <div class="field"><label for="f-fdt">Data</label><input id="f-fdt" name="data" type="date" value="${esc(it.data || "")}"></div>
+      <div class="field"><label for="f-fdt">${CONTAS() ? "Data da compra" : "Data"}</label><input id="f-fdt" name="data" type="date" value="${esc(it.data || "")}"></div>
       <div class="field full"><label for="f-fa">Área</label><select id="f-fa" name="area">${FIN_AREAS.map(a => `<option ${it.area === a ? "selected" : ""}>${a}</option>`).join("")}</select></div>
+      ${CONTAS() ? contaCampos(it) : ""}
       <div class="field full"><span class="lab">Recibo / nota</span><div class="cel-acoes" style="margin:0"><label class="btn">📷 ${foto ? "Trocar foto" : "Tirar foto do recibo"}<input type="file" accept="image/*" capture="environment" id="finFoto" hidden></label></div>
         <img id="finPrev" class="cel-grande" src="${esc(foto)}" alt="" ${foto ? "" : "hidden"}></div>
     </div>
@@ -2378,10 +2380,76 @@ function finForm(id) {
     const valor = Number(String(fd.get("valor") || "").replace(/\./g, "").replace(",", ".")); if (!(valor > 0)) { toast("Confira o valor."); return; }
     const arq = finFotoArq; closeModal();
     (async () => { const f = arq ? await fotoGuardar(arq, `financeiro/${curTopId()}/recibo`) : { foto: it.foto || "", fotoPath: it.fotoPath || "" };
-      const novo = { ...it, id: it.id || Date.now().toString(36), tipo: fd.get("tipo") || "gasto", desc: String(fd.get("desc") || "").trim(), valor, data: fd.get("data") || hojeISO(), area: fd.get("area"), ...f, por: it.por || ME.adm || "", em: it.em || agoraISO() };
+      const novo = { ...it, id: it.id || Date.now().toString(36), tipo: fd.get("tipo") || "gasto", desc: String(fd.get("desc") || "").trim(), valor, data: fd.get("data") || hojeISO(), area: fd.get("area"), ...f, por: it.por || ME.adm || "", em: it.em || agoraISO(),
+        ...(CONTAS() ? contaLer(fd, valor, it) : {}) };
       finSalvar(D => ({ itens: [...(D.itens || []).filter(x => x.id !== novo.id), novo] }), "Lançamento salvo"); })(); });
   $("#finFoto").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return; finFotoArq = fl; try { foto = await reduzirFoto(fl, 700); $("#finPrev").src = foto; $("#finPrev").hidden = false; } catch { toast("Não consegui abrir a foto."); } });
   const d = $("#finDel"); if (d) d.onclick = () => { if (!confirm("Excluir este lançamento?")) return; closeModal(); finSalvar(D => ({ itens: (D.itens || []).filter(x => x.id !== it.id) }), "Excluído"); };
+  if (CONTAS()) contaLigar();
+}
+/* ---------- Contas a pagar (demo): forma de pagamento, pago ou a pagar, vencimento e parcelas de cada saída ----------
+   no item: pag, fornecedor, sit (pago|apagar), parcelas:[{n,de,venc,valor,pago,pagoEm,pagoPor}] (vazio = pago à vista) */
+const CONTAS = () => DEMO;
+const CONTA_PAG = ["Pix", "Dinheiro", "Cartão de débito", "Cartão de crédito", "Boleto", "Transferência"];
+const somaMes = (iso, n) => { const d = new Date(iso + "T12:00"), dia = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n); d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); return d.toISOString().slice(0, 10); };
+function contaCampos(it) {
+  const P = it.parcelas || [], parc = P.length > 1, sit = it.sit || (P.length ? "apagar" : "pago");
+  return `<div class="field full conta-box" id="contaBox" ${it.tipo === "entrada" ? "hidden" : ""}>
+    <div class="form" style="padding:0">
+      <div class="field"><label for="f-cpag">Forma de pagamento</label><select id="f-cpag" name="pag">${CONTA_PAG.map(x => `<option ${it.pag === x ? "selected" : ""}>${x}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-cfor">Fornecedor / loja</label><input id="f-cfor" name="fornecedor" value="${esc(it.fornecedor || "")}" placeholder="opcional"></div>
+      <div class="field full" id="cxSit" ${parc ? "hidden" : ""}><span class="lab">Situação</span><div class="seg lem-quando conta-seg">${[["pago", "Já pago"], ["apagar", "A pagar (vai vencer)"]].map(([v, l]) => `<label><input type="radio" name="sit" value="${v}" ${sit === v ? "checked" : ""}> ${l}</label>`).join("")}</div></div>
+      <div class="field full cel-motivos"><label><input type="checkbox" name="parcelado" id="f-cparc" ${parc ? "checked" : ""}> Parcelado</label></div>
+      <div class="field" id="cxN" ${parc ? "" : "hidden"}><label for="f-cn">Em quantas vezes</label><select id="f-cn" name="nparc">${Array.from({ length: 23 }, (_, i) => i + 2).map(n => `<option value="${n}" ${P.length === n ? "selected" : ""}>${n}x</option>`).join("")}</select></div>
+      <div class="field" id="cxV"><label for="f-cv" id="cxVl">${parc ? "1º vencimento" : "Vencimento"}</label><input id="f-cv" name="venc" type="date" value="${esc((P[0] || {}).venc || somaDias(hojeISO(), 30))}"></div>
+      <div class="field full cel-motivos" id="cxP1" ${parc ? "" : "hidden"}><label><input type="checkbox" name="p1pago" ${parc && P[0] && P[0].pago ? "checked" : ""}> A 1ª parcela já foi paga</label></div>
+      <p class="hint field full" id="cxRes" style="margin:0"></p>
+    </div></div>`;
+}
+function contaLigar() {
+  const f = $("#mform"); if (!f || !$("#contaBox")) return;
+  const sync = () => {
+    const tipo = (f.querySelector('[name="tipo"]:checked') || {}).value, sit = (f.querySelector('[name="sit"]:checked') || {}).value, parc = $("#f-cparc").checked;
+    $("#contaBox").hidden = tipo === "entrada";
+    $("#cxN").hidden = !parc; $("#cxSit").hidden = parc; $("#cxP1").hidden = !parc; $("#cxV").hidden = !parc && sit === "pago"; $("#cxVl").textContent = parc ? "1º vencimento" : "Vencimento";
+    const v = Number(String($("#f-fv").value || "").replace(/\./g, "").replace(",", ".")) || 0, n = +$("#f-cn").value || 2;
+    $("#cxRes").textContent = parc && v ? `${n}x de ${brl(v / n)}, todo mês a partir de ${$("#f-cv").value ? new Date($("#f-cv").value + "T12:00").toLocaleDateString("pt-BR") : "—"}.` : !parc && sit === "apagar" && v ? `${brl(v)} para pagar até ${$("#f-cv").value ? new Date($("#f-cv").value + "T12:00").toLocaleDateString("pt-BR") : "—"}.` : "";
+  };
+  f.addEventListener("change", sync); f.addEventListener("input", sync); sync();
+}
+function contaLer(fd, valor, it) {
+  if ((fd.get("tipo") || "gasto") === "entrada") return { pag: "", fornecedor: "", sit: "", parcelas: [] };
+  const parc = fd.get("parcelado") === "on", sit = fd.get("sit") || "pago", venc = fd.get("venc") || somaDias(hojeISO(), 30), ant = it.parcelas || [];
+  const base = { pag: fd.get("pag") || "", fornecedor: String(fd.get("fornecedor") || "").trim() };
+  if (parc) {
+    const n = +fd.get("nparc") || 2, cada = Math.round(valor / n * 100) / 100;
+    const parcelas = Array.from({ length: n }, (_, i) => { const a = ant[i] || {}; return { n: i + 1, de: n, venc: somaMes(venc, i), valor: i === n - 1 ? Math.round((valor - cada * (n - 1)) * 100) / 100 : cada,
+      pago: i === 0 ? fd.get("p1pago") === "on" : !!a.pago, ...(a.pago || (i === 0 && fd.get("p1pago") === "on") ? { pagoEm: a.pagoEm || agoraISO(), pagoPor: a.pagoPor || ME.adm || "" } : {}) }; });
+    return { ...base, sit: "parcelado", parcelas };
+  }
+  if (sit === "apagar") { const a = ant.length === 1 ? ant[0] : {}; return { ...base, sit, parcelas: [{ n: 1, de: 1, venc, valor, pago: !!a.pago, ...(a.pago ? { pagoEm: a.pagoEm, pagoPor: a.pagoPor } : {}) }] }; }
+  return { ...base, sit: "pago", parcelas: [] };
+}
+// todas as parcelas em aberto, da mais atrasada para a mais distante
+const contasAbertas = () => (finDoc().itens || []).filter(i => i.tipo !== "entrada").flatMap(i => (i.parcelas || []).filter(p => !p.pago).map(p => ({ ...p, item: i })))
+  .sort((a, b) => (a.venc || "").localeCompare(b.venc || ""));
+const contaChip = i => { const P = i.parcelas || []; if (!P.length) return ""; const ab = P.filter(p => !p.pago), prox = ab[0], hj = hojeISO();
+  if (!ab.length) return `<span class="chip ok">${P.length > 1 ? P.length + "x pagas" : "Paga"}</span>`;
+  const atras = prox.venc < hj, dt = new Date(prox.venc + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  return `<span class="chip ${atras ? "bad" : prox.venc <= somaDias(hj, 7) ? "wait" : "sent"}">${P.length > 1 ? `${P.length - ab.length}/${P.length} pagas · ` : ""}${atras ? "venceu" : "vence"} ${dt}</span>`; };
+function contasPainel(ed) {
+  const A = contasAbertas(); if (!A.length) return "";
+  const hj = hojeISO(), atras = A.filter(p => p.venc < hj), semana = A.filter(p => p.venc >= hj && p.venc <= somaDias(hj, 7)), tot = A.reduce((s, p) => s + (+p.valor || 0), 0);
+  const dd = d => new Date(d + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return `<section class="panel"><h3>Contas a pagar <small>${A.length}</small></h3>
+    <p class="hint" style="margin:0 0 8px">${brl(tot)} em aberto${atras.length ? ` · <b class="bad-t">${atras.length} vencida(s)</b>` : ""}${semana.length ? ` · ${semana.length} vence(m) em 7 dias` : ""}.</p>
+    <div class="list">${A.slice(0, 12).map(p => `<div class="li conta-li ${p.venc < hj ? "atras" : ""}"><span class="grow"><b>${esc(p.item.desc)}</b>${p.de > 1 ? ` <span class="tag">${p.n}/${p.de}</span>` : ""}<br><span class="hint">${p.venc < hj ? "Venceu" : "Vence"} ${dd(p.venc)}${p.item.pag ? " · " + esc(p.item.pag) : ""}${p.item.fornecedor ? " · " + esc(p.item.fornecedor) : ""}</span></span>
+      <b class="num fin-v">${brl(p.valor)}</b>${ed ? `<button class="btn sm" type="button" data-conta-paga="${esc(p.item.id + "|" + p.n)}">${ico("check")} Paga</button>` : ""}</div>`).join("")}</div>
+    ${A.length > 12 ? `<p class="hint">e mais ${A.length - 12}. Toque no card Saídas para ver tudo.</p>` : ""}</section>`;
+}
+function contaPagar(ref) {
+  const [id, n] = ref.split("|");
+  finSalvar(D => ({ itens: (D.itens || []).map(i => i.id !== id ? i : { ...i, parcelas: (i.parcelas || []).map(p => p.n === +n ? { ...p, pago: true, pagoEm: agoraISO(), pagoPor: ME.adm || "" } : p) }) }), "Marcada como paga");
 }
 function finOrcForm() {
   const o = finDoc().orc || {};
@@ -5240,6 +5308,7 @@ document.addEventListener("click", e => {
   if (d.act === "fin-orc") { finOrcForm(); return; }
   if (d.act === "fin-pdf") { finPdf(); return; }
   if (d.finDet) { finDetalhe(d.finDet); return; }
+  if (d.contaPaga) { if (podeEditar()) contaPagar(d.contaPaga); return; }
   if (d.gasto != null && t.matches("[data-gasto]")) { gastoForm(d.gasto); return; }
   if (d.feqFoto) { const [doc, id] = d.feqFoto.split("|"), i = ((cfgDe(doc) || {}).itens || []).find(x => x.id === id); if (i) modal(`<h3>${esc(i.desc)}</h3><img class="cel-grande" src="${esc(celFotoSrc(i))}" alt="Comprovante"><div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal()); return; }
   if (d.feq) { const [doc, id, acao] = d.feq.split("|"); feqDecidir(doc, id, acao); return; }
