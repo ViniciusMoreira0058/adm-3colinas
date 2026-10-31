@@ -1065,6 +1065,16 @@ button.fin-a { background: none; border: 0; padding: 4px 0; border-radius: 8px; 
 .fin-det .li { align-items: center; }
 .fin-det .fin-v { white-space: nowrap; }
 .fin-det .li .grow, .fin-det .li .grow * { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.taxa-gl { display: flex; flex-direction: column; gap: 10px; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.taxa-gl:hover { border-color: var(--accent); }
+.taxa-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.taxa-top > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.taxa-top .lbl { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.taxa-top b { font-size: 26px; }
+.taxa-top small, .taxa-of small { color: var(--muted); font-size: 13px; }
+.taxa-ver { color: var(--accent); font-weight: 700; font-size: 13px; }
+.taxa-of { display: flex; flex-wrap: wrap; gap: 8px; }
+.taxa-of > span { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; }
 /* TOP COMPLETO (demo) */
 .chk-fam{flex:none;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);font-weight:800;font-size:14px}
 .chk-topo{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}

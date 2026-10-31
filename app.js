@@ -2306,6 +2306,7 @@ function vFinanceiro() {
     <button type="button" class="kpi kpi-btn ${se - sg < 0 ? "alert" : ""}" data-fin-det="saldo"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos saídas</span></button>
     <button type="button" class="kpi kpi-btn ${totOrc && sg > totOrc ? "alert" : ""}" data-fin-det="orc"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></button>
   </div>
+  ${TAXA_GLOBAL() ? taxaGlobalCard() : ""}
   <section class="panel"><h3>Por área ${S.isOwner ? `<button class="linkbtn" type="button" data-act="fin-orc">orçamento ›</button>` : ""}</h3>
     <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<button type="button" class="fin-a" data-fin-det="${esc("area:" + a)}"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></button>`; }).join("") || `<div class="empty">Nenhuma saída ainda.</div>`}</div></section>
   ${VENDAS() ? vendasPainel(ed) : ""}
@@ -2339,7 +2340,7 @@ function finDetalhe(key) {
   else if (tipo === "of") { titulo = val; L = vend(ap.filter(x => x.oferta === val)); }
   else if (tipo === "rep") { const [d, id] = val.split("|"); titulo = `Repasse ${id} · ${dd(d)}`; L = vend(ap.filter(x => x.repasse === d && x.repId === id)); }
   else if (key === "v:vendido") { titulo = "Vendido (valor pago pelo comprador)"; L = vend(ap); campo = "bruto"; }
-  else if (key === "v:coprod") { titulo = "Comissão da Legendários Internacional"; L = ap.filter(x => +x.coprod).map(x => ({ ...vend([x])[0], v: +x.coprod })); }
+  else if (key === "v:coprod") { titulo = "Taxa da Legendários Global"; nota = "Valor que a plataforma já separa de cada venda para a Legendários Global (coprodutor)."; L = ap.filter(x => +x.coprod).map(x => ({ ...vend([x])[0], v: +x.coprod, sn: 0 })); }
   else if (key === "v:liq") { titulo = "Fica com a base"; L = vend(ap); }
   else if (key === "v:repassado") { titulo = "Já repassado"; L = vend(ap.filter(x => x.repasse)); }
   else if (key === "v:liberar") { titulo = "A liberar (aprovado, sem repasse)"; L = vend(ap.filter(x => !x.repasse)); }
@@ -2397,7 +2398,7 @@ async function finPdf() {
   const sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0) + V.liq, dt = d => d ? d.split("-").reverse().slice(0, 2).join("/") : "";
   const areas = [...new Set(g.map(i => i.area || "Outros"))].sort();
   return gerarListaPdf({ titulo: "Prestação de contas", arquivo: "Prestacao de contas " + topName(), orient: "portrait",
-    resumo: [["Saídas", brl(sg)], ["Entradas", brl(se)], ["Saldo", brl(se - sg)]], legenda: "Saídas por área, com a foto do recibo. Entradas no fim.",
+    resumo: [["Saídas", brl(sg)], ["Entradas", brl(se)], ["Saldo", brl(se - sg)], ...(TAXA_GLOBAL() && V.coprod ? [["Taxa Legendários Global", brl(V.coprod)]] : [])], legenda: "Saídas por área, com a foto do recibo. Entradas no fim.",
     colunas: [{ t: "Recibo", w: 20, foto: true }, { t: "Data", w: 14 }, { t: "Descrição", bold: true }, { t: "Por", w: 26, cinza: true }, { t: "Valor", w: 26, al: "right" }],
     secoes: [...areas.map(a => { const L = g.filter(i => (i.area || "Outros") === a); return { titulo: `${a} · ${brl(L.reduce((s, i) => s + (+i.valor || 0), 0))}`, linhas: L.map(i => [fotos[i.id] || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }; }),
       ...(V.liq ? [{ titulo: `Vendas do TOP (TicketAndGo) · ${brl(V.liq)} líquido`, linhas: V.ofertas.map(o => ["", "", `${o.oferta} (${o.n})`, `bruto ${brl(o.bruto)}`, brl(o.liq)]) }] : []),
@@ -2456,7 +2457,7 @@ function vendasPainel(ed) {
     <p class="hint" style="margin:0 0 10px">Importado ${D.importadoEm ? new Date(D.importadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}${D.por ? " por " + esc(D.por) : ""} · ${V.linhas} linha(s) da planilha.</p>
     <div class="vend-kpis">
       <button type="button" data-fin-det="v:vendido"><span>Vendido</span><b class="num">${brl(V.bruto)}</b><small>${V.nAp} venda(s) aprovada(s)</small></button>
-      <button type="button" data-fin-det="v:coprod"><span>Legendários Internacional</span><b class="num">${brl(V.coprod)}</b><small>comissão do coprodutor</small></button>
+      <button type="button" data-fin-det="v:coprod"><span>Taxa Legendários Global</span><b class="num">${brl(V.coprod)}</b><small>${V.bruto ? pct(V.coprod, V.bruto) + "% do vendido" : "comissão do coprodutor"}</small></button>
       <button type="button" data-fin-det="v:liq" class="ok"><span>Fica com a base</span><b class="num">${brl(V.liq)}</b><small>entra no Financeiro</small></button>
       <button type="button" data-fin-det="v:repassado"><span>Já repassado</span><b class="num">${brl(V.repassado)}</b><small>${brl(V.aReceber)} a liberar</small></button>
       <button type="button" data-fin-det="v:aberto" class="${V.aberto ? "wait" : ""}"><span>Boletos em aberto</span><b class="num">${V.aberto}</b><small>${V.aberto ? brl(V.abertoV) : "nenhum"}</small></button>
@@ -2477,6 +2478,18 @@ document.addEventListener("change", async e => {
     vendasImportForm(linhas, f.name);
   } catch (x) { toast("Não consegui ler a planilha. " + (x.message || "")); }
 });
+/* Taxa da Legendários Global (demo): a comissão do coprodutor que a TicketAndGo separa de cada venda */
+const TAXA_GLOBAL = () => DEMO;
+function taxaGlobalCard() {
+  if (!VENDAS()) return "";
+  const V = vendasResumo(); if (!V.coprod) return "";
+  const ap = (vendasDoc().linhas || []).filter(x => x.stat === "aprovado" && +x.coprod);
+  const of = [...new Set(ap.map(x => x.oferta))].map(o => { const A = ap.filter(x => x.oferta === o); return { o, n: new Set(A.map(x => x.tx)).size, v: A.reduce((s, x) => s + (+x.coprod || 0), 0), b: A.reduce((s, x) => s + (+x.bruto || 0), 0) }; }).sort((a, b) => b.v - a.v);
+  const rep = ap.filter(x => x.repasse).reduce((s, x) => s + (+x.coprod || 0), 0);
+  return `<button type="button" class="panel taxa-gl" data-fin-det="v:coprod">
+    <span class="taxa-top"><span><span class="lbl">Taxa repassada à Legendários Global</span><b class="num">${brl(V.coprod)}</b><small>${pct(V.coprod, V.bruto)}% de ${brl(V.bruto)} vendidos · ${brl(rep)} em vendas já liberadas pela plataforma</small></span><span class="taxa-ver">ver por venda ›</span></span>
+    <span class="taxa-of">${of.map(x => `<span><b>${esc(x.o)}</b><small>${x.n} venda(s) · ${brl(x.v)}${x.b ? ` (${pct(x.v, x.b)}%)` : ""}</small></span>`).join("")}</span></button>`;
+}
 function vendasImportForm(linhas, arquivo) {
   const L = vendasLer(linhas), V = vendasResumo(L), antes = vendasDoc().linhas || [], ja = new Set(antes.map(x => x.k));
   const novas = L.filter(x => !ja.has(x.k)).length, mudou = L.filter(x => { const a = antes.find(y => y.k === x.k); return a && (a.stat !== x.stat || a.repasse !== x.repasse); }).length;
@@ -2488,7 +2501,7 @@ function vendasImportForm(linhas, arquivo) {
       <div><b class="num">${novas}</b><span>linhas novas</span></div>
       <div><b class="num">${mudou}</b><span>mudaram de status ou repasse</span></div>
     </div>
-    <p class="hint">Vendido ${brl(V.bruto)} · Legendários Internacional ${brl(V.coprod)} · ${V.aberto} boleto(s) em aberto · ${V.canc} cancelada(s). A planilha nova substitui a anterior deste TOP.</p>
+    <p class="hint">Vendido ${brl(V.bruto)} · Taxa Legendários Global ${brl(V.coprod)} · ${V.aberto} boleto(s) em aberto · ${V.canc} cancelada(s). A planilha nova substitui a anterior deste TOP.</p>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${ico("upload")} Importar</button></div></div>`,
   () => { closeModal(); save(() => api.set("config", `vendas-${curTopId()}`, { top: curTopId(), linhas: L, importadoEm: agoraISO(), por: ME.adm || "", arquivo: arquivo || "" }), `Vendas importadas: ${brl(V.liq)} de entrada`).then(() => { if (S.view !== "financeiro") go("financeiro"); else render(); }); });
 }
