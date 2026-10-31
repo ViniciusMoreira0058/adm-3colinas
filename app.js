@@ -168,7 +168,7 @@ const VIEWS = [
   { id: "remedios", l: "Remédios", c: "Remédios", i: "pill", need: [] , all: true, menu: true },
   { id: "emergencia", l: "Emergência", c: "Emergência", i: "sos", need: [], all: true, menu: true },
   { id: "transporte", l: "Transporte", c: "Transporte", i: "bus", need: [], all: true, menu: true },
-  { id: "carros", l: "Carros", c: "Carros", i: "car", demo: true },   // todos os veículos que vão ao TOP (só na demo)
+  { id: "carros", l: "Carros", c: "Carros", i: "car" },   // todos os veículos que vão ao TOP
   { id: "financeiro", l: "Financeiro", c: "Financeiro", i: "money" },   // completo só para o dono, acesso total ou quem tiver a página marcada (coordenador vê só o da equipe)
   { id: "celulares", l: "Celulares", c: "Celulares", i: "phone", need: ["legendarios"] },   // celulares dos legendários no check-in
   { id: "campo", l: "Campo", c: "Campo", i: "group", need: ["participantes"], demo: true },   // chamada, mural, turnos e entregas com o TOP rodando
@@ -2291,22 +2291,29 @@ function trDistForm(vid) {
   $("#mform").addEventListener("change", c); c();
 }
 
-/* ---------- CARROS (demo, flag CARROS): todos os veículos que vão ao TOP ----------
+/* ---------- CARROS: todos os veículos que vão ao TOP (app real desde 31/10/2026) ----------
    config carros-<top> {token, lista:[{id,nome,tel,modelo,cor,placa,vagas,funcao,local,obs,foto,fotoPlaca,origem:"adm"|"link",conferido,em,chegou,saiu}]}
-   Link do proprietário: carro.html?t=<token>. Na demo o formulário guarda no próprio aparelho (localStorage "adm3-carros-link")
-   e a página Carros junta o que chegou por ali; no app real vai precisar de uma função no banco que aceite o envio pelo token. */
-const CARROS = () => DEMO;
+   Link do proprietário: carro.html?t=<token>&top=<top>. No app real o formulário chama a função adm_carro_enviar (supabase/carros.sql),
+   que grava cada carro em config/carlink-<top>-<id>; na demo guarda no próprio aparelho (localStorage "adm3-carros-link").
+   Fotos que a ADM tira vão para o Storage (fotoPath/placaPath); as que vêm pelo link ficam no carlink, sem copiar para a lista. */
+const CARROS = () => true;
 const CAR_FUNC = ["Apoio", "Ambulância", "Visitante", ...EQUIPES];
 const CAR_LS = "adm3-carros-link";
 const carId = () => `carros-${curTopId()}`;
 const carDoc = () => cfgDe(carId()) || {};
 const carDoLink = () => { try { return (JSON.parse(localStorage.getItem(CAR_LS) || "[]") || []).filter(c => c && c.id && (c.top || curTopId()) === curTopId()); } catch { return []; } };
-const carLista = () => { const D = carDoc(), L = D.lista || [], ids = new Set(L.map(c => c.id)), fora = new Set(D.apagados || []);
-  return [...L, ...(DEMO ? carDoLink().filter(c => !ids.has(c.id) && !fora.has(c.id)).map(c => ({ ...c, origem: "link" })) : [])]; };
+const carLinkDocs = () => DEMO ? carDoLink() : Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`carlink-${curTopId()}-`)).map(([k, d]) => ({ ...d, id: k }));
+const carLista = () => { const D = carDoc(), L = D.lista || [], ids = new Set(L.map(c => c.id)), fora = new Set(D.apagados || []), lk = carLinkDocs(), porId = Object.fromEntries(lk.map(c => [c.id, c]));
+  const comFoto = c => { const b = porId[c.id]; return b ? { ...c, foto: c.foto || c.fotoPath ? c.foto : b.foto || "", fotoPlaca: c.fotoPlaca || c.placaPath ? c.fotoPlaca : b.fotoPlaca || "" } : c; };
+  return [...L.map(comFoto), ...lk.filter(c => !ids.has(c.id) && !fora.has(c.id)).map(({ token, ...c }) => ({ ...c, origem: "link" }))]; };
+// na lista principal não repete a foto que já está no cadastro feito pelo link
+const carEnxuga = L => { const lk = Object.fromEntries(carLinkDocs().map(c => [c.id, c])); return L.map(({ token, top, ...c }) => { const b = lk[c.id]; if (b) { if (c.foto && c.foto === b.foto) c.foto = ""; if (c.fotoPlaca && c.fotoPlaca === b.fotoPlaca) c.fotoPlaca = ""; } return c; }); };
+const carImg = (c, placa) => celFotoSrc(placa ? { foto: c.fotoPlaca, fotoPath: c.placaPath } : { foto: c.foto, fotoPath: c.fotoPath });
 const carSt = c => c.saiu ? "saiu" : c.chegou ? "dentro" : "espera";
 const CAR_ST = { espera: ["Aguardando", "wait"], dentro: ["No TOP", "ok"], saiu: ["Saiu", ""] };
 const carPlaca = p => String(p || "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^([A-Z]{3})(\d[A-Z0-9]\d{2})$/, "$1-$2");
-const carSalvar = (fn, msg) => { const D = carDoc(); return save(() => api.set("config", carId(), { token: D.token || "", lista: carLista(), apagados: D.apagados || [], ...fn({ ...D, lista: carLista() }), top: curTopId() }), msg).then(render); };
+const carSalvar = (fn, msg) => { const D = carDoc(), out = { token: D.token || "", lista: carLista(), apagados: D.apagados || [], ...fn({ ...D, lista: carLista() }), top: curTopId() };
+  out.lista = carEnxuga(out.lista); return save(() => api.set("config", carId(), out), msg).then(render); };
 const carLink = () => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}carro.html?t=${encodeURIComponent(carDoc().token || "")}&top=${encodeURIComponent(curTopId())}${DEMO ? "&demo=1" : ""}`;
 const carTexto = () => `Olá! Aqui é ${ME.adm ? ME.adm.split(" ")[0] + ", " : ""}da equipe ADM do ${topName()}.\n\nVocê vai levar um veículo ao TOP. Cadastre ele pelo link abaixo (leva 2 minutos, com foto do carro e da placa):\n${carLink()}`;
 function vCarros() {
@@ -2329,7 +2336,7 @@ function vCarros() {
   <div class="car-grid">${V.map(c => { const st = carSt(c), [stl, stc] = CAR_ST[st], novo = c.origem === "link" && !c.conferido;
     return `<section class="panel car-card ${st}${novo ? " novo" : ""}">
       <button type="button" class="car-cab" data-car-ver="${esc(c.id)}">
-        <span class="car-foto">${c.foto ? `<img src="${esc(c.foto)}" alt="">` : ico("car")}</span>
+        <span class="car-foto">${carImg(c) ? `<img src="${esc(carImg(c))}" alt="">` : ico("car")}</span>
         <span class="grow"><b class="car-placa num">${esc(carPlaca(c.placa) || "SEM PLACA")}</b><span class="car-mod">${esc([c.modelo, c.cor].filter(Boolean).join(" · "))}</span>
           <small>${esc(c.nome || "")}${c.funcao ? " · " + esc(c.funcao) : ""}</small></span></button>
       <div class="car-chips"><span class="chip ${stc}">${stl}${c.chegou && !c.saiu ? " " + hmDe(c.chegou) : c.saiu ? " " + hmDe(c.saiu) : ""}</span>${novo ? `<span class="chip wait">Novo · pelo link</span>` : ""}${c.vagas ? `<span class="chip">${esc(c.vagas)} lugares</span>` : ""}${c.local ? `<span class="chip">${esc(c.local)}</span>` : ""}</div>
@@ -2340,7 +2347,7 @@ function vCarros() {
 function carVer(id) {
   const c = carLista().find(x => x.id === id); if (!c) return; const ed = podeEditar(), dt = s => s ? new Date(s).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
   modal(`<h3>${esc(carPlaca(c.placa) || "Carro")} <small class="hint">${esc([c.modelo, c.cor].filter(Boolean).join(" · "))}</small></h3>
-    <div class="car-fotos">${c.foto ? `<img src="${esc(c.foto)}" alt="Foto do carro">` : ""}${c.fotoPlaca ? `<img src="${esc(c.fotoPlaca)}" alt="Foto da placa">` : ""}</div>
+    <div class="car-fotos">${carImg(c) ? `<img src="${esc(carImg(c))}" alt="Foto do carro">` : ""}${carImg(c, 1) ? `<img src="${esc(carImg(c, 1))}" alt="Foto da placa">` : ""}</div>
     <div class="list">
       <div class="li"><span class="grow"><b>${esc(c.nome || "—")}</b><br><span class="hint">${esc(c.tel || "sem telefone")}</span></span>${c.tel ? `<a class="btn sm" href="tel:${esc(telLimpo(c.tel))}">Ligar</a>` : ""}${waNumber(c.tel) ? `<a class="btn sm" href="https://wa.me/${waNumber(c.tel)}" target="_blank" rel="noopener">${ico("wa")}</a>` : ""}</div>
       <div class="li"><span class="grow">Função</span><b>${esc(c.funcao || "—")}</b></div>
@@ -2352,7 +2359,7 @@ function carVer(id) {
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button>${ed ? `<button class="btn primary" type="button" data-car="${esc(c.id)}">${ico("edit")} Editar</button>` : ""}</div></div>`, () => closeModal());
 }
 function carForm(id) {
-  const c = carLista().find(x => x.id === id) || { funcao: "Apoio" }; let foto = c.foto || "", fotoPlaca = c.fotoPlaca || "";
+  const c = carLista().find(x => x.id === id) || { funcao: "Apoio" }, arq = {};
   const fotoCampo = (k, l, v) => `<div class="field"><span class="lab">${l}</span><label class="btn car-up"><img id="${k}Prev" src="${esc(v)}" ${v ? "" : "hidden"} alt=""><span>${ico("upload")} ${v ? "Trocar" : "Tirar foto"}</span><input type="file" accept="image/*" capture="environment" id="${k}Arq" hidden></label></div>`;
   modal(`<h3>${c.id ? "Editar carro" : "Cadastrar carro"}</h3><div class="form">
     <div class="field full"><label for="f-cn">Nome do dono ou motorista</label><input id="f-cn" name="nome" value="${esc(c.nome || "")}" list="carPessoas" required autocomplete="off"><datalist id="carPessoas">${S.P.filter(p => !cancelado(p)).map(p => `<option value="${esc(p.nome)}">`).join("")}</datalist></div>
@@ -2363,19 +2370,24 @@ function carForm(id) {
     <div class="field"><label for="f-cf">Função</label><select id="f-cf" name="funcao">${CAR_FUNC.map(x => `<option ${c.funcao === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
     <div class="field"><label for="f-cv">Lugares</label><input id="f-cv" name="vagas" type="number" min="1" max="60" value="${esc(c.vagas || "")}"></div>
     <div class="field full"><label for="f-cl">Onde fica estacionado</label><input id="f-cl" name="local" value="${esc(c.local || "")}" placeholder="ex.: estacionamento da base, portaria"></div>
-    ${fotoCampo("carF", "Foto do carro", foto)}${fotoCampo("carP", "Foto da placa", fotoPlaca)}
+    ${fotoCampo("carF", "Foto do carro", carImg(c))}${fotoCampo("carP", "Foto da placa", carImg(c, 1))}
     <div class="field full"><label for="f-co">Observação</label><input id="f-co" name="obs" value="${esc(c.obs || "")}"></div></div>
     <div class="modal-foot"><div>${c.id ? `<button class="btn danger" type="button" id="carDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
     const g = k => String(fd.get(k) || "").trim();
     if (!g("nome") || !g("placa")) { toast("Preencha o nome e a placa."); return; }
-    const novo = { ...c, id: c.id || "car" + Date.now().toString(36), nome: g("nome"), tel: g("tel"), placa: carPlaca(g("placa")), modelo: g("modelo"), cor: g("cor"), funcao: g("funcao"), vagas: +g("vagas") || "", local: g("local"), obs: g("obs"), foto, fotoPlaca, origem: c.origem || "adm", em: c.em || new Date().toISOString(), por: c.por || ME.adm || "" };
+    const novo = { ...c, id: c.id || "car" + Date.now().toString(36), nome: g("nome"), tel: g("tel"), placa: carPlaca(g("placa")), modelo: g("modelo"), cor: g("cor"), funcao: g("funcao"), vagas: +g("vagas") || "", local: g("local"), obs: g("obs"), origem: c.origem || "adm", em: c.em || new Date().toISOString(), por: c.por || ME.adm || "" };
     if (novo.origem === "link") novo.conferido = true;
-    closeModal(); carSalvar(D => ({ lista: [...D.lista.filter(x => x.id !== novo.id), novo] }), "Carro salvo");
+    closeModal(); (async () => {
+      if (arq.carF || arq.carP) toast("Salvando as fotos…");
+      try { if (arq.carF) { const f = await fotoGuardar(arq.carF, `carros/${curTopId()}/${novo.id}`); novo.foto = f.foto; novo.fotoPath = f.fotoPath; }
+        if (arq.carP) { const f = await fotoGuardar(arq.carP, `carros/${curTopId()}/${novo.id}-placa`); novo.fotoPlaca = f.foto; novo.placaPath = f.fotoPath; } } catch { toast("Não consegui salvar a foto."); }
+      carSalvar(D => ({ lista: [...D.lista.filter(x => x.id !== novo.id), novo] }), "Carro salvo"); })();
   });
-  [["carF", u => foto = u], ["carP", u => fotoPlaca = u]].forEach(([k, set]) => $("#" + k + "Arq").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return;
-    try { const u = await reduzirFoto(fl, 700); set(u); $("#" + k + "Prev").src = u; $("#" + k + "Prev").hidden = false; } catch { toast("Não consegui abrir a foto."); } }));
+  ["carF", "carP"].forEach(k => $("#" + k + "Arq").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return;
+    try { const u = await reduzirFoto(fl, 700); arq[k] = fl; $("#" + k + "Prev").src = u; $("#" + k + "Prev").hidden = false; } catch { toast("Não consegui abrir a foto."); } }));
   const d = $("#carDel"); if (d) d.onclick = () => { if (!confirm("Excluir o carro " + carPlaca(c.placa) + "?")) return; closeModal();
-    carSalvar(D => ({ lista: D.lista.filter(x => x.id !== c.id), apagados: [...(D.apagados || []), c.id] }), "Carro excluído"); };
+    carSalvar(D => ({ lista: D.lista.filter(x => x.id !== c.id), apagados: [...(D.apagados || []), c.id] }), "Carro excluído")
+      .then(() => { if (!DEMO && c.id.startsWith("carlink-")) api.remove("config", c.id).catch(() => {}); }); };
 }
 function carLinkForm() {
   const D = carDoc(); const abrir = () => {

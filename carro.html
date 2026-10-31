@@ -61,6 +61,7 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
 </form></main>
 <script>
 (function () {
+  const URL_SB = "https://jgoewqyfihdzpurlvaxe.supabase.co", KEY_SB = "sb_publishable_QBxqFv2T9W-4-XTj_OSVEA_d1olCthu";   // chave pública (anon): só consegue chamar adm_carro_enviar
   const $ = s => document.querySelector(s), f = $("#f"), q = new URLSearchParams(location.search), demo = q.has("demo"), token = q.get("t") || "", top = q.get("top") || "";
   $("#aviso").hidden = !demo;
   if (!token) { $("#semLink").hidden = false; f.hidden = true; return; }
@@ -80,7 +81,12 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
     const carro = { id: "lk" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), top, token, nome: v("nome"), tel: v("tel"), funcao: v("func"), placa: placa(v("placa")), modelo: v("mod"), cor: v("cor"), vagas: +v("vag") || "", obs: v("obs"), foto: fotos[1] || "", fotoPlaca: fotos[2] || "", origem: "link", em: new Date().toISOString() };
     const fim = () => { document.querySelector("main").innerHTML = `<div class="card ok"><b>✅</b><h1>Veículo cadastrado!</h1><p class="muted">Obrigado, ${carro.nome.split(" ")[0].replace(/[<>&]/g, "")}. A equipe ADM já recebeu o ${carro.modelo.replace(/[<>&]/g, "")} placa ${carro.placa}. Até o TOP!</p>${demo ? '<p class="demo" style="margin-top:16px">Demonstração: abra a página Carros neste aparelho para ver o cadastro.</p>' : ""}</div>`; scrollTo(0, 0); };
     if (demo) { try { const L = JSON.parse(localStorage.getItem("adm3-carros-link") || "[]"); L.push(carro); localStorage.setItem("adm3-carros-link", JSON.stringify(L)); } catch (x) { err.textContent = "Não consegui guardar neste aparelho (pouco espaço ou modo anônimo)."; err.hidden = false; return; } fim(); return; }
-    err.textContent = "O cadastro pelo link ainda está em teste. Fale com a equipe ADM."; err.hidden = false;
+    const bt = f.querySelector("button[type=submit]"); bt.disabled = true; bt.textContent = "Enviando…"; err.hidden = true;
+    const { token: _t, top: _p, id: _i, origem: _o, em: _e, ...dados } = carro;
+    fetch(URL_SB + "/rest/v1/rpc/adm_carro_enviar", { method: "POST", headers: { "Content-Type": "application/json", apikey: KEY_SB },
+      body: JSON.stringify({ p_top: top, p_token: token, p_carro: dados }) })
+      .then(async r => { if (r.ok) return fim(); let m = ""; try { m = (await r.json()).message || ""; } catch (x) {} throw new Error(m); })
+      .catch(x => { err.textContent = (x && x.message && !/fetch|network/i.test(x.message) ? x.message : "Não consegui enviar. Confira a internet e tente de novo."); err.hidden = false; bt.disabled = false; bt.textContent = "Enviar cadastro"; });
   });
 })();
 </script></body></html>
