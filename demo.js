@@ -1820,3 +1820,11 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
   if ((x = it("40 kg de gelo"))) Object.assign(x, { pag: "Dinheiro", sit: "pago", parcelas: [] });
   if ((x = it("Combustível"))) Object.assign(x, { pag: "Cartão de débito", sit: "pago", parcelas: [] });
 })();
+// saída de equipe aprovada que ainda vai vencer (boleto): aparece em Contas a pagar da ADM
+(function () {
+  const D = window.ADM_DEMO.docs, doc = D.find(x => x.col === "config" && x.id === "fingasto-top1922-m-coord"); if (!doc) return;
+  const dia = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  doc.data.itens.push({ id: "g5", desc: "Rádios comunicadores (2)", valor: 640, data: dia(-1), area: "Logística", pag: "Boleto", fornecedor: "Eletrônica Central", sit: "parcelado", reemb: false, obs: "",
+    foto: "", parcelas: [{ n: 1, de: 2, venc: dia(5), valor: 320, pago: false }, { n: 2, de: 2, venc: dia(35), valor: 320, pago: false }],
+    status: "aprovado", decPor: "Vinicius Moreira", decEm: new Date().toISOString(), por: "Fábio Henrique Alves", em: new Date(Date.now() - 864e5).toISOString() });
+})();

@@ -2406,13 +2406,13 @@ function contaCampos(it) {
       <p class="hint field full" id="cxRes" style="margin:0"></p>
     </div></div>`;
 }
-function contaLigar() {
+function contaLigar(valId = "f-fv") {
   const f = $("#mform"); if (!f || !$("#contaBox")) return;
   const sync = () => {
     const tipo = (f.querySelector('[name="tipo"]:checked') || {}).value, sit = (f.querySelector('[name="sit"]:checked') || {}).value, parc = $("#f-cparc").checked;
     $("#contaBox").hidden = tipo === "entrada";
     $("#cxN").hidden = !parc; $("#cxSit").hidden = parc; $("#cxP1").hidden = !parc; $("#cxV").hidden = !parc && sit === "pago"; $("#cxVl").textContent = parc ? "1º vencimento" : "Vencimento";
-    const v = Number(String($("#f-fv").value || "").replace(/\./g, "").replace(",", ".")) || 0, n = +$("#f-cn").value || 2;
+    const v = Number(String($("#" + valId).value || "").replace(/\./g, "").replace(",", ".")) || 0, n = +$("#f-cn").value || 2;
     $("#cxRes").textContent = parc && v ? `${n}x de ${brl(v / n)}, todo mês a partir de ${$("#f-cv").value ? new Date($("#f-cv").value + "T12:00").toLocaleDateString("pt-BR") : "—"}.` : !parc && sit === "apagar" && v ? `${brl(v)} para pagar até ${$("#f-cv").value ? new Date($("#f-cv").value + "T12:00").toLocaleDateString("pt-BR") : "—"}.` : "";
   };
   f.addEventListener("change", sync); f.addEventListener("input", sync); sync();
@@ -2431,7 +2431,7 @@ function contaLer(fd, valor, it) {
   return { ...base, sit: "pago", parcelas: [] };
 }
 // todas as parcelas em aberto, da mais atrasada para a mais distante
-const contasAbertas = () => (finDoc().itens || []).filter(i => i.tipo !== "entrada").flatMap(i => (i.parcelas || []).filter(p => !p.pago).map(p => ({ ...p, item: i })))
+const contasAbertas = () => [...(finDoc().itens || []).filter(i => i.tipo !== "entrada"), ...feqAprovados()].flatMap(i => (i.parcelas || []).filter(p => !p.pago).map(p => ({ ...p, item: i })))
   .sort((a, b) => (a.venc || "").localeCompare(b.venc || ""));
 const contaChip = i => { const P = i.parcelas || []; if (!P.length) return ""; const ab = P.filter(p => !p.pago), prox = ab[0], hj = hojeISO();
   if (!ab.length) return `<span class="chip ok">${P.length > 1 ? P.length + "x pagas" : "Paga"}</span>`;
@@ -2443,12 +2443,18 @@ function contasPainel(ed) {
   const dd = d => new Date(d + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
   return `<section class="panel"><h3>Contas a pagar <small>${A.length}</small></h3>
     <p class="hint" style="margin:0 0 8px">${brl(tot)} em aberto${atras.length ? ` · <b class="bad-t">${atras.length} vencida(s)</b>` : ""}${semana.length ? ` · ${semana.length} vence(m) em 7 dias` : ""}.</p>
-    <div class="list">${A.slice(0, 12).map(p => `<div class="li conta-li ${p.venc < hj ? "atras" : ""}"><span class="grow"><b>${esc(p.item.desc)}</b>${p.de > 1 ? ` <span class="tag">${p.n}/${p.de}</span>` : ""}<br><span class="hint">${p.venc < hj ? "Venceu" : "Vence"} ${dd(p.venc)}${p.item.pag ? " · " + esc(p.item.pag) : ""}${p.item.fornecedor ? " · " + esc(p.item.fornecedor) : ""}</span></span>
-      <b class="num fin-v">${brl(p.valor)}</b>${ed ? `<button class="btn sm" type="button" data-conta-paga="${esc(p.item.id + "|" + p.n)}">${ico("check")} Paga</button>` : ""}</div>`).join("")}</div>
+    <div class="list">${A.slice(0, 12).map(p => `<div class="li conta-li ${p.venc < hj ? "atras" : ""}"><span class="grow"><b>${esc(p.item.desc)}</b>${p.item.equipe ? ` <span class="tag">${esc(p.item.equipe)}</span>` : ""}${p.de > 1 ? ` <span class="tag">${p.n}/${p.de}</span>` : ""}<br><span class="hint">${p.venc < hj ? "Venceu" : "Vence"} ${dd(p.venc)}${p.item.pag ? " · " + esc(p.item.pag) : ""}${p.item.fornecedor ? " · " + esc(p.item.fornecedor) : ""}</span></span>
+      <b class="num fin-v">${brl(p.valor)}</b>${ed ? `<button class="btn sm" type="button" data-conta-paga="${esc((p.item.doc ? p.item.doc + "|" : "") + p.item.id + "|" + p.n)}">${ico("check")} Paga</button>` : ""}</div>`).join("")}</div>
     ${A.length > 12 ? `<p class="hint">e mais ${A.length - 12}. Toque no card Saídas para ver tudo.</p>` : ""}</section>`;
 }
 function contaPagar(ref) {
-  const [id, n] = ref.split("|");
+  const parts = ref.split("|");
+  if (parts.length === 3) {   // saída de equipe (documento do coordenador)
+    const [doc, id, n] = parts;
+    save(() => { const D = cfgDe(doc) || {}; return api.set("config", doc, { ...D, itens: (D.itens || []).map(i => i.id !== id ? i : { ...i, parcelas: (i.parcelas || []).map(p => p.n === +n ? { ...p, pago: true, pagoEm: agoraISO(), pagoPor: ME.adm || "" } : p) }) }); }, "Marcada como paga").then(render);
+    return;
+  }
+  const [id, n] = parts;
   finSalvar(D => ({ itens: (D.itens || []).map(i => i.id !== id ? i : { ...i, parcelas: (i.parcelas || []).map(p => p.n === +n ? { ...p, pago: true, pagoEm: agoraISO(), pagoPor: ME.adm || "" } : p) }) }), "Marcada como paga");
 }
 function finOrcForm() {
@@ -2585,7 +2591,7 @@ async function gastoSalvar(fn, msg) {   // o coordenador grava só o documento d
 const feqLinha = (i, acoes) => `<div class="cel-li feq ${i.status === "recusado" ? "nao" : i.status === "pendente" ? "" : "guardado"}">
     ${i.foto || i.fotoPath ? `<button type="button" class="cel-foto" data-feq-foto="${esc(i.doc + "|" + i.id)}" aria-label="Ver comprovante">${celFotoSrc(i) ? `<img src="${esc(celFotoSrc(i))}" alt="">` : "🧾"}</button>` : `<span class="cel-foto vazia">🧾</span>`}
     <div class="cel-info"><b>${esc(i.desc)}</b><small>${esc([i.equipe && "Equipe " + i.equipe, i.por, i.area, i.data && new Date(i.data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }), i.pag].filter(Boolean).join(" · "))}</small>
-      <span class="feq-st"><span class="chip ${FEQ_CHIP[i.status] || "wait"}">${FEQ_TXT[i.status] || "Aguardando aprovação"}</span>${i.reemb && i.status !== "reembolsado" && i.status !== "recusado" ? ` <span class="chip sent">Reembolsar${i.pix ? " · Pix " + esc(i.pix) : ""}</span>` : ""}</span>
+      <span class="feq-st"><span class="chip ${FEQ_CHIP[i.status] || "wait"}">${FEQ_TXT[i.status] || "Aguardando aprovação"}</span>${CONTAS() ? contaChip(i) : ""}${i.reemb && i.status !== "reembolsado" && i.status !== "recusado" ? ` <span class="chip sent">Reembolsar${i.pix ? " · Pix " + esc(i.pix) : ""}</span>` : ""}</span>
       ${i.obs ? `<small>${esc(i.obs)}</small>` : ""}${i.motivo && i.status === "recusado" ? `<small class="feq-mot">Motivo: ${esc(i.motivo)}</small>` : ""}
       ${acoes || ""}</div>
     <b class="num fin-v">${brl(i.valor)}</b></div>`;
@@ -2633,9 +2639,9 @@ function gastoForm(id) {
     <div class="form">
       <div class="field full"><label for="f-gd">O que foi comprado</label><input id="f-gd" name="desc" value="${esc(it.desc || "")}" placeholder="ex.: 6 pilhas para os rádios, lona" required></div>
       <div class="field"><label for="f-gv">Valor (R$)</label><input id="f-gv" name="valor" inputmode="decimal" value="${it.valor != null ? String(it.valor).replace(".", ",") : ""}" required></div>
-      <div class="field"><label for="f-gdt">Data</label><input id="f-gdt" name="data" type="date" value="${esc(it.data || "")}"></div>
+      <div class="field"><label for="f-gdt">${CONTAS() ? "Data da compra" : "Data"}</label><input id="f-gdt" name="data" type="date" value="${esc(it.data || "")}"></div>
       <div class="field"><label for="f-ga">Categoria</label><select id="f-ga" name="area">${FIN_AREAS.map(a => `<option ${it.area === a ? "selected" : ""}>${a}</option>`).join("")}</select></div>
-      <div class="field"><label for="f-gp">Como pagou</label><select id="f-gp" name="pag">${FEQ_PAG.map(a => `<option ${it.pag === a ? "selected" : ""}>${a}</option>`).join("")}</select></div>
+      ${CONTAS() ? contaCampos(it) : `<div class="field"><label for="f-gp">Como pagou</label><select id="f-gp" name="pag">${FEQ_PAG.map(a => `<option ${it.pag === a ? "selected" : ""}>${a}</option>`).join("")}</select></div>`}
       <div class="field full"><div class="cel-motivos"><label><input type="checkbox" name="reemb" id="f-gr" ${it.reemb ? "checked" : ""}> Paguei do meu bolso, preciso de reembolso</label></div></div>
       <div class="field full" id="gPix" ${it.reemb ? "" : "hidden"}><label for="f-gx">Chave Pix para o reembolso</label><input id="f-gx" name="pix" value="${esc(it.pix || "")}" autocomplete="off" placeholder="celular, e-mail ou chave aleatória"></div>
       <div class="field full"><label for="f-go">Observação</label><input id="f-go" name="obs" value="${esc(it.obs || "")}" placeholder="opcional"></div>
@@ -2651,10 +2657,11 @@ function gastoForm(id) {
     const reemb = fd.get("reemb") === "on", pix = String(fd.get("pix") || "").trim(); if (reemb && !pix) { err("Coloque a chave Pix para o reembolso."); return; }
     const arq = gastoFotoArq; closeModal();
     (async () => { const f = arq ? await fotoGuardar(arq, `gastos/${curTopId()}/${ME.id}/comprovante`) : { foto: it.foto || "", fotoPath: it.fotoPath || "" };
-      const novo = { ...it, id: it.id || Date.now().toString(36), desc, valor, data: fd.get("data") || hojeISO(), area: fd.get("area"), pag: fd.get("pag"), reemb, pix: reemb ? pix : "", obs: String(fd.get("obs") || "").trim(), ...f, status: "pendente", motivo: "", por: ME.adm || "", em: it.em || agoraISO() };
+      const novo = { ...it, id: it.id || Date.now().toString(36), desc, valor, data: fd.get("data") || hojeISO(), area: fd.get("area"), pag: fd.get("pag"), reemb, pix: reemb ? pix : "", obs: String(fd.get("obs") || "").trim(), ...f, ...(CONTAS() ? contaLer(fd, valor, it) : {}), status: "pendente", motivo: "", por: ME.adm || "", em: it.em || agoraISO() };
       gastoSalvar(L => [...L.filter(x => x.id !== novo.id), novo], it.id ? "Saída reenviada para a ADM" : "Saída enviada para a ADM"); })(); });
   $("#gFoto").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return; gastoFotoArq = fl; try { foto = await reduzirFoto(fl, 700); $("#gPrev").src = foto; $("#gPrev").hidden = false; } catch { toast("Não consegui abrir a foto."); } });
   $("#f-gr").addEventListener("change", e => { $("#gPix").hidden = !e.target.checked; });
+  if (CONTAS()) contaLigar("f-gv");
   const d = $("#gDel"); if (d) d.onclick = () => { if (!confirm("Excluir esta saída?")) return; closeModal(); gastoSalvar(L => L.filter(x => x.id !== it.id), "Saída excluída"); };
 }
 
