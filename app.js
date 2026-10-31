@@ -1926,9 +1926,10 @@ function vCelulares() {
     return `<div class="cel-li ${st}">
       ${c.foto || c.fotoPath ? `<button type="button" class="cel-foto" data-cel-ver="${esc(p.id)}" aria-label="Ver foto">${celFotoSrc(c) ? `<img src="${esc(celFotoSrc(c))}" alt="">` : "🖼"}</button>` : `<span class="cel-foto vazia">${st === "nao" ? "✕" : "📱"}</span>`}
       <button type="button" class="cel-info" ${ed ? `data-cel="${esc(p.id)}"` : "disabled"}><b>${esc(p.nome)}</b>
-        <small>${p.funcao ? esc(p.funcao) + " · " : ""}<span class="chip ${CEL_CHIP[st]}">${CEL_TXT[st]}</span>${c.em && st !== "falta" ? ` ${hmDe(st === "devolvido" ? c.devolvidoEm : c.em)}` : ""}${st === "nao" && c.motivo ? ` · ${esc(c.motivo)}` : ""}</small></button>
+        <small>${p.funcao ? esc(p.funcao) + " · " : ""}<span class="chip ${CEL_CHIP[st]}">${CEL_TXT[st]}</span>${c.em && st !== "falta" ? ` ${hmDe(st === "devolvido" ? c.devolvidoEm : c.em)}` : ""}${st === "nao" && c.motivo ? ` · ${esc(c.motivo)}` : ""}${c.qtd > 1 ? ` · ${c.qtd} aparelhos` : ""}${c.obs && st !== "nao" ? ` · ${esc(c.obs)}` : ""}</small></button>
       ${ed ? (st === "falta" ? `<label class="btn sm primary cel-cam">📷 Guardar<input type="file" accept="image/*" capture="environment" data-cel-foto="${esc(p.id)}" hidden></label><button class="btn sm" type="button" data-cel-nao="${esc(p.id)}">Não entregou</button>`
-        : st === "guardado" ? `<button class="btn sm" type="button" data-cel-dev="${esc(p.id)}">Devolver</button>` : "") : ""}</div>`; };
+        : st === "guardado" ? `<button class="btn sm" type="button" data-cel-dev="${esc(p.id)}">Devolver</button>` : "") : ""}
+      ${ed ? `<button class="icon-btn" type="button" data-cel-edit="${esc(p.id)}" aria-label="Editar" title="Editar">${ico("edit")}</button>` : ""}</div>`; };
   return `
   <div class="head"><div><h2>Celulares</h2><p>No check-in: guarde o celular, tire a foto do saquinho com o nome e pronto. Quem não entregar fica com o motivo. No fim do TOP, marque a devolução. Cada coordenador recebe o relatório da equipe dele.</p></div></div>
   <div class="kpis">
@@ -1982,12 +1983,42 @@ function celForm(p) {
       ${st !== "nao" ? `<button class="btn" type="button" id="celNao">Não entregou</button>` : `<button class="btn" type="button" id="celNao">Mudar motivo</button>`}
       ${st === "guardado" ? `<button class="btn" type="button" id="celDev">Devolvido</button>` : ""}
       ${st !== "falta" ? `<button class="btn ghost" type="button" id="celVolta">Voltar para "falta entregar"</button>` : ""}</div>
-    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
+    <div class="modal-foot"><span>${podeEditar() ? `<button class="btn" type="button" id="celEdit">${ico("edit")} Editar tudo</button>` : ""}</span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
   const on = (id, fn) => { const b = $("#" + id); if (b) b.onclick = fn; };
+  on("celEdit", () => { closeModal(); celEditar(p); });
   on("celSemFoto", () => { closeModal(); celSalvar(p, { status: "guardado", foto: "", fotoPath: "", em: new Date().toISOString(), por: ME.adm || "" }, "Celular guardado"); });
   on("celNao", () => { closeModal(); celNaoForm(p); });
   on("celDev", () => { closeModal(); celSalvar(p, { status: "devolvido", devolvidoEm: new Date().toISOString(), devolvidoPor: ME.adm || "" }, "Celular devolvido"); });
   on("celVolta", () => { closeModal(); celSalvar(p, { status: "falta", foto: "", fotoPath: "", motivo: "", obs: "", em: "", devolvidoEm: "" }, "Voltou para falta entregar"); });
+}
+// editar tudo de uma pessoa: situação, quantos aparelhos, motivo, observação, quem recebeu e horários
+function celEditar(p) {
+  const c = celDe(p), st = celSt(p), loc = iso => { if (!iso) return ""; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  const adms = [...new Set([...(S.equipe || []).map(e => e.nome), c.por, c.devolvidoPor, ME.adm].filter(Boolean))].sort();
+  modal(`<h3>Editar · ${esc(p.nome)}</h3>
+    <div class="form">
+      <div class="field"><label for="f-cs">Situação</label><select id="f-cs" name="status">${Object.entries(CEL_TXT).map(([k, l]) => `<option value="${k}" ${st === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-cq">Aparelhos guardados</label><input id="f-cq" name="qtd" type="number" min="0" max="5" value="${esc(c.qtd ?? 1)}"></div>
+      <div class="field full" data-cs="nao"><label for="f-cm">Motivo</label><select id="f-cm" name="motivo">${CEL_MOTIVOS.map(m => `<option ${c.motivo === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></div>
+      <div class="field full"><label for="f-cob">Observação</label><input id="f-cob" name="obs" value="${esc(c.obs || "")}" placeholder="ex.: 2 celulares (pessoal e trabalho), capinha azul"></div>
+      <div class="field" data-cs="guardado nao devolvido"><label for="f-cpor">Recebido por</label><input id="f-cpor" name="por" list="celAdms" value="${esc(c.por || "")}"></div>
+      <div class="field" data-cs="guardado nao devolvido"><label for="f-cem">Quando</label><input id="f-cem" name="em" type="datetime-local" value="${loc(c.em)}"></div>
+      <div class="field" data-cs="devolvido"><label for="f-cdp">Devolvido por</label><input id="f-cdp" name="devolvidoPor" list="celAdms" value="${esc(c.devolvidoPor || "")}"></div>
+      <div class="field" data-cs="devolvido"><label for="f-cde">Devolvido em</label><input id="f-cde" name="devolvidoEm" type="datetime-local" value="${loc(c.devolvidoEm)}"></div>
+      ${c.foto || c.fotoPath ? `<div class="field full cel-motivos"><label><input type="checkbox" name="semFoto"> Apagar a foto</label></div>` : ""}
+      <datalist id="celAdms">${adms.map(n => `<option value="${esc(n)}">`).join("")}</datalist>
+    </div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const s = fd.get("status"), iso = v => v ? new Date(v).toISOString() : "", agora = new Date().toISOString();
+    const dados = { status: s, qtd: Math.max(0, Math.min(5, Number(fd.get("qtd")) || 0)), obs: String(fd.get("obs") || "").trim(), motivo: s === "nao" ? fd.get("motivo") : "",
+      por: s === "falta" ? "" : String(fd.get("por") || "").trim() || ME.adm || "", em: s === "falta" ? "" : iso(fd.get("em")) || c.em || agora,
+      devolvidoPor: s === "devolvido" ? String(fd.get("devolvidoPor") || "").trim() || ME.adm || "" : "", devolvidoEm: s === "devolvido" ? iso(fd.get("devolvidoEm")) || c.devolvidoEm || agora : "",
+      editadoPor: ME.adm || "", editadoEm: agora };
+    if (fd.get("semFoto") || s === "falta" || s === "nao") { dados.foto = ""; dados.fotoPath = ""; }
+    closeModal(); celSalvar(p, dados, "Alterações salvas");
+  });
+  const sync = () => { const s = $("#f-cs").value; $("#mform").querySelectorAll("[data-cs]").forEach(el => { el.hidden = !el.dataset.cs.split(" ").includes(s); }); };
+  $("#f-cs").addEventListener("change", sync); sync();
 }
 async function celPdf(eq, wa) {
   const L = celLgs(), fotos = {};
@@ -1998,7 +2029,7 @@ async function celPdf(eq, wa) {
   const secoes = eqs.map(e => { const cd = celCoord(e);
     return { titulo: `${e}${cd ? " · coord. " + cd.nome : ""}`, linhas: L.filter(p => (p.equipe || "Sem equipe") === e).sort((a, b) => ordem[celSt(a)] - ordem[celSt(b)] || norm(a.nome).localeCompare(norm(b.nome))).map(p => { const c = celDe(p), st = celSt(p);
       return [fotos[p.id] || "", p.nome, p.funcao || "", CEL_TXT[st], st === "falta" ? "" : (c.em ? new Date(c.em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "") + (st === "devolvido" && c.devolvidoEm ? ` · devolvido ${hmDe(c.devolvidoEm)}` : ""),
-        st === "nao" ? [c.motivo, c.obs].filter(Boolean).join(" · ") : c.por ? "Recebido por " + c.por : ""]; }) }; });
+        [st === "nao" ? c.motivo : c.por ? "Recebido por " + c.por : "", c.qtd > 1 ? c.qtd + " aparelhos" : "", c.obs].filter(Boolean).join(" · ")]; }) }; });
   const m = L.filter(p => eqs.includes(p.equipe || "Sem equipe")), cnt = s => m.filter(p => celSt(p) === s).length;
   return gerarListaPdf({ titulo: eq ? `Celulares · ${eq}` : "Celulares dos legendários", arquivo: `Celulares ${eq || "todas as equipes"} ${topName()}`, orient: "portrait",
     resumo: [["Guardados", `${cnt("guardado") + cnt("devolvido")} de ${m.length}`], ["Não entregaram", cnt("nao")], ["Faltam", cnt("falta")]],
@@ -4543,6 +4574,7 @@ document.addEventListener("click", e => {
   if (d.cel) { const p = S.P.find(x => x.id === d.cel); if (p && podeEditar()) celForm(p); return; }
   if (d.celNao) { const p = S.P.find(x => x.id === d.celNao); if (p && podeEditar()) celNaoForm(p); return; }
   if (d.celDev) { const p = S.P.find(x => x.id === d.celDev); if (p && podeEditar()) celSalvar(p, { status: "devolvido", devolvidoEm: new Date().toISOString(), devolvidoPor: ME.adm || "" }, `Celular devolvido a ${p.nome.split(" ")[0]}`); return; }
+  if (d.celEdit) { const p = S.P.find(x => x.id === d.celEdit); if (p && podeEditar()) celEditar(p); return; }
   if (d.celVer) { const p = S.P.find(x => x.id === d.celVer); if (p) celForm(p); return; }
   if (d.celPdf != null && t.matches("[data-cel-pdf]")) { celPdf(d.celPdf, false); return; }
   if (d.celWa) { celResumoWa(d.celWa); return; }
