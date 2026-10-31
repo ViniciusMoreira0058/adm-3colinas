@@ -1610,7 +1610,7 @@ function vMural(msgs) {
     <div class="mural-lista">${msgs.map(m => `<div class="mural-msg ${m.tipo === "alerta" ? "alerta" : ""} ${Date.now() - new Date(m.em) < 10 * 6e4 ? "novo" : ""}"><p>${esc(m.txt)}</p><small>${esc(m.por)} · ${hmDe(m.em)} · ${haQuanto(m.em)}</small></div>`).join("") || `<div class="empty">Nenhum recado ainda.</div>`}</div></section>`;
 }
 // turnos
-const FUNC_TURNO = ["Vigília", "Apoio na pista", "Camp", "Carro de apoio", "Cozinha", "Equipe médica", "Base"];
+const FUNC_TURNO = ["Vigília (Segurança)", "Apoio na pista", "Camp", "Carro de apoio", "Cozinha", "Equipe médica", "Base"];
 const turnos = () => ((cfgDe(campoId("turnos")) || {}).lista || []).slice().sort((a, b) => (a.ini || "").localeCompare(b.ini || ""));
 const turnoAgora = t => { const n = Date.now(); return new Date(t.ini) <= n && n < new Date(t.fim); };
 const meusTurnos = () => turnos().filter(t => (t.adms || []).some(n => norm(n).split(" ")[0] === norm(ME.adm || "").split(" ")[0]));
@@ -1629,7 +1629,10 @@ function vTurnos() {
       ${ed ? `<button class="icon-btn" type="button" data-turno="${esc(t.id)}" aria-label="Editar turno">${ico("edit")}</button>` : ""}</div>`).join("")}</div></section>`).join("") || `<section class="panel"><div class="empty">Nenhum turno ainda. Monte a escala de vigília, apoio e camp.</div></section>`}`;
 }
 function turnoForm(id) {
-  const L = turnos(), t = L.find(x => x.id === id) || {}, nomes = [...new Set([...(S.equipe || []).map(e => e.nome), ...(t.adms || [])])].filter(Boolean).sort();
+  const L = turnos(), t = L.find(x => x.id === id) || {};
+  const seg = S.P.filter(p => p.tipo === "legendario" && !cancelado(p) && /segur/i.test(p.equipe || "")).map(p => p.nome).sort();
+  const adms = (S.equipe || []).map(e => e.nome).filter(Boolean).sort(), outros = (t.adms || []).filter(n => !seg.includes(n) && !adms.includes(n));
+  const grupo = (tit, ns, vazio) => `<div class="turno-grupo"><small>${tit}</small><div class="turno-quem">${ns.map(n => `<label class="chk"><input type="checkbox" name="adm" value="${esc(n)}" ${(t.adms || []).includes(n) ? "checked" : ""}> ${esc(n)}</label>`).join("") || `<span class="hint">${vazio}</span>`}</div></div>`;
   const loc = iso => { if (!iso) return ""; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
   modal(`
     <h3>${t.id ? "Editar turno" : "Novo turno"}</h3>
@@ -1637,7 +1640,8 @@ function turnoForm(id) {
       <div class="field full"><label for="f-tf">Função</label><input id="f-tf" name="funcao" list="funcTurno" value="${esc(t.funcao || "")}" required><datalist id="funcTurno">${FUNC_TURNO.map(f => `<option value="${esc(f)}">`).join("")}</datalist></div>
       <div class="field"><label for="f-ti">Começa</label><input id="f-ti" name="ini" type="datetime-local" value="${loc(t.ini)}" required></div>
       <div class="field"><label for="f-tm">Termina</label><input id="f-tm" name="fim" type="datetime-local" value="${loc(t.fim)}" required></div>
-      <div class="field full"><span class="lab">Quem</span><div class="turno-quem">${nomes.map(n => `<label class="chk"><input type="checkbox" name="adm" value="${esc(n)}" ${(t.adms || []).includes(n) ? "checked" : ""}> ${esc(n)}</label>`).join("")}</div></div>
+      <div class="field full"><span class="lab">Quem</span>
+        ${grupo("Equipe de Segurança (legendários) · vigília da noite", seg, "Nenhum legendário na equipe Segurança ainda.")}${grupo("ADMs", adms, "")}${outros.length ? grupo("Outros", outros, "") : ""}</div>
     </div>
     <div class="modal-foot"><div>${t.id ? `<button class="btn danger" type="button" id="tDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
     const ini = fd.get("ini"), fim = fd.get("fim"); if (!ini || !fim || fim <= ini) { toast("Confira o horário de início e fim."); return; }

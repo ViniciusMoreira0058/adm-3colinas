@@ -923,6 +923,10 @@ body.d2 .empty.e2.busca .e2-ic { background: var(--surface2); color: var(--muted
 .li.turno.agora{box-shadow:inset 3px 0 0 #46c486;padding-left:10px;background:rgba(70,196,134,.07)}
 .li.turno.passou{opacity:.55}
 .turno-quem{display:flex;flex-wrap:wrap;gap:6px 14px}
+.turno-grupo{margin-top:6px}
+.turno-quem label{display:inline-flex!important;flex-direction:row!important;align-items:center;gap:8px;text-transform:none!important;letter-spacing:0!important;font-size:15px!important;font-weight:500!important;color:var(--fg)!important;margin:0!important;padding:8px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.turno-quem label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.turno-quem input{width:18px;height:18px;margin:0;accent-color:var(--accent)}.turno-grupo>small{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
 .ent-tab{display:grid;grid-template-columns:minmax(84px,auto) repeat(var(--n),1fr);gap:6px;align-items:center}
 .ent-tab>b{font-size:12px;text-align:center;color:var(--muted);font-weight:600}
 .ent-fam{font-weight:700;font-size:14px}

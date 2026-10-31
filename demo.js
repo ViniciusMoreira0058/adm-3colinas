@@ -1679,11 +1679,11 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     { id: "m2", txt: "💧 Faltando água no ponto do Cemitério, mandem o carro", por: "Rafael Lima", em: h(140) },
     { id: "m1", txt: "🚌 Ônibus chegou", por: "Bruno Costa", em: h(320) }] } });
   D.push({ col: "config", id: "turnos-top1922", data: { top: "top1922", lista: [
-    { id: "t1", funcao: "Vigília", ini: h(240), fim: h(120), adms: ["Rafael Lima", "Bruno Costa"] },
+    { id: "t1", funcao: "Vigília (Segurança)", ini: h(240), fim: h(120), adms: ["Daniel Costa Freitas"] },
     { id: "t2", funcao: "Apoio na pista", ini: h(90), fim: f(60), adms: ["Thalisson", "Henrique"] },
     { id: "t3", funcao: "Carro de apoio", ini: h(90), fim: f(150), adms: ["Diego Souza"] },
     { id: "t4", funcao: "Camp", ini: f(20), fim: f(200), adms: ["Vinicius Moreira", "Rafael Lima"] },
-    { id: "t5", funcao: "Vigília", ini: f(600), fim: f(780), adms: ["Thalisson", "Bruno Costa"] }] } });
+    { id: "t5", funcao: "Vigília (Segurança)", ini: f(600), fim: f(780), adms: ["Daniel Costa Freitas"] }] } });
   const reg = {}, por = n => ({ por: n, em: h(n === "Diego Souza" ? 50 : 200) });
   [1, 2, 3].forEach(fam => { reg[`d1|${fam}|agua`] = por("Diego Souza"); reg[`d1|${fam}|mre`] = por("Rafael Lima"); });
   reg["d1|1|gelo"] = por("Diego Souza"); reg["d1|3|equip"] = por("Bruno Costa");
