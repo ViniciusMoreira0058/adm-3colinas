@@ -2295,19 +2295,20 @@ const finSalvar = (fn, msg) => { const D = finDoc(); return save(() => api.set("
 function vFinanceiro() {
   if (ehCoordEq()) return vFinCoord();
   const D = finDoc(), I = (D.itens || []).slice().sort((a, b) => (b.data || "").localeCompare(a.data || "") || (b.em || "").localeCompare(a.em || "")), orc = D.orc || {}, ed = podeEditar();
-  const g = [...I.filter(i => i.tipo !== "entrada"), ...feqAprovados()], e = I.filter(i => i.tipo === "entrada"), sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0), totOrc = Object.values(orc).reduce((a, v) => a + (+v || 0), 0);
+  const g = [...I.filter(i => i.tipo !== "entrada"), ...feqAprovados()], e = I.filter(i => i.tipo === "entrada"), sg = g.reduce((a, i) => a + (+i.valor || 0), 0), vl = vendasResumo().liq, se = e.reduce((a, i) => a + (+i.valor || 0), 0) + vl, totOrc = Object.values(orc).reduce((a, v) => a + (+v || 0), 0);
   const porA = a => g.filter(i => i.area === a).reduce((s, i) => s + (+i.valor || 0), 0), areas = [...new Set([...FIN_AREAS.filter(a => porA(a) || orc[a]), ...g.map(i => i.area)])];
   return `
   <div class="head"><div><h2>Financeiro</h2><p>Gastos e entradas do TOP com a foto do recibo. No fim sai a prestação de contas em PDF.</p></div>
-    <div class="actions">${ed ? `<button class="btn primary" type="button" data-fin="">${ico("plus")} Lançar</button>` : ""}<button class="btn" type="button" data-act="fin-pdf">${ico("upload")} Prestação de contas</button></div></div>
+    <div class="actions">${ed ? `<button class="btn primary" type="button" data-fin="">${ico("plus")} Lançar</button>` : ""}${VENDAS() && ed ? `<label class="btn">${ico("upload")} Importar vendas<input type="file" accept=".xlsx,.xls,.csv" id="vendasArq" hidden></label>` : ""}<button class="btn" type="button" data-act="fin-pdf">${ico("upload")} Prestação de contas</button></div></div>
   <div class="kpis">
     <div class="kpi"><span class="lbl">Gasto</span><span class="val num" style="font-size:24px">${brl(sg)}</span><span class="sub">${g.length} lançamento(s)${feqAprovados().length ? ` · ${feqAprovados().length} das equipes` : ""}</span></div>
-    <div class="kpi"><span class="lbl">Entradas</span><span class="val num" style="font-size:24px">${brl(se)}</span><span class="sub">doações e repasses</span></div>
+    <div class="kpi"><span class="lbl">Entradas</span><span class="val num" style="font-size:24px">${brl(se)}</span><span class="sub">${vl ? `vendas ${brl(vl)} + doações` : "doações e repasses"}</span></div>
     <div class="kpi ${se - sg < 0 ? "alert" : ""}"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos gastos</span></div>
     <div class="kpi ${totOrc && sg > totOrc ? "alert" : ""}"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></div>
   </div>
   <section class="panel"><h3>Por área ${S.isOwner ? `<button class="linkbtn" type="button" data-act="fin-orc">orçamento ›</button>` : ""}</h3>
     <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<div class="fin-a"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></div>`; }).join("") || `<div class="empty">Nenhum gasto ainda.</div>`}</div></section>
+  ${VENDAS() ? vendasPainel(ed) : ""}
   ${COORD() ? feqPainel(ed) : ""}
   <section class="panel"><h3>Lançamentos <small>${I.length}</small></h3><div class="cel-lista">${I.map(i => `<div class="cel-li ${i.tipo === "entrada" ? "guardado" : ""}">
     ${i.foto || i.fotoPath ? `<button type="button" class="cel-foto" data-fin-foto="${esc(i.id)}" aria-label="Ver recibo">${celFotoSrc(i) ? `<img src="${esc(celFotoSrc(i))}" alt="">` : "🧾"}</button>` : `<span class="cel-foto vazia">${i.tipo === "entrada" ? "＋" : "🧾"}</span>`}
@@ -2347,13 +2348,104 @@ async function finPdf() {
   const ext = feqAprovados().map(i => ({ ...i, id: "eq-" + i.id, por: `${i.por} (${i.equipe})` }));
   const fotos = {}; await Promise.all([...(finDoc().itens || []), ...ext].map(async i => { fotos[i.id] = await celFotoData(i); }));
   const D = finDoc(), I = [...(D.itens || []), ...ext].slice().sort((a, b) => (a.data || "").localeCompare(b.data || "")), g = I.filter(i => i.tipo !== "entrada"), e = I.filter(i => i.tipo === "entrada");
-  const sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0), dt = d => d ? d.split("-").reverse().slice(0, 2).join("/") : "";
+  const V = VENDAS() ? vendasResumo() : { liq: 0, ofertas: [] };
+  const sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0) + V.liq, dt = d => d ? d.split("-").reverse().slice(0, 2).join("/") : "";
   const areas = [...new Set(g.map(i => i.area || "Outros"))].sort();
   return gerarListaPdf({ titulo: "Prestação de contas", arquivo: "Prestacao de contas " + topName(), orient: "portrait",
     resumo: [["Gasto", brl(sg)], ["Entradas", brl(se)], ["Saldo", brl(se - sg)]], legenda: "Gastos por área, com a foto do recibo. Entradas no fim.",
     colunas: [{ t: "Recibo", w: 20, foto: true }, { t: "Data", w: 14 }, { t: "Descrição", bold: true }, { t: "Por", w: 26, cinza: true }, { t: "Valor", w: 26, al: "right" }],
     secoes: [...areas.map(a => { const L = g.filter(i => (i.area || "Outros") === a); return { titulo: `${a} · ${brl(L.reduce((s, i) => s + (+i.valor || 0), 0))}`, linhas: L.map(i => [fotos[i.id] || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }; }),
-      ...(e.length ? [{ titulo: `Entradas · ${brl(se)}`, linhas: e.map(i => [fotos[i.id] || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }] : [])] }, false).catch(er => toast("Não foi possível gerar o PDF. " + er.message));
+      ...(V.liq ? [{ titulo: `Vendas do TOP (TicketAndGo) · ${brl(V.liq)} líquido`, linhas: V.ofertas.map(o => ["", "", `${o.oferta} (${o.n})`, `bruto ${brl(o.bruto)}`, brl(o.liq)]) }] : []),
+      ...(e.length ? [{ titulo: `Outras entradas · ${brl(se - V.liq)}`, linhas: e.map(i => [fotos[i.id] || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }] : [])] }, false).catch(er => toast("Não foi possível gerar o PDF. " + er.message));
+}
+
+/* ---------- Vendas do TOP (demo): relatório de vendas da TicketAndGo vira entrada do Financeiro ----------
+   config vendas-<top> {linhas:[{k,tx,st,stat,parc,data,oferta,tipo,pag,bruto,liq,coprod,cupom,nome,lib,repasse,repId}], importadoEm, por, arquivo}
+   Nunca guarda CPF, e-mail ou telefone do comprador. Cada linha da planilha é uma transação ou uma parcela. */
+const VENDAS = () => DEMO;
+const vendasDoc = () => cfgDe(`vendas-${curTopId()}`) || {};
+const ehVendas = linhas => { const h = (linhas[0] || []).map(x => norm(String(x))); return h.includes("id da transacao") && h.includes("minha comissao"); };
+const VEND_TXT = { aprovado: "Aprovada", pendente: "Boleto em aberto", cancelado: "Cancelada", estornado: "Estornada" };
+function vendasLer(linhas) {
+  const h = (linhas[0] || []).map(x => norm(String(x))), col = n => h.indexOf(n);
+  const c = { tx: col("id da transacao"), st: col("status da transacao"), dt: col("data da transacao"), of: col("oferta"), bruto: col("valor de compra com acrescimos"), liq: col("minha comissao"),
+    cop: col("comissao do(a) coprodutor(a)"), pend: col("valor pendente de pagamento"), pag: col("metodo de pagamento"), cup: col("codigo de cupom"), nome: col("comprador(a)"), lib: col("data liberacao para repasse"), rep: col("data repasse"), repId: col("repasse") };
+  const num = v => { let t = String(v == null ? "" : v).replace(/[^\d,.-]/g, ""); if (!t) return 0;
+    const lc = t.lastIndexOf(","), lp = t.lastIndexOf("."); t = lc > lp ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, ""); return Math.round((+t || 0) * 100) / 100; };
+  const corpo = linhas.slice(1).filter(l => String(l[c.tx] || "").trim());
+  // datas "9/1/26 16:10" (planilha em inglês: mês/dia) ou "01/09/2026" (dia/mês): decide pela coluna inteira
+  const pares = corpo.map(l => /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(l[c.dt] || ""))).filter(Boolean);
+  const diaPrimeiro = pares.some(m => +m[1] > 12) || (!pares.some(m => +m[2] > 12) && /\.csv$/i.test(impArquivo || ""));
+  const data = v => { v = String(v || "").trim(); if (!v) return ""; const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(v); if (iso) return iso[0];
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(v); if (!m) return ""; const [d, mm] = diaPrimeiro ? [m[1], m[2]] : [m[2], m[1]], a = m[3].length === 2 ? "20" + m[3] : m[3];
+    return `${a}-${String(mm).padStart(2, "0")}-${String(d).padStart(2, "0")}`; };
+  const vistos = {};
+  return corpo.map(l => {
+    const st = String(l[c.st] || "").trim(), S_ = st.toUpperCase(), parc = (/(\d+)\s*x\s*(\d+)/i.exec(st) || [])[0] || "", tx = String(l[c.tx]).trim();
+    const stat = /ESTORN|REEMBOLS|CHARGEBACK|DEVOLV/.test(S_) ? "estornado" : /CANCEL|EXPIR|RECUS|NEGAD/.test(S_) ? "cancelado" : /^APROVAD|PAGO|CONFIRM/.test(S_) ? "aprovado" : "pendente";
+    const oferta = String(l[c.of] || "").trim(), pag = String(l[c.pag] || "").trim();
+    const tipo = /cortesia|sorteio|ganhad|premio/i.test(norm(oferta)) || /gratuito/i.test(pag) ? "cortesia" : /servidor|legendari/i.test(norm(oferta)) ? "legendario" : "participante";
+    let k = tx + (parc ? "-" + parc.replace(/\s/g, "") : ""); vistos[k] = (vistos[k] || 0) + 1; if (vistos[k] > 1) k += "-" + vistos[k];
+    return { k, tx, st, stat, parc: parc.replace(/\s/g, ""), data: data(l[c.dt]), oferta, tipo, pag, bruto: num(l[c.bruto]), liq: num(l[c.liq]), coprod: c.cop >= 0 ? num(l[c.cop]) : 0, pend: c.pend >= 0 ? num(l[c.pend]) : 0,
+      cupom: c.cup >= 0 ? String(l[c.cup] || "").trim() : "", nome: c.nome >= 0 ? String(l[c.nome] || "").trim() : "", lib: c.lib >= 0 ? data(l[c.lib]) : "", repasse: c.rep >= 0 ? data(l[c.rep]) : "", repId: c.repId >= 0 ? String(l[c.repId] || "").trim() : "" };
+  });
+}
+function vendasResumo(L = vendasDoc().linhas || []) {
+  const ap = L.filter(x => x.stat === "aprovado"), soma = (A, k) => Math.round(A.reduce((s, x) => s + (+x[k] || 0), 0) * 100) / 100;
+  const txs = st => new Set(L.filter(x => x.stat === st).map(x => x.tx)).size;
+  const ofertas = [...new Set(ap.map(x => x.oferta))].map(o => { const A = ap.filter(x => x.oferta === o); return { oferta: o, tipo: A[0].tipo, n: new Set(A.map(x => x.tx)).size, bruto: soma(A, "bruto"), liq: soma(A, "liq") }; }).sort((a, b) => b.liq - a.liq);
+  const reps = [...new Set(ap.filter(x => x.repasse).map(x => x.repasse + "|" + x.repId))].sort().map(kk => { const [d, id] = kk.split("|"), A = ap.filter(x => x.repasse === d && x.repId === id); return { data: d, id, n: A.length, liq: soma(A, "liq") }; });
+  const aberto = L.filter(x => x.stat === "pendente");
+  // parcelamento: cada parcela paga é uma linha ("APROVADO R 1x3"); as que faltam ainda vão cair
+  const porTx = {}; ap.filter(x => /^\d+x\d+$/.test(x.parc || "")).forEach(x => (porTx[x.tx] = porTx[x.tx] || []).push(x));
+  let parcFut = 0, parcN = 0; Object.values(porTx).forEach(A => { const n = Math.max(...A.map(x => +x.parc.split("x")[1])), falta = n - A.length; if (falta > 0) { parcN += falta; parcFut += falta * (A[A.length - 1].liq || 0); } });
+  return { linhas: L.length, nAp: new Set(ap.map(x => x.tx)).size, bruto: soma(ap, "bruto"), liq: soma(ap, "liq"), coprod: soma(ap, "coprod"), repassado: soma(ap.filter(x => x.repasse), "liq"), aReceber: soma(ap.filter(x => !x.repasse), "liq"),
+    aberto: aberto.length, abertoV: soma(aberto, "pend") || soma(aberto, "bruto"), parcN, parcFut: Math.round(parcFut * 100) / 100, canc: txs("cancelado"), est: txs("estornado"), ofertas, reps,
+    cortesias: new Set(ap.filter(x => x.tipo === "cortesia").map(x => x.tx)).size };
+}
+function vendasPainel(ed) {
+  const D = vendasDoc(), V = vendasResumo(), dd = d => d ? d.split("-").reverse().slice(0, 2).join("/") : "";
+  if (!V.linhas) return `<section class="panel"><h3>Vendas do TOP</h3><div class="empty">Importe o relatório de vendas da TicketAndGo${ed ? " no botão <b>Importar vendas</b> (ou em Importar relatório)" : ""}. As vendas aprovadas entram como entrada do Financeiro.</div></section>`;
+  const TIPO = { participante: "Senderistas", legendario: "Legendários servidores", cortesia: "Cortesias" };
+  return `<section class="panel vend"><h3>Vendas do TOP <small>TicketAndGo</small></h3>
+    <p class="hint" style="margin:0 0 10px">Importado ${D.importadoEm ? new Date(D.importadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}${D.por ? " por " + esc(D.por) : ""} · ${V.linhas} linha(s) da planilha.</p>
+    <div class="vend-kpis">
+      <div><span>Vendido</span><b class="num">${brl(V.bruto)}</b><small>${V.nAp} venda(s) aprovada(s)</small></div>
+      <div><span>Legendários Internacional</span><b class="num">${brl(V.coprod)}</b><small>comissão do coprodutor</small></div>
+      <div class="ok"><span>Fica com a base</span><b class="num">${brl(V.liq)}</b><small>entra no Financeiro</small></div>
+      <div><span>Já repassado</span><b class="num">${brl(V.repassado)}</b><small>${brl(V.aReceber)} a liberar</small></div>
+      <div class="${V.aberto ? "wait" : ""}"><span>Boletos em aberto</span><b class="num">${V.aberto}</b><small>${V.aberto ? brl(V.abertoV) : "nenhum"}</small></div>
+      <div><span>Parcelas a vencer</span><b class="num">${brl(V.parcFut)}</b><small>${V.parcN ? V.parcN + " parcela(s) do parcelamento" : "nenhuma"}</small></div>
+      <div><span>Canceladas / estornadas</span><b class="num">${V.canc + V.est}</b><small>${V.canc} canc. · ${V.est} estorno(s)</small></div>
+    </div>
+    <div class="vend-grid">
+      <div><h4>Por oferta</h4><div class="list">${V.ofertas.map(o => `<div class="li"><span class="grow"><b>${esc(o.oferta)}</b><br><span class="hint">${TIPO[o.tipo]} · ${o.n} venda(s) · bruto ${brl(o.bruto)}</span></span><b class="num">${brl(o.liq)}</b></div>`).join("")}</div></div>
+      <div><h4>Repasses recebidos</h4><div class="list">${V.reps.map(x => `<div class="li"><span class="grow"><b>${dd(x.data)}</b><br><span class="hint">repasse ${esc(x.id)} · ${x.n} pagamento(s)</span></span><b class="num">${brl(x.liq)}</b></div>`).join("") || `<div class="empty">Nenhum repasse ainda.</div>`}
+        ${V.aReceber ? `<div class="li"><span class="grow"><b>A liberar</b><br><span class="hint">aprovado, ainda sem repasse</span></span><b class="num">${brl(V.aReceber)}</b></div>` : ""}</div></div>
+    </div></section>`;
+}
+document.addEventListener("change", async e => {
+  if (!e.target || e.target.id !== "vendasArq") return;
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try { impArquivo = f.name; const linhas = await lerPlanilha(f);
+    if (!ehVendas(linhas)) { toast("Essa planilha não parece o relatório de vendas da TicketAndGo."); return; }
+    vendasImportForm(linhas, f.name);
+  } catch (x) { toast("Não consegui ler a planilha. " + (x.message || "")); }
+});
+function vendasImportForm(linhas, arquivo) {
+  const L = vendasLer(linhas), V = vendasResumo(L), antes = vendasDoc().linhas || [], ja = new Set(antes.map(x => x.k));
+  const novas = L.filter(x => !ja.has(x.k)).length, mudou = L.filter(x => { const a = antes.find(y => y.k === x.k); return a && (a.stat !== x.stat || a.repasse !== x.repasse); }).length;
+  modal(`<h3>Importar vendas do TOP</h3>
+    <p class="hint" style="margin:0">Reconheci o <b>relatório de vendas da TicketAndGo</b>. As vendas aprovadas entram como entrada no Financeiro de ${esc(topName())}. CPF, e-mail e telefone dos compradores não são guardados.</p>
+    <div class="imp-kpis">
+      <div class="ok"><b class="num">${brl(V.liq)}</b><span>fica com a base</span></div>
+      <div><b class="num">${V.nAp}</b><span>vendas aprovadas</span></div>
+      <div><b class="num">${novas}</b><span>linhas novas</span></div>
+      <div><b class="num">${mudou}</b><span>mudaram de status ou repasse</span></div>
+    </div>
+    <p class="hint">Vendido ${brl(V.bruto)} · Legendários Internacional ${brl(V.coprod)} · ${V.aberto} boleto(s) em aberto · ${V.canc} cancelada(s). A planilha nova substitui a anterior deste TOP.</p>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${ico("upload")} Importar</button></div></div>`,
+  () => { closeModal(); save(() => api.set("config", `vendas-${curTopId()}`, { top: curTopId(), linhas: L, importadoEm: agoraISO(), por: ME.adm || "", arquivo: arquivo || "" }), `Vendas importadas: ${brl(V.liq)} de entrada`).then(() => { if (S.view !== "financeiro") go("financeiro"); else render(); }); });
 }
 
 /* ---------- Gastos das equipes (demo): o coordenador lança, a ADM aprova ----------
@@ -5887,6 +5979,7 @@ function importForm(tipoAtual) {
       if (ehAssinaturas(linhas)) { closeModal(); assinaturasForm(linhas); return; }
       if (ehAvaliacoes(linhas)) { closeModal(); avaliacoesForm(linhas); return; }
       if (ehEquipes(linhas)) { closeModal(); equipesImportForm(linhas); return; }
+      if (VENDAS() && ehVendas(linhas)) { closeModal(); vendasImportForm(linhas, f.name); return; }
       R = analisarImport(lerRelatorio(linhas)); R.arquivo = f.name;
       prev.innerHTML = previewImport(R);
       $("#impBtn").disabled = !R.novos.length && !R.ja.length && !R.canc.some(c => c.p) && !R.fora.length;

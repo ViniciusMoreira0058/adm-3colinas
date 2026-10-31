@@ -1792,3 +1792,18 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
   D.push({ col: "config", id: "fingasto-top1922-m-midia", data: { top: "top1922", membro: "m-midia", nome: "Gustavo Ferreira Reis", equipe: "Mídia", cargo: "Coordenador", itens: [
     { id: "g4", desc: "Cartão de memória 128 GB", valor: 89.9, data: dia(3), area: "Mídia", pag: "Pix", reemb: false, obs: "", foto: nota("SD 128GB", "89,90", "#7a3bd1"), status: "pendente", por: "Gustavo Ferreira Reis", em: h(400) }] } });
 })();
+// VENDAS DO TOP: relatório de vendas fictício (como o da TicketAndGo), já importado no Financeiro
+(function () {
+  const D = window.ADM_DEMO.docs, dia = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  const nomes = ["Carlos Ramos", "João Moreira", "Marcos Teixeira", "André Campos", "Lucas Prado", "Rafael Lima", "Pedro Alves", "Fábio Souza", "Bruno Dias", "Diego Rocha", "Otávio Reis", "Samuel Luz", "Vitor Nunes", "Heitor Costa", "Igor Freitas", "Renato Pires", "Caio Mendes", "Davi Barros", "Enzo Martins", "Gabriel Rios"];
+  const L = []; let tx = 3100000, k = 0;
+  const add = (o) => { tx += 37; L.push({ k: String(tx) + (o.parc ? "-" + o.parc : ""), tx: String(tx), st: o.st || "APROVADO", stat: o.stat || "aprovado", parc: o.parc || "", cupom: "", nome: nomes[k++ % nomes.length], lib: "", repId: o.repasse ? "R" + o.repasse.replace(/-/g, "").slice(2) : "", coprod: 0, ...o }); };
+  for (let i = 0; i < 22; i++) { const d = 60 - i * 2, rep = d > 12 ? dia(Math.floor((d - 5) / 10) * 10 + 2) : ""; add({ data: dia(d), oferta: "Participante TOP 1922", tipo: "participante", pag: ["PIX", "BOLETO", "CARTÃO DE CRÉDITO"][i % 3], bruto: i % 4 ? 1248.31 : 1982.61, liq: i % 4 ? 952 : 1512, coprod: i % 4 ? 238 : 378, repasse: rep, cupom: i % 3 ? "OUTUBRO" : "" }); }
+  for (let i = 0; i < 18; i++) { const d = 55 - i * 2.5 | 0, rep = d > 12 ? dia(Math.floor((d - 5) / 10) * 10 + 2) : ""; add({ data: dia(d), oferta: "Legendário Servidor", tipo: "legendario", pag: i % 2 ? "PIX" : "BOLETO", bruto: 500, liq: 500, repasse: rep }); }
+  for (let i = 0; i < 3; i++) add({ data: dia(30 - i), oferta: "Legendario - Cortesia (premio indicações)", tipo: "cortesia", pag: "GRATUITO", bruto: 0, liq: 0 });
+  for (let i = 0; i < 4; i++) add({ data: dia(3 + i), oferta: "Participante TOP 1922", tipo: "participante", pag: "BOLETO", st: "BOLETO GERADO", stat: "pendente", bruto: 1248.31, liq: 952, coprod: 238 });
+  for (let i = 0; i < 6; i++) add({ data: dia(20 + i), oferta: "Participante TOP 1922", tipo: "participante", pag: "BOLETO", st: "BOLETO CANCELADO", stat: "cancelado", bruto: 1248.31, liq: 952, coprod: 238 });
+  add({ data: dia(25), oferta: "Legendário Servidor", tipo: "legendario", pag: "BOLETO", st: "ESTORNADO R 1x3", stat: "estornado", parc: "1x3", bruto: 166.66, liq: 166.66 });
+  const fin = D.find(x => x.col === "config" && x.id === "fin-top1922"); if (fin) fin.data.itens = fin.data.itens.filter(i => !/inscri/i.test(i.desc));   // as inscrições agora vêm das vendas
+  D.push({ col: "config", id: "vendas-top1922", data: { top: "top1922", linhas: L, importadoEm: new Date(Date.now() - 36e5).toISOString(), por: "Vinicius Moreira", arquivo: "Relatorio_de_vendas_TicketAndGo.xlsx" } });
+})();
