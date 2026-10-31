@@ -2530,14 +2530,14 @@ function vendasPainel(ed) {
   const TIPO = { participante: "Senderistas", legendario: "Legendários servidores", cortesia: "Cortesias" };
   return `<section class="panel vend"><h3>Vendas do TOP <small>TicketAndGo</small></h3>
     <p class="hint" style="margin:0 0 10px">Importado ${D.importadoEm ? new Date(D.importadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}${D.por ? " por " + esc(D.por) : ""} · ${V.linhas} linha(s) da planilha.</p>
-    <div class="vend-kpis">
-      <button type="button" data-fin-det="v:vendido"><span>Vendido</span><b class="num">${brl(V.bruto)}</b><small>${V.nAp} venda(s) aprovada(s)</small></button>
-      <button type="button" data-fin-det="v:coprod"><span>Taxa Legendários Global</span><b class="num">${brl(V.coprod)}</b><small>${V.bruto ? pct(V.coprod, V.bruto) + "% do vendido" : "comissão do coprodutor"}</small></button>
-      <button type="button" data-fin-det="v:liq" class="ok"><span>Fica com a base</span><b class="num">${brl(V.liq)}</b><small>entra no Financeiro</small></button>
-      <button type="button" data-fin-det="v:repassado"><span>Já repassado</span><b class="num">${brl(V.repassado)}</b><small>${brl(V.aReceber)} a liberar</small></button>
-      <button type="button" data-fin-det="v:aberto" class="${V.aberto ? "wait" : ""}"><span>Boletos em aberto</span><b class="num">${V.aberto}</b><small>${V.aberto ? brl(V.abertoV) : "nenhum"}</small></button>
-      <button type="button" data-fin-det="v:parc"><span>Parcelas a vencer</span><b class="num">${brl(V.parcFut)}</b><small>${V.parcN ? V.parcN + " parcela(s) do parcelamento" : "nenhuma"}</small></button>
-      <button type="button" data-fin-det="v:canc"><span>Canceladas / estornadas</span><b class="num">${V.canc + V.est}</b><small>${V.canc} canc. · ${V.est} estorno(s)</small></button>
+    <div class="kpis kpis-3 vend-cards">
+      ${[["v:vendido", "Vendido", brl(V.bruto), `${V.nAp} venda(s) aprovada(s)`, ""],
+        ["v:liq", "Fica com a base", brl(V.liq), "entra no Financeiro", "lucro"],
+        ["v:repassado", "Já repassado", brl(V.repassado), `${brl(V.aReceber)} a liberar`, ""],
+        ["v:aberto", "Boletos em aberto", String(V.aberto), V.aberto ? brl(V.abertoV) + " para pagar" : "nenhum", V.aberto ? "alert" : ""],
+        ["v:parc", "Parcelas a vencer", brl(V.parcFut), V.parcN ? V.parcN + " parcela(s) do parcelamento" : "nenhuma", ""],
+        ["v:canc", "Canceladas / estornadas", String(V.canc + V.est), `${V.canc} cancelada(s) · ${V.est} estorno(s)`, ""]]
+        .map(([k, l, v, sub, cl]) => `<button type="button" class="kpi kpi-btn ${cl}" data-fin-det="${k}"><span class="lbl">${l}</span><span class="val num" style="font-size:24px">${v}</span><span class="sub">${sub}</span></button>`).join("")}
     </div>
     <div class="vend-grid">
       <div><h4>Por oferta</h4><div class="list">${V.ofertas.map(o => `<div class="li li-btn" role="button" tabindex="0" data-fin-det="${esc("of:" + o.oferta)}"><span class="grow"><b>${esc(o.oferta)}</b><br><span class="hint">${TIPO[o.tipo]} · ${o.n} venda(s) · bruto ${brl(o.bruto)}</span></span><b class="num">${brl(o.liq)}</b></div>`).join("")}</div></div>
