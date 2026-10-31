@@ -1769,3 +1769,12 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
   cfg("fin-top1922", { top: "top1922", orc: { "Alimentação": 3000, "Transporte": 600, "Saúde": 400, "Logística": 800, "Material e brindes": 300 },
     itens: L.map(([tipo, area, desc, valor, n], i) => ({ id: "f" + i, tipo, area, desc, valor, data: d(n), por: ["Vinicius Moreira", "Diego Souza", "Rafael Lima"][i % 3], em: h(n * 1440 + 5), foto: tipo === "gasto" ? recibo(desc, valor) : "" })) });
 })();
+// COORDENADORES DE EQUIPE: e-mails fictícios dos chefes/subchefes e um coordenador já liberado (Fábio, Segurança)
+(function () {
+  const D = window.ADM_DEMO.docs, pes = id => (D.find(d => d.col === "pessoas" && d.id === id) || {}).data;
+  [["lg10", "fabio.seg@exemplo.com"], ["lg11", "marcelo.seg@exemplo.com", "Subchefe"], ["lg13", "gustavo.midia@exemplo.com"], ["lg14", "leonardo.midia@exemplo.com", "Subchefe"], ["lg17", "eduardo.inter@exemplo.com"]]
+    .forEach(([id, email, funcao]) => { const p = pes(id); if (p) { p.email = email; if (funcao) p.funcao = funcao; } });
+  window.ADM_DEMO.membros.push({ id: "m-coord", nome: "Fábio Henrique Alves", email: "fabio.seg@exemplo.com", telefone: "16 99110-0010", funcao: "Outros",
+    nivel: "leitura", abas: ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista", "legendarios", "_v2"],
+    perfil: "coord", equipe_lgnd: "Segurança", cargo: "Coordenador", ativo: true, dono: false, user_id: "u-coord", visto_em: null });
+})();

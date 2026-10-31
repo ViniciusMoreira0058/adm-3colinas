@@ -198,6 +198,13 @@ const NIVEIS = [
 const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && (!v.demo || DEMO) && (!v.org || ORG()));
 // "_v2" marca o cadastro salvo já com a escolha página por página; cadastros antigos seguem a regra antiga (página que usa dados de outra aparece junto)
 const ABA_V2 = "_v2";
+/* Coordenadores e subcoordenadores de equipe (demo): perfil "coord" no cadastro, só leitura, vê só a própria equipe */
+const COORD = () => DEMO;
+const COORD_ABAS = ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista"];
+const COORD_VER = ["painel", ...COORD_ABAS];
+const coordAbasSalvar = () => [...COORD_ABAS, "legendarios", ABA_V2];   // "legendarios" só para o banco liberar a equipe dele (a página Legendários fica escondida)
+const ehCoordEq = () => COORD() && !!ME.coord;
+const ehCoordCad = e => COORD() && e && e.perfil === "coord";
 const temAba = (abas, v) => { abas = abas || []; const base = !v.need || v.need.some(a => abas.includes(a));
   return v.need && !abas.includes(ABA_V2) ? base : abas.includes(v.id) && base; };
 const precisaLogin = () => !ME.acesso;
@@ -212,6 +219,7 @@ const canSee = v => {
   if ((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
   if (!ME.acesso) return v.id === "painel";
+  if (ehCoordEq()) return COORD_VER.includes(v.id);   // coordenador de equipe: só as páginas dele, sem saúde, telefones e pagamentos
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
   if (S.isOwner || (VIEWS.find(x => x.id === v.id) || v).all) return true;
   if (v.owner) return false;
@@ -275,10 +283,10 @@ function renderNav() {
   $("#nav").innerHTML = !ORG() ? vis.map(navBtn).join("")
     : MENU_GRUPOS.map(([g, ids]) => { const b = vis.filter(v => ids.includes(v.id)); return b.length ? (g ? `<div class="nav-grp">${g}</div>` : "") + b.map(navBtn).join("") : ""; }).join("")
       + vis.filter(v => !MENU_GRUPOS.some(([, ids]) => ids.includes(v.id))).map(navBtn).join("");
-  const bb = $("#buscaBtn"); if (bb) bb.hidden = !(ORG() && ME.acesso);
+  const bb = $("#buscaBtn"); if (bb) bb.hidden = !(ORG() && ME.acesso && !ehCoordEq());
   const sb = $("#saudeBtn"); if (sb) sb.hidden = !(NOVO() && ME.acesso && (canSee({ id: "participantes" }) || canSee({ id: "legendarios" })));
   const sino = $("#bellBtn");
-  if (sino) { sino.hidden = !ME.acesso; sino.querySelector(".badge").hidden = !novas; sino.querySelector(".badge").textContent = novas > 99 ? "99+" : novas;
+  if (sino) { sino.hidden = !ME.acesso || ehCoordEq(); sino.querySelector(".badge").hidden = !novas; sino.querySelector(".badge").textContent = novas > 99 ? "99+" : novas;
     sino.setAttribute("aria-label", novas ? `Notificações: ${novas} nova(s)` : "Notificações"); }
   $("#backBtn").hidden = S.view === "painel";
   $("#backBtn").setAttribute("aria-label", "Voltar para " + ((VIEWS.find(x => x.id === hist[hist.length - 1]) || VIEWS[0]).l));
@@ -580,6 +588,7 @@ function painelPronto() {
   </section>`;
 }
 function vPainel() {
+  if (ehCoordEq()) return vPainelCoord();
   if (DASH_NOVO()) return vPainelNovo();
   const s = stats();
   const kits = topKits();
@@ -811,14 +820,15 @@ function vFamilias() {
     <div class="kpi"><span class="lbl">Distribuídos</span><span class="val num">${parts.length - sem.length}</span><span class="sub">de ${parts.length} senderistas</span></div>
     <div class="kpi ${sem.length ? "alert" : ""}"><span class="lbl">Sem família</span><span class="val num">${sem.length}</span><span class="sub">média ideal ${parts.length ? (parts.length / 12).toFixed(1).replace(".", ",") : 0} por família</span></div>
   </div>
-  ${sem.length ? `<section class="panel"><h3>Sem família <small>${sem.length}</small></h3><div class="list">${sem.map(p => `<div class="li"><span class="grow">${esc(p.nome)} ${is40(p) ? '<span class="tag">+40</span>' : ""}</span><select class="sel" data-fam="${p.id}" aria-label="Família de ${esc(p.nome)}"><option value="">Escolher…</option>${fams.map(f => `<option value="${f}">Família ${String(f).padStart(2, "0")}</option>`).join("")}</select></div>`).join("")}</div></section>` : ""}
+  ${sem.length ? `<section class="panel"><h3>Sem família <small>${sem.length}</small></h3><div class="list">${sem.map(p => `<div class="li"><span class="grow">${esc(p.nome)} ${is40(p) ? '<span class="tag">+40</span>' : ""}</span>${podeEditar() ? `<select class="sel" data-fam="${p.id}" aria-label="Família de ${esc(p.nome)}"><option value="">Escolher…</option>${fams.map(f => `<option value="${f}">Família ${String(f).padStart(2, "0")}</option>`).join("")}</select>` : ""}</div>`).join("")}</div></section>` : ""}
   <div class="fams">${fams.map(f => { const m = parts.filter(p => Number(p.familia) === f); return `
     <section class="fam"><header><b>Família ${String(f).padStart(2, "0")}</b><span class="hint num">${m.length} · ${m.filter(is40).length} +40</span></header>
-    ${m.length ? `<ul>${m.map(p => `<li><span>${esc(p.nome)}</span>${atOk(p) && p.termo === "assinado" ? '<span class="chip ok">OK</span>' : '<span class="chip wait">Pend.</span>'}</li>`).join("")}</ul>` : `<div class="empty">Ninguém ainda.</div>`}</section>`; }).join("")}</div>`;
+    ${m.length ? `<ul>${m.map(p => `<li><span>${esc(p.nome)}</span>${ehCoordEq() ? "" : atOk(p) && p.termo === "assinado" ? '<span class="chip ok">OK</span>' : '<span class="chip wait">Pend.</span>'}</li>`).join("")}</ul>` : `<div class="empty">Ninguém ainda.</div>`}</section>`; }).join("")}</div>`;
 }
 
 /* ---------- Equipes LGND: em qual área cada legendário vai servir (campos equipe e funcao do legendário) ---------- */
 function vEquipes() {
+  if (ehCoordEq()) return vEquipeCoord();
   const lgs = S.P.filter(p => p.tipo === "legendario" && !cancelado(p)), ed = podeEditar();
   const sem = lgs.filter(p => !p.equipe);
   const eqs = equipesUsadas().map(e => ({ e, m: lgs.filter(p => p.equipe === e).sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || norm(a.nome).localeCompare(norm(b.nome))) }));
@@ -979,7 +989,7 @@ function vAoVivo() {
   return `<div class="aovivo${mapa ? " tem-mapa" : ""}">${sobre}<div class="av-info">
     <div class="av-top"><div><span class="eyebrow">${esc(topName())} · ${esc(D.nome || "")}</span><b class="av-relogio num">${hora}</b></div>
       <div class="actions"><span class="chip ${atraso > 10 ? "bad" : atraso > 0 ? "wait" : "ok"} av-atraso">${atraso == null ? "Sem marcações ainda" : atraso > 0 ? "Atrasado " + fmtDif(atraso).replace("+", "") : atraso < 0 ? "Adiantado " + fmtDif(atraso).replace("−", "") : "No horário"}</span>
-      ${RELATORIO_FINAL() && ocorrAbertas().length ? `<button class="chip bad av-atraso" type="button" data-go="ocorrencias">${ocorrAbertas().length} ocorrência(s) aberta(s)</button>` : ""}
+      ${RELATORIO_FINAL() && !ehCoordEq() && ocorrAbertas().length ? `<button class="chip bad av-atraso" type="button" data-go="ocorrencias">${ocorrAbertas().length} ocorrência(s) aberta(s)</button>` : ""}
       ${paisagem.matches ? "" : tv ? `<button class="btn" type="button" data-act="aovivo-tv">Sair do modo TV</button>` : `<button class="btn" type="button" data-act="aovivo-tv">Modo TV</button><button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button>`}</div></div>
     <section class="av-agora"><span class="lbl">Agora</span><h2>${agora ? esc(agora.atv) : prox ? "Aguardando início" : "Dia encerrado"}</h2>
       ${agora ? `<p>${[agora.local, agora.resp].filter(Boolean).map(esc).join(" · ")}${M[agora.id].ini ? ` · desde ${esc(M[agora.id].ini)}${agora.hora ? ` (previsto ${esc(agora.hora)})` : ""}` : ""}</p>` : ""}</section>
@@ -987,7 +997,7 @@ function vAoVivo() {
       ${prox ? `<p>${prox.hora ? `previsto ${esc(prox.hora)}${prev && prev !== prox.hora ? ` · deve começar ~${esc(prev)}` : ""}` : ""}${prox.local ? " · " + esc(prox.local) : ""}</p>` : ""}</section>
     ${seguintes.length ? `<ul class="av-depois">${seguintes.map(i => `<li><span class="num">${esc(i.hora || "")}</span>${esc(i.atv)}</li>`).join("")}</ul>` : ""}
     <div class="av-barra"><div class="bar good"><i style="width:${pct(nFeito, D.itens.length)}%"></i></div><span class="hint num">${nFeito} de ${D.itens.length} momentos do ${esc(D.nome || "dia")} concluídos · atualiza sozinho</span></div>
-    ${equipeMapaBarra()}${climaCard()}
+    ${ehCoordEq() ? "" : equipeMapaBarra()}${climaCard()}
   </div>${mapa}</div>`;
 }
 setInterval(() => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) render(); }, 30000);
@@ -3465,7 +3475,7 @@ function pdfTelaForm() {
 const PDF_TELAS = ["painel", "participantes", "legendarios", "equipes", "pendencias", "familias", "checklist", "estoque", "pista", "pins", "tops", "usuarios", "historico", "notificacoes"];
 // coloca o botão "Exportar PDF" no topo da página (cronograma e consagração já têm o deles)
 function botaoPdf() {
-  if (!ME.acesso || $("#view .sk-wrap") || !PDF_TELAS.includes(S.view) || (S.view === "usuarios" && S.usrAba === "notif")) return;
+  if (!ME.acesso || ehCoordEq() || $("#view .sk-wrap") || !PDF_TELAS.includes(S.view) || (S.view === "usuarios" && S.usrAba === "notif")) return;
   const head = $("#view .head") || $("#view .hero-text"); if (!head || head.querySelector("[data-act=pdf-tela]")) return;
   let act = head.querySelector(":scope > .actions");
   if (!act) { act = document.createElement("div"); act.className = "actions"; head.appendChild(act); }
@@ -4020,6 +4030,7 @@ function nivelTxt(e) {
   if (e.dono) return `<span class="chip ok">Dono · acesso total</span>`;
   if (e.ativo === false) return `<span class="chip bad">Bloqueado</span>`;
   if (e.nivel === "total") return `<span class="chip ok">Acesso total</span>`;
+  if (ehCoordCad(e)) return `<span class="chip">${esc(e.cargo || "Coordenador")} · ${esc(e.equipe_lgnd || "sem equipe")}</span><div class="hint" style="font-size:12px;margin-top:3px">Só leitura: Dashboard, ${COORD_ABAS.map(id => (VIEWS.find(v => v.id === id) || {}).l).join(", ")} (só a equipe dele)</div>`;
   const abas = ABAS().filter(v => temAba(e.abas, v)).map(v => v.l);
   return `<span class="chip ${e.nivel === "leitura" ? "" : "sent"}">${e.nivel === "leitura" ? "Somente leitura" : "Edita"}</span><div class="hint" style="font-size:12px;margin-top:3px">${esc(abas.length ? "Dashboard, " + abas.join(", ") : "só o Dashboard")}</div>`;
 }
@@ -4035,7 +4046,7 @@ function vUsuarios() {
   if (abaU === "notif") return vEnviarNotif(abasU);
   return `
   <div class="head"><div><h2>Usuários</h2><p>Cadastre quem pode entrar no app com o e-mail da pessoa e escolha as abas que ela pode ver ou alterar. Só você vê esta aba.</p></div>
-    <div class="actions"><button class="btn primary" type="button" data-act="novo-adm">${ico("plus")} Cadastrar usuário</button></div></div>
+    <div class="actions">${COORD() ? `<button class="btn" type="button" data-act="coord-liberar">${ico("shield")} Coordenadores</button>` : ""}<button class="btn primary" type="button" data-act="novo-adm">${ico("plus")} Cadastrar usuário</button></div></div>
   ${abasU}
   <div class="kpis">
     <div class="kpi"><span class="lbl">Cadastrados</span><span class="val num">${S.equipe.length}</span><span class="sub">${S.equipe.filter(e => e.ativo !== false).length} com acesso liberado</span></div>
@@ -4049,7 +4060,7 @@ function vUsuarios() {
     <thead><tr><th>Nome</th><th>Função</th><th>E-mail (login)</th><th>Acesso liberado</th><th>Último acesso</th><th>WhatsApp</th><th></th></tr></thead>
     <tbody>${rows.map(({ e, on }) => `<tr>
       <td><div class="pname">${esc(e.nome)}${e.id === ME.id ? ' <span class="tag">você</span>' : ""}<small>${esc(e.obs || "")}</small></div></td>
-      <td>${esc(e.funcao || "ADM")}</td>
+      <td>${esc(ehCoordCad(e) ? (e.cargo || "Coordenador") + " · " + (e.equipe_lgnd || "") : e.funcao || "ADM")}</td>
       <td class="num">${esc(e.email)}</td>
       <td>${nivelTxt(e)}</td>
       <td>${acessoHtml(e, on)}</td>
@@ -4063,17 +4074,25 @@ const isEmail = v => /^[^@\s]+@[^@\s]+\.[a-z0-9-]{2,}$/i.test(v);
 function admCadForm(e) {
   const novo = !e;
   e = e || { funcao: "ADM", ativo: true, nome: "", email: "", nivel: "edita", abas: [...ABAS().map(v => v.id), ABA_V2] };
-  const dono = !!e.dono;
+  const dono = !!e.dono, coord = ehCoordCad(e), comPerfil = COORD() && !dono;
   modal(`
     <h3>${novo ? "Cadastrar usuário" : "Editar " + esc(e.nome)}</h3>
     <div class="form">
+      ${comPerfil ? `<div class="field full"><span class="lab">Tipo de acesso</span><div class="seg" role="radiogroup" id="perfilSeg"><label><input type="radio" name="perfil" value="adm" ${coord ? "" : "checked"}> ADM</label><label><input type="radio" name="perfil" value="coord" ${coord ? "checked" : ""}> Coordenador de equipe</label></div></div>
+      <div class="coord-box field full" id="coordBox" ${coord ? "" : "hidden"}>
+        <div class="form" style="padding:0">
+          <div class="field"><label for="f-aeq">Equipe LGND</label><select id="f-aeq" name="equipe_lgnd"><option value="">Escolher…</option>${equipesUsadas().map(x => `<option ${e.equipe_lgnd === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+          <div class="field"><label for="f-acargo">Cargo</label><select id="f-acargo" name="cargo">${["Coordenador", "Subcoordenador"].map(x => `<option ${e.cargo === x ? "selected" : ""}>${x}</option>`).join("")}</select></div>
+        </div>
+        <p class="hint" style="margin:6px 0 0">Somente leitura. Vê o Dashboard da equipe dele, Equipes (só a equipe dele), Famílias, Consagração, Emergência, Cronograma, Ao vivo e Pista. Saúde, telefones, pendências e pagamentos ficam escondidos.</p>
+      </div>` : ""}
       <div class="field full"><label for="f-anome">Nome</label><input id="f-anome" name="nome" value="${esc(e.nome)}" required placeholder="Como a equipe chama"></div>
       <div class="field"><label for="f-aemail">E-mail (login)</label><input id="f-aemail" name="email" type="email" inputmode="email" value="${esc(e.email)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="nome@email.com"></div>
       <div class="field"><label for="f-atel">Telefone / WhatsApp</label><input id="f-atel" name="telefone" inputmode="tel" value="${esc(e.telefone)}"></div>
-      <div class="field"><label for="f-afun">Função</label>${sel("funcao", FUNCOES.map(x => ({ v: x, l: x })), e.funcao || "ADM")}</div>
+      <div class="field adm-only" ${coord ? "hidden" : ""}><label for="f-afun">Função</label>${sel("funcao", FUNCOES.map(x => ({ v: x, l: x })), e.funcao || "ADM")}</div>
       ${dono ? `<div class="field full"><p class="hint" style="margin:0">Esta é a conta do dono: sempre tem acesso total e não pode ser bloqueada.</p></div>` : `
-      <div class="field full"><span class="lab">O que pode acessar</span><div class="nivel-opts">${NIVEIS.map(n => `<label><input type="radio" name="nivel" value="${n.v}" ${e.nivel === n.v ? "checked" : ""}><span>${n.l}<small>${n.d}</small></span></label>`).join("")}</div></div>
-      <div class="field full"><span class="lab">Páginas que pode ver (o Dashboard sempre aparece)</span><div class="abas ${e.nivel === "total" ? "off" : ""}" id="abasBox">${MENU_GRUPOS.map(([g, ids]) => { const vs = ABAS().filter(v => ids.includes(v.id)); return vs.length ? `<div class="abas-grp">${g}</div>` + vs.map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("") : ""; }).join("")}${ABAS().filter(v => !MENU_GRUPOS.some(([, ids]) => ids.includes(v.id))).map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("")}</div>
+      <div class="field full adm-only" ${coord ? "hidden" : ""}><span class="lab">O que pode acessar</span><div class="nivel-opts">${NIVEIS.map(n => `<label><input type="radio" name="nivel" value="${n.v}" ${e.nivel === n.v ? "checked" : ""}><span>${n.l}<small>${n.d}</small></span></label>`).join("")}</div></div>
+      <div class="field full adm-only" ${coord ? "hidden" : ""}><span class="lab">Páginas que pode ver (o Dashboard sempre aparece)</span><div class="abas ${e.nivel === "total" ? "off" : ""}" id="abasBox">${MENU_GRUPOS.map(([g, ids]) => { const vs = ABAS().filter(v => ids.includes(v.id)); return vs.length ? `<div class="abas-grp">${g}</div>` + vs.map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("") : ""; }).join("")}${ABAS().filter(v => !MENU_GRUPOS.some(([, ids]) => ids.includes(v.id))).map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("")}</div>
         <p class="hint" style="margin:6px 0 0">Equipes LGND, Pendências, Ao vivo, Ocorrências e Importação do dia usam os dados de Senderistas, Legendários ou Cronograma: marque também a página de onde vêm os dados. Marcar <b>Importação do dia</b> libera a pessoa para importar as planilhas. Usuários e Histórico são só seus.</p></div>`}
       <div class="field full"><label for="f-aobs">Observações</label><input id="f-aobs" name="obs" value="${esc(e.obs)}"></div>
       ${dono ? "" : `<div class="field full"><div class="checks"><label><input type="checkbox" id="f-aativo" name="ativo" ${e.ativo !== false ? "checked" : ""}> Acesso liberado (desmarque para bloquear a entrada)</label></div></div>`}
@@ -4088,9 +4107,12 @@ function admCadForm(e) {
     const email = String(fd.get("email") || "").trim().toLowerCase();
     if (!isEmail(email)) { err("Coloque um e-mail válido. É com ele que a pessoa entra no app."); $("#f-aemail").focus(); return; }
     if (S.equipe.some(x => x.email === email && x.id !== e.id)) { err(`O e-mail ${email} já está cadastrado para outra pessoa.`); $("#f-aemail").focus(); return; }
-    const nivel = dono ? "total" : (fd.get("nivel") || "edita");
+    const ehC = comPerfil && fd.get("perfil") === "coord";
+    if (ehC && !fd.get("equipe_lgnd")) { err("Escolha a equipe do coordenador."); $("#f-aeq").focus(); return; }
+    const nivel = dono ? "total" : ehC ? "leitura" : (fd.get("nivel") || "edita");
     const row = { nome, email, telefone: String(fd.get("telefone") || "").trim(), funcao: fd.get("funcao"), obs: String(fd.get("obs") || "").trim(),
-      nivel, abas: [...(nivel === "total" ? ABAS().map(v => v.id) : fd.getAll("abas")), ABA_V2], ativo: dono ? true : fd.get("ativo") === "on" };
+      nivel, abas: ehC ? coordAbasSalvar() : [...(nivel === "total" ? ABAS().map(v => v.id) : fd.getAll("abas")), ABA_V2], ativo: dono ? true : fd.get("ativo") === "on" };
+    if (comPerfil) Object.assign(row, ehC ? { perfil: "coord", equipe_lgnd: String(fd.get("equipe_lgnd")), cargo: String(fd.get("cargo") || "Coordenador"), funcao: "Outros" } : { perfil: "adm", equipe_lgnd: null, cargo: null });
     if (!novo && e.email && e.email !== email && e.user_id && !confirm(`Trocar o e-mail desliga o login atual de ${nome}. A pessoa vai precisar criar a senha de novo com o e-mail novo. Continuar?`)) return;
     closeModal();
     try {
@@ -4100,7 +4122,8 @@ function admCadForm(e) {
     } catch (x) { toast(erroAmigavel(x)); }
   });
   const box = $("#abasBox");
-  if (box) $("#mform").addEventListener("change", ev => { if (ev.target.name === "nivel") box.classList.toggle("off", ev.target.value === "total"); });
+  if (box) $("#mform").addEventListener("change", ev => { if (ev.target.name === "nivel") box.classList.toggle("off", ev.target.value === "total");
+    if (ev.target.name === "perfil") { const c = ev.target.value === "coord"; $("#coordBox").hidden = !c; document.querySelectorAll("#mform .adm-only").forEach(x => x.hidden = c); } });
   const re = $("#reenviar"); if (re) re.onclick = () => conviteModal(e);
   const del = $("#delBtn");
   if (del) del.onclick = async () => {
@@ -4110,10 +4133,15 @@ function admCadForm(e) {
   };
 }
 const APP_URL = location.origin + location.pathname.replace(/index\.html$/, "");
-function conviteModal(e) {
+function conviteTxt(e) {
   const nivel = e.nivel, abas = e.abas || [];
-  const oq = nivel === "total" ? "acesso total" : (nivel === "leitura" ? "somente leitura" : "edição") + " em: Dashboard" + ABAS().filter(v => temAba(abas, v)).map(v => ", " + v.l).join("");
+  const oq = ehCoordCad(e) ? `somente leitura, como ${(e.cargo || "coordenador").toLowerCase()} da equipe ${e.equipe_lgnd || ""}: Dashboard, ` + COORD_ABAS.map(id => (VIEWS.find(v => v.id === id) || {}).l).join(", ")
+    : nivel === "total" ? "acesso total" : (nivel === "leitura" ? "somente leitura" : "edição") + " em: Dashboard" + ABAS().filter(v => temAba(abas, v)).map(v => ", " + v.l).join("");
   const msg = `Olá ${e.nome.split(" ")[0]}! Seu acesso ao app ADM 3Colinas está liberado.\n\n1. Abra: ${APP_URL}\n2. Toque em "Primeiro acesso? Criar minha senha"\n3. Use este e-mail: ${e.email}\n4. Crie sua senha e confirme pelo link que chega no e-mail.\n\nDepois é só entrar com o e-mail e a senha. Dica: no celular, use "Adicionar à tela inicial" para ficar como app.\n\nAcesso: ${oq}.`;
+  return { oq, msg };
+}
+function conviteModal(e) {
+  const { oq, msg } = conviteTxt(e);
   const n = waNumber(e.telefone);
   modal(`
     <h3>Convite para ${esc(e.nome)}</h3>
@@ -4124,6 +4152,88 @@ function conviteModal(e) {
   if (c) c.onclick = () => { navigator.clipboard.writeText(msg).then(() => toast("Convite copiado"), () => toast("Não deu para copiar")); };
 }
 
+
+/* ---------- Coordenadores de equipe (demo) ---------- */
+// candidatos: Chefe e Sub de cada equipe LGND (vem da planilha de equipes)
+const coordCands = () => S.P.filter(p => p.tipo === "legendario" && !cancelado(p) && p.equipe && FUNC_ORDEM(p.funcao) < 2)
+  .sort((a, b) => norm(a.equipe).localeCompare(norm(b.equipe)) || FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || norm(a.nome).localeCompare(norm(b.nome)));
+const coordCadDe = p => { const em = String(p.email || "").trim().toLowerCase(); return em ? S.equipe.find(x => String(x.email || "").toLowerCase() === em) : null; };
+function coordLiberarForm() {
+  const C = coordCands();
+  const linha = p => {
+    const m = coordCadDe(p), em = String(p.email || "").trim(), cargo = FUNC_ORDEM(p.funcao) === 0 ? "Coordenador" : "Subcoordenador";
+    const st = !isEmail(em) ? `<span class="chip bad">Sem e-mail</span>` : !m ? `<span class="chip wait">Novo</span>` : !ehCoordCad(m) ? `<span class="chip sent">Já é ADM</span>` : m.ativo === false ? `<span class="chip bad">Bloqueado</span>` : `<span class="chip ok">Com acesso</span>`;
+    const pode = isEmail(em) && (!m || ehCoordCad(m)), on = pode && (!m || m.ativo !== false);
+    return `<label class="coord-li ${pode ? "" : "off"}"><input type="checkbox" name="c" value="${esc(p.id)}" ${on ? "checked" : ""} ${pode ? "" : "disabled"}>
+      <span class="grow"><b>${esc(p.nome)}</b><small>${cargo} · ${esc(p.funcao)}${em ? " · " + esc(em) : ""}</small></span>${st}</label>`;
+  };
+  const eqs = [...new Set(C.map(p => p.equipe))];
+  const semEmail = C.filter(p => !isEmail(String(p.email || "").trim())).length;
+  modal(`
+    <h3>${ico("shield")} Coordenadores de equipe</h3>
+    <p class="hint" style="margin:0">Chefes e subchefes de cada equipe, da planilha de equipes LGND. Marcado = acesso liberado (somente leitura): Dashboard, a própria equipe, Famílias, Consagração, Emergência, Cronograma, Ao vivo e Pista. Desmarcar bloqueia.</p>
+    ${C.length ? `<div class="coord-tools"><button class="btn sm" type="button" id="coordTodos">Marcar todos</button><button class="btn sm ghost" type="button" id="coordNenhum">Desmarcar todos</button>${semEmail ? `<span class="hint">${semEmail} sem e-mail: coloque o e-mail no cadastro do legendário para liberar.</span>` : ""}</div>
+    <div class="coord-lista">${eqs.map(eq => `<section><h4>${esc(eq)}</h4>${C.filter(p => p.equipe === eq).map(linha).join("")}</section>`).join("")}</div>`
+    : `<div class="empty">Nenhum chefe ou subchefe nas equipes ainda. Importe a planilha de equipes LGND em Legendários.</div>`}
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button>${C.length ? `<button class="btn primary" type="submit">${ico("check")} Liberar acesso</button>` : ""}</div></div>`,
+  async fd => {
+    const marc = new Set(fd.getAll("c")), novos = [];
+    let lib = 0, blq = 0;
+    closeModal();
+    try {
+      for (const p of C) {
+        const em = String(p.email || "").trim().toLowerCase(); if (!isEmail(em)) continue;
+        const m = coordCadDe(p), quer = marc.has(p.id), cargo = FUNC_ORDEM(p.funcao) === 0 ? "Coordenador" : "Subcoordenador";
+        const base = { perfil: "coord", equipe_lgnd: p.equipe, cargo, nivel: "leitura", abas: coordAbasSalvar() };
+        if (!m) { if (!quer) continue; const row = { nome: p.nome, email: em, telefone: p.telefone || "", funcao: "Outros", obs: "", ativo: true, ...base }; await membros.salvar(row, null); novos.push(row); lib++; }
+        else if (ehCoordCad(m)) {
+          const muda = (m.ativo !== false) !== quer || m.equipe_lgnd !== p.equipe || m.cargo !== cargo;
+          if (muda) { await membros.salvar({ ...base, ativo: quer }, m.id); quer ? lib++ : blq++; }
+        }
+      }
+      toast(lib || blq ? [lib && `${lib} liberado(s)`, blq && `${blq} bloqueado(s)`].filter(Boolean).join(", ") : "Nada mudou");
+      if (novos.length) coordConvites(novos);
+    } catch (x) { toast(erroAmigavel(x)); }
+  });
+  const box = (v) => document.querySelectorAll('#mform input[name="c"]:not(:disabled)').forEach(x => x.checked = v);
+  const t = $("#coordTodos"), n = $("#coordNenhum"); if (t) t.onclick = () => box(true); if (n) n.onclick = () => box(false);
+}
+function coordConvites(L) {
+  modal(`
+    <h3>Convites dos coordenadores</h3>
+    <p class="hint" style="margin:0">Cada um cria a própria senha em "Primeiro acesso". Toque para mandar o convite no WhatsApp de cada um.</p>
+    <div class="coord-lista">${L.map((e, i) => { const n = waNumber(e.telefone);
+      return `<div class="coord-li"><span class="grow"><b>${esc(e.nome)}</b><small>${esc(e.cargo)} · ${esc(e.equipe_lgnd)} · ${esc(e.email)}</small></span>${n ? `<a class="btn sm primary" href="https://wa.me/${n}?text=${encodeURIComponent(conviteTxt(e).msg)}" target="_blank" rel="noopener">${ico("wa")} Enviar</a>` : `<button class="btn sm" type="button" data-coord-copiar="${i}">Copiar</button>`}</div>`; }).join("")}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn primary" type="button" data-close-btn>Pronto</button></div></div>`, () => closeModal());
+  document.querySelectorAll("[data-coord-copiar]").forEach(b => b.onclick = () => navigator.clipboard.writeText(conviteTxt(L[+b.dataset.coordCopiar]).msg).then(() => toast("Convite copiado"), () => toast("Não deu para copiar")));
+}
+// equipe do coordenador: só nome e função (sem telefone, saúde e pagamento)
+const coordMembros = () => S.P.filter(p => p.tipo === "legendario" && !cancelado(p) && ME.equipeLgnd && p.equipe === ME.equipeLgnd)
+  .sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || norm(a.nome).localeCompare(norm(b.nome)));
+function vEquipeCoord() {
+  const m = coordMembros(), lid = m.filter(p => FUNC_ORDEM(p.funcao) < 2);
+  return `
+  <div class="head"><div><h2>Equipe ${esc(ME.equipeLgnd || "")}</h2><p>Os legendários que servem na sua equipe neste TOP. Somente leitura: mudanças são feitas pela ADM.</p></div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Na equipe</span><span class="val num">${m.length}</span><span class="sub">legendários</span></div>
+    <div class="kpi"><span class="lbl">Liderança</span><span class="val num">${lid.length}</span><span class="sub">${esc(lid.map(p => p.nome.split(" ")[0]).join(", ") || "—")}</span></div>
+  </div>
+  ${ME.equipeLgnd ? `<section class="fam coord-eq"><header><b>${esc(ME.equipeLgnd)}</b><span class="hint num">${m.length}</span></header>
+    ${m.length ? `<ul class="eq-list">${m.map(p => `<li><span>${esc(p.nome)}</span>${p.funcao ? ` <span class="chip ${FUNC_ORDEM(p.funcao) < 2 ? "ok" : ""}">${esc(p.funcao)}</span>` : ""}</li>`).join("")}</ul>` : `<div class="empty">Ninguém na equipe ainda.</div>`}</section>`
+    : `<div class="empty">Seu cadastro ainda não tem equipe. Peça à ADM para definir.</div>`}`;
+}
+function vPainelCoord() {
+  const td = topDoc() || {}, dias = diasParaTop(), m = coordMembros();
+  const quando = dias == null ? "" : dias > 1 ? `faltam <b class="num">${dias}</b> dias` : dias === 1 ? "começa <b>amanhã</b>" : dias === 0 ? "começa <b>hoje</b>" : td.status === "finalizado" ? "TOP finalizado" : "<b>em andamento</b>";
+  const tiles = COORD_ABAS.map(id => VIEWS.find(v => v.id === id)).filter(v => v && canSee(v));
+  return `
+  <section class="panel coord-hero"><span class="eyebrow">${esc(ME.cargo || "Coordenador")} · Equipe ${esc(ME.equipeLgnd || "—")}</span>
+    <h2>Olá, ${esc((ME.adm || "").split(" ")[0])}!</h2><p>${esc(topName())}${quando ? " · " : ""}${quando}</p></section>
+  <div class="coord-tiles">${tiles.map(v => `<button class="coord-tile" type="button" data-go="${v.id}">${ico(v.id === "equipes" ? "shield" : v.i)}<b>${v.id === "equipes" ? "Minha equipe" : esc(v.l)}</b>${v.id === "equipes" ? `<small class="num">${m.length} legendários</small>` : ""}</button>`).join("")}</div>
+  <section class="panel"><h3>Equipe ${esc(ME.equipeLgnd || "")} <small>${m.length}</small><button class="linkbtn" type="button" data-go="equipes">ver ›</button></h3>
+    ${m.length ? `<div class="list">${m.slice(0, 6).map(p => `<div class="li"><span class="grow">${esc(p.nome)}</span>${p.funcao ? `<span class="chip ${FUNC_ORDEM(p.funcao) < 2 ? "ok" : ""}">${esc(p.funcao)}</span>` : ""}</div>`).join("")}</div>${m.length > 6 ? `<p class="hint">e mais ${m.length - 6}.</p>` : ""}` : `<div class="empty">Ninguém na sua equipe ainda.</div>`}</section>
+  <p class="hint">Seu acesso é somente leitura. Dados de saúde, telefones, pendências e pagamentos ficam só com a ADM.</p>`;
+}
 
 function topStats(id) {
   const ps = S.pessoas.filter(p => topOf(p) === id);
@@ -4179,7 +4289,7 @@ function render() {
   const other = tid !== atualId() && v !== "tops"
     ? `<div class="banner"><span>Você está vendo o <b>${esc(topName())}</b>${td && td.status === "finalizado" ? " (finalizado)" : ""}. O que mudar aqui fica no histórico dele.</span><button class="btn" type="button" data-top-open="${esc(atualId())}">Voltar para o ${esc(topName(atualId()))}</button></div>` : "";
   const faixa = avisoVisivel() ? `<div class="banner aviso"><span>${ico("bell")} <b>Planilha atualizada</b> por ${esc(S.aviso.por || "um ADM")}: ${S.aviso.novosP + S.aviso.novosL} novo(s) (${S.aviso.novosP} part. · ${S.aviso.novosL} LGND).</span><button class="btn" type="button" data-aviso="abrir">Ver resumo</button></div>` : "";
-  let html = faixa + avisoRemedio() + avisoLembretes() + avisoTurno() + other + (v === "painel" ? vPainel()
+  let html = faixa + (ehCoordEq() ? "" : avisoRemedio() + avisoLembretes() + avisoTurno()) + other + (v === "painel" ? vPainel()
     : v === "tops" ? vTops()
     : v === "usuarios" ? vUsuarios()
     : v === "historico" ? vHistorico()
@@ -4554,7 +4664,7 @@ function loginForm(aviso, erro) {
       <h1 id="loginTitle">ADM 3COLINAS</h1>
       <p>${esc(titulo || (DEMO ? "Demonstração: escolha como entrar e veja o que cada nível de acesso enxerga." : "Entre com o seu e-mail e senha."))}</p>
       <form id="loginForm" novalidate>
-        ${DEMO ? `<div class="demo-pick" role="group" aria-label="Entrar como">${S.equipe.map((e, i) => `<button type="button" data-demo="${esc(e.id)}" aria-pressed="${i === 0}">${esc(e.nome.split(" ")[0])}<small>${e.dono ? "Dono" : e.nivel === "leitura" ? "Só leitura" : e.nivel === "total" ? "Acesso total" : "Edita abas"}</small></button>`).join("")}</div>` : `
+        ${DEMO ? `<div class="demo-pick" role="group" aria-label="Entrar como">${S.equipe.map((e, i) => `<button type="button" data-demo="${esc(e.id)}" aria-pressed="${i === 0}">${esc(e.nome.split(" ")[0])}<small>${e.dono ? "Dono" : ehCoordCad(e) ? "Coord. " + esc(e.equipe_lgnd || "") : e.nivel === "leitura" ? "Só leitura" : e.nivel === "total" ? "Acesso total" : "Edita abas"}</small></button>`).join("")}</div>` : `
         ${m !== "newpass" ? `<label class="sr" for="f-luser">E-mail</label>
         <input id="f-luser" name="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="E-mail" value="${esc(store.get("adm-email") || "")}">` : ""}
         ${m !== "reset" ? `<label class="sr" for="f-lsenha">Senha</label>
@@ -4621,7 +4731,10 @@ function loginForm(aviso, erro) {
 function aplicarPerfil(p) {
   ME.id = p.id; ME.adm = p.nome; ME.dono = !!p.dono; S.isOwner = ME.dono;
   ME.acesso = { nivel: p.dono ? "total" : (p.nivel || "leitura"), abas: p.dono || p.nivel === "total" ? [...ABAS().map(v => v.id), ABA_V2] : (p.abas || []) };
+  ME.coord = !p.dono && p.perfil === "coord"; ME.equipeLgnd = ME.coord ? (p.equipe_lgnd || "") : ""; ME.cargo = p.cargo || "";
+  if (ME.coord) ME.acesso = { nivel: "leitura", abas: coordAbasSalvar() };
   document.body.classList.toggle("ro", ME.acesso.nivel === "leitura" && !ME.dono);
+  document.body.classList.toggle("coord", ehCoordEq());
 }
 let sessaoOk = false;
 /* Login sem internet: no login com internet o app guarda neste aparelho uma "impressão" da senha (PBKDF2, não a senha)
@@ -4955,6 +5068,7 @@ document.addEventListener("click", e => {
   if (d.act === "novo-item") { itemForm(); return; }
   if (d.act === "novo-top") { topForm(); return; }
   if (d.act === "novo-adm") { admCadForm(); return; }
+  if (d.act === "coord-liberar") { coordLiberarForm(); return; }
   if (d.act === "novo-dia") { diaForm(); return; }
   if (d.editDia) { diaForm(S.pista.find(x => x.id === d.editDia)); return; }
   if (d.editAdm) { admCadForm(S.equipe.find(x => x.id === d.editAdm)); return; }
