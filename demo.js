@@ -1733,3 +1733,39 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
   cel("lg12", { status: "nao", motivo: "Liberado pela coordenação", obs: "Plantão médico, fica com o celular no modo avião", em: h(84), por: "Thalisson" });
   cel("lg14", { status: "nao", motivo: "Esqueceu no carro", obs: "Vai entregar no intervalo", em: h(70), por: "Henrique" });
 })();
+// TOP COMPLETO: check-in, mochila, remédios, emergência, transporte e financeiro (fictícios)
+(function () {
+  const D = window.ADM_DEMO.docs, h = m => new Date(Date.now() - m * 6e4).toISOString(), cfg = (id, data) => D.push({ col: "config", id, data });
+  const hoje = (() => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); })();
+  const IT = ["Mochila cargueira", "Saco de dormir", "Isolante térmico", "Lanterna de cabeça", "Cantil ou garrafa 2 L", "Capa de chuva", "Remédios pessoais", "Documento com foto", "Roupa extra", "Kit de higiene"];
+  const chk = (pid, nome, min, pul, faltou, prov) => cfg(`chk-top1922-${pid}`, { pessoaId: pid, nome, em: h(min), por: min % 2 ? "Thalisson" : "Rafael Lima", pulseira: pul, obs: "", itens: Object.fromEntries(IT.map(i => [i, !faltou.includes(i)])), faltou, prov: prov || {}, top: "top1922" });
+  chk("ex01", "Carlos Eduardo Ramos", 52, "001", []);
+  chk("ex04", "João Batista Moreira", 47, "002", ["Lanterna de cabeça"], { "Lanterna de cabeça": { por: "Diego Souza", em: h(30) } });
+  chk("ex06", "André Luiz Campos", 41, "003", ["Capa de chuva", "Isolante térmico"]);
+  chk("ex03", "Rafael Nogueira Lima", 35, "004", []);
+  chk("ex08", "Fábio Rodrigues Souza", 20, "005", ["Cantil ou garrafa 2 L"]);
+  const hm = m => { const d = new Date(Date.now() + m * 6e4); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const r1 = hm(-45), r2 = hm(8), r3 = hm(-120);
+  cfg("remed-top1922", { top: "top1922", lista: [
+    { id: "r1", pid: "ex02", remedio: "Losartana 50 mg, 1 comprimido", horarios: [r3, "20:00"].sort(), obs: "Fica na farmácia da base" },
+    { id: "r2", pid: "ex02", remedio: "Metformina 850 mg, com refeição", horarios: [r1], obs: "" },
+    { id: "r3", pid: "ex06", remedio: "Sertralina 50 mg", horarios: [r2], obs: "Ele mesmo carrega" }],
+    doses: { [`r1|${hoje}|${r3}`]: { por: "Henrique", em: h(118) } } });
+  cfg("emerg", { em: h(3000), por: "Vinicius Moreira", encontro: "Base 3 Colinas, ao lado do galpão (portão azul). Em caso de evacuação, todos voltam para lá.",
+    contatos: [{ nome: "Dr. Paulo (fictício)", tel: "16 99000-0001", papel: "Médico do TOP" }, { nome: "Diego Souza", tel: "16 99999-5555", papel: "Motorista do carro de apoio" }, { nome: "Vinicius Moreira", tel: "16 99999-0000", papel: "Coordenação geral" }, { nome: "Fábio Henrique Alves", tel: "16 99110-0010", papel: "Chefe da Segurança" }],
+    hospitais: [{ nome: "Santa Casa de Franca", tel: "", end: "Franca - SP", obs: "pronto-socorro 24 h", lat: -20.5383, lng: -47.4009 }, { nome: "UPA mais próxima da pista", tel: "", end: "confirmar endereço", obs: "atendimento 24 h" }],
+    plano: "1. Quem vê a situação avisa o médico e o coordenador pelo rádio (canal 7).\n2. O médico decide se remove. Se sim, o carro de apoio vai até o ponto mais próximo da trilha.\n3. Um legendário da Segurança acompanha a pessoa até o hospital.\n4. O coordenador avisa o contato de emergência da ficha.\n5. Registrar a ocorrência no app." });
+  cfg("transp-top1922", { top: "top1922", veiculos: [
+    { id: "v1", nome: "Ônibus 1", motorista: "Sr. Antônio (fictício)", tel: "16 99000-0002", vagas: 44, pessoas: ["ex01", "ex02", "ex03", "ex04", "ex05", "ex06", "ex10", "lg10"] },
+    { id: "v2", nome: "Van da Base", motorista: "Diego Souza", tel: "16 99999-5555", vagas: 15, pessoas: ["ex07", "ex09", "lg13", "lg15"] }],
+    emb: Object.fromEntries(["ex01", "ex02", "ex04", "ex06", "ex10", "lg10"].map((p, i) => [`ida|v1|${p}`, { por: "Thalisson", em: h(70 - i) }]).concat([["ida|v2|ex09", { por: "Diego Souza", em: h(66) }]])) });
+  const recibo = (txt, v) => { try { const c = document.createElement("canvas"); c.width = 300; c.height = 420; const g = c.getContext("2d");
+    g.fillStyle = "#6b6f75"; g.fillRect(0, 0, 300, 420); g.fillStyle = "#fbfaf6"; g.fillRect(40, 20, 220, 380); g.fillStyle = "#222"; g.font = "bold 18px monospace"; g.textAlign = "center"; g.fillText("CUPOM FISCAL", 150, 60);
+    g.font = "14px monospace"; g.textAlign = "left"; [txt.slice(0, 22), "----------------------", "QTD  ITEM", "1    " + txt.slice(0, 16), "", "TOTAL"].forEach((l, i) => g.fillText(l, 55, 100 + i * 24));
+    g.font = "bold 22px monospace"; g.fillText("R$ " + v.toFixed(2).replace(".", ","), 55, 270); return c.toDataURL("image/jpeg", .6); } catch (e) { return ""; } };
+  const d = n => { const x = new Date(Date.now() - n * 864e5); return new Date(x.getTime() - x.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+  const L = [["gasto", "Alimentação", "Compra no atacado (arroz, feijão, carnes)", 2380.5, 6], ["gasto", "Alimentação", "40 kg de gelo", 160, 0], ["gasto", "Transporte", "Combustível da van", 420, 1], ["gasto", "Saúde", "Reposição da farmácia da base", 312.9, 3],
+    ["gasto", "Material e brindes", "Pulseiras numeradas", 185, 8], ["gasto", "Logística", "Lonas e cordas", 540, 5], ["entrada", "Outros", "Repasse das inscrições", 6000, 9], ["entrada", "Outros", "Doação de um irmão", 800, 4]];
+  cfg("fin-top1922", { top: "top1922", orc: { "Alimentação": 3000, "Transporte": 600, "Saúde": 400, "Logística": 800, "Material e brindes": 300 },
+    itens: L.map(([tipo, area, desc, valor, n], i) => ({ id: "f" + i, tipo, area, desc, valor, data: d(n), por: ["Vinicius Moreira", "Diego Souza", "Rafael Lima"][i % 3], em: h(n * 1440 + 5), foto: tipo === "gasto" ? recibo(desc, valor) : "" })) });
+})();

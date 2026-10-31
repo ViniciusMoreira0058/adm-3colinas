@@ -164,6 +164,11 @@ const VIEWS = [
   { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "comunicacao", l: "Comunicação", c: "Comunicação", i: "chat", all: true, menu: true },   // recados, lembretes e aprendizados
+  { id: "checkin", l: "Check-in", c: "Check-in", i: "door", need: ["participantes"] },
+  { id: "remedios", l: "Remédios", c: "Remédios", i: "pill", need: [] , all: true, menu: true },
+  { id: "emergencia", l: "Emergência", c: "Emergência", i: "sos", need: [], all: true, menu: true },
+  { id: "transporte", l: "Transporte", c: "Transporte", i: "bus", need: [], all: true, menu: true },
+  { id: "financeiro", l: "Financeiro", c: "Financeiro", i: "money", need: [] },
   { id: "celulares", l: "Celulares", c: "Celulares", i: "phone", need: ["legendarios"] },   // celulares dos legendários no check-in
   { id: "campo", l: "Campo", c: "Campo", i: "group", need: ["participantes"], demo: true },   // chamada, mural, turnos e entregas com o TOP rodando
   { id: "nfc", l: "NFC 3COLINAS", c: "NFC", i: "nfc", need: ["participantes", "legendarios"], nfc: true },   // ficha de saúde + tag NFC
@@ -203,6 +208,7 @@ const canSee = v => {
   if (v.nfc && !NFC()) return false;
   if (v.id === "campo" && !CAMPO()) return false;
   if (v.id === "celulares" && !CEL()) return false;
+  if (TOP2_VIEWS.includes(v.id) && !TOP2()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
   if (!ME.acesso) return v.id === "painel";
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
@@ -1000,7 +1006,7 @@ const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
 const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "nfc", "familias", "consagracao"]],
-  ["Operação", ["cronograma", "aovivo", "comunicacao", "campo", "celulares", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
+  ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "emergencia", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
 /* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
@@ -2047,6 +2053,287 @@ function celResumoWa(eq) {
 }
 document.addEventListener("change", e => { const i = e.target; if (i && i.matches && i.matches("input[data-cel-foto]")) { if ($("#modalRoot").innerHTML) closeModal(); celFotoTirada(i); } });
 document.addEventListener("input", e => { if (e.target && e.target.id === "celQ") { S.celQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $("#celQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } } });
+
+/* ---------- TOP completo (só na demo): Check-in + Mochila, Remédios, Emergência, Transporte e Financeiro ---------- */
+const TOP2 = () => DEMO;
+const TOP2_VIEWS = ["checkin", "remedios", "emergencia", "transporte", "financeiro"];
+const senderistas = () => S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+const agoraISO = () => new Date().toISOString();
+const linhaSel = (k, v) => `data-${k}="${esc(v)}"`;
+const busca = (id, val, ph) => `<div class="cel-busca"><input id="${id}" type="search" placeholder="${esc(ph)}" value="${esc(val || "")}" aria-label="Buscar"></div>`;
+document.addEventListener("input", e => { const id = e.target && e.target.id; if (!["chkQ", "trQ"].includes(id)) return;
+  S[id] = e.target.value; const pos = e.target.selectionStart; render(); const n = $("#" + id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } });
+
+// ===== 1 e 2: CHECK-IN + MOCHILA =====  config chk-<top>-<pid> {em, por, pulseira, itens:{}, faltou:[], prov:{}, obs}; itens da mochila em config mochila-itens {lista}
+const MOCHILA_PADRAO = ["Mochila cargueira", "Saco de dormir", "Isolante térmico", "Lanterna de cabeça", "Cantil ou garrafa 2 L", "Capa de chuva", "Remédios pessoais", "Documento com foto", "Roupa extra", "Kit de higiene"];
+const mochilaItens = () => (cfgDe("mochila-itens") || {}).lista || MOCHILA_PADRAO;
+const chkId = p => `chk-${curTopId()}-${p.id}`;
+const chkDe = p => cfgDe(chkId(p)) || null;
+const PEND_TXT = { pagamento: "Pagamento", termo: "Termo", apto: "Atestado" };
+function vCheckin() {
+  const aba = S.chkAba || "chegada", L = senderistas(), cheg = L.filter(chkDe), pend = L.filter(p => faltaTop(p).length);
+  const moch = cheg.filter(p => (chkDe(p).faltou || []).some(k => !(chkDe(p).prov || {})[k]));
+  return `
+  <div class="head"><div><h2>Check-in</h2><p>Chegada dos senderistas: confere documentos, entrega a pulseira, confirma a família e passa a mochila na hora.</p></div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Chegaram</span><span class="val num">${cheg.length}<small style="font-size:.5em;opacity:.7"> / ${L.length}</small></span><div class="bar good"><i style="width:${pct(cheg.length, L.length)}%"></i></div></div>
+    <div class="kpi ${L.length - cheg.length ? "alert" : ""}"><span class="lbl">Faltam chegar</span><span class="val num">${L.length - cheg.length}</span><span class="sub">${cheg.length ? "último às " + hmDe(cheg.map(p => chkDe(p).em).sort().pop()) : "ninguém ainda"}</span></div>
+    <div class="kpi"><span class="lbl">Com pendência</span><span class="val num">${pend.length}</span><span class="sub">termo, atestado ou pagamento</span></div>
+    <div class="kpi"><span class="lbl">Mochila incompleta</span><span class="val num">${moch.length}</span><span class="sub">item ainda não providenciado</span></div>
+  </div>
+  <div class="seg campo-abas"><button type="button" data-chk-aba="chegada" aria-pressed="${aba === "chegada"}">Chegada</button><button type="button" data-chk-aba="mochila" aria-pressed="${aba === "mochila"}">Mochila ${moch.length ? `<span class="com-n num">${moch.length}</span>` : ""}</button></div>
+  ${aba === "mochila" ? vMochila(cheg) : vChegada(L)}`;
+}
+function vChegada(L) {
+  const q = norm(S.chkQ || ""), f = S.chkF || "faltam", ed = podeEditar();
+  const vis = L.filter(p => (!q || norm(p.nome).includes(q)) && (f === "todos" || (f === "faltam" ? !chkDe(p) : !!chkDe(p))));
+  return `${busca("chkQ", S.chkQ, "Buscar senderista pelo nome…")}
+  <div class="seg cel-filtro">${[["faltam", "Faltam chegar"], ["chegaram", "Chegaram"], ["todos", "Todos"]].map(([v, l]) => `<button type="button" data-chk-f="${v}" aria-pressed="${f === v}">${l}</button>`).join("")}</div>
+  <section class="panel"><div class="cel-lista">${vis.map(p => { const c = chkDe(p), fl = faltaTop(p);
+    return `<div class="cel-li ${c ? "guardado" : fl.length ? "nao" : ""}"><span class="chk-fam">${p.familia ? String(p.familia).padStart(2, "0") : "—"}</span>
+      <button type="button" class="cel-info" ${ed ? `data-chk="${esc(p.id)}"` : "disabled"}><b>${esc(p.nome)}${is40(p) ? ' <span class="tag">+40</span>' : ""}</b>
+        <small>${c ? `<span class="chip ok">Chegou ${hmDe(c.em)}</span>${c.pulseira ? ` · pulseira ${esc(c.pulseira)}` : ""}${(c.faltou || []).length ? ` · <span class="bad-text">faltou ${(c.faltou || []).length} item(ns)</span>` : ""}`
+          : fl.length ? fl.map(k => `<span class="chip bad">${PEND_TXT[k] || k}</span>`).join(" ") : '<span class="chip ok">Documentos ok</span>'}</small></button>
+      ${ed && !c ? `<button class="btn sm primary" type="button" data-chk="${esc(p.id)}">Check-in</button>` : ""}</div>`; }).join("") || `<div class="empty">${q ? "Ninguém com esse nome." : f === "faltam" ? "Todos chegaram! 🎉" : "Ninguém aqui ainda."}</div>`}</div></section>`;
+}
+function chkForm(p) {
+  const c = chkDe(p) || {}, fl = faltaTop(p), itens = mochilaItens(), ok = c.itens || {};
+  modal(`<h3>Check-in · ${esc(p.nome)}</h3>
+    <div class="chk-topo"><span class="chip">${p.familia ? famTxt(p.familia) : "Sem família"}</span>${is40(p) ? '<span class="chip">+40</span>' : ""}
+      ${fl.length ? fl.map(k => `<span class="chip bad">Falta ${PEND_TXT[k] || k}</span>`).join("") : '<span class="chip ok">Termo, atestado e pagamento ok</span>'}</div>
+    ${fl.length ? `<p class="chk-alerta">⚠️ Pendência de ${fl.map(k => (PEND_TXT[k] || k).toLowerCase()).join(", ")}. Resolva com a coordenação antes de liberar.</p>` : ""}
+    <div class="form">
+      <div class="field"><label for="f-pul">Pulseira nº</label><input id="f-pul" name="pulseira" inputmode="numeric" value="${esc(c.pulseira || "")}" placeholder="ex.: 027"></div>
+      <div class="field"><label for="f-cobs">Observação</label><input id="f-cobs" name="obs" value="${esc(c.obs || "")}"></div>
+      <div class="field full"><span class="lab">Mochila <button type="button" class="linkbtn" id="mochTudo">marcar tudo</button></span>
+        <div class="moch-grid">${itens.map(it => `<label class="moch-it"><input type="checkbox" name="it" value="${esc(it)}" ${!c.em || ok[it] ? (c.em ? "checked" : "") : ""}><span>${esc(it)}</span></label>`).join("")}</div>
+        <p class="hint" id="mochRes" style="margin:6px 0 0"></p></div>
+    </div>
+    <div class="modal-foot"><div>${c.em ? `<button class="btn danger" type="button" id="chkDesf">Desfazer check-in</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${c.em ? "Salvar" : "Confirmar chegada"}</button></div></div>`, fd => {
+    const marcados = fd.getAll("it"), itensOk = Object.fromEntries(itens.map(i => [i, marcados.includes(i)])), faltou = itens.filter(i => !marcados.includes(i));
+    closeModal(); save(() => api.set("config", chkId(p), { ...c, pessoaId: p.id, nome: p.nome, em: c.em || agoraISO(), por: c.por || ME.adm || "", pulseira: String(fd.get("pulseira") || "").trim(), obs: String(fd.get("obs") || "").trim(), itens: itensOk, faltou, prov: c.prov || {}, top: curTopId() }),
+      c.em ? "Check-in atualizado" : `${p.nome.split(" ")[0]} chegou${faltou.length ? ` · faltou ${faltou.length} item(ns) da mochila` : ""}`).then(render);
+  });
+  const res = () => { const n = $("#mform").querySelectorAll("[name=it]:checked").length; $("#mochRes").innerHTML = n === itens.length ? `<span style="color:#46c486;font-weight:700">Mochila completa ✓</span>` : `${n} de ${itens.length} itens · <span class="bad-text">faltam ${itens.length - n}</span>`; };
+  $("#mform").addEventListener("change", res); res();
+  $("#mochTudo").onclick = () => { $("#mform").querySelectorAll("[name=it]").forEach(i => { i.checked = true; }); res(); };
+  const d = $("#chkDesf"); if (d) d.onclick = () => { if (!confirm("Desfazer o check-in de " + p.nome + "?")) return; closeModal(); save(() => api.remove("config", chkId(p)), "Check-in desfeito").then(render); };
+}
+function vMochila(cheg) {
+  const itens = mochilaItens(), ed = podeEditar();
+  const falta = it => cheg.filter(p => (chkDe(p).faltou || []).includes(it));
+  return `<section class="panel"><h3>Itens que faltaram <small>de quem já chegou</small>${S.isOwner ? ` <button class="linkbtn" type="button" data-act="moch-itens">editar itens ›</button>` : ""}</h3>
+    <div class="moch-res">${itens.map(it => { const L = falta(it), ab = L.filter(p => !(chkDe(p).prov || {})[it]).length;
+      return `<div class="moch-li ${ab ? "bad" : L.length ? "ok" : ""}"><b>${esc(it)}</b><span class="num">${ab ? `${ab} sem` : L.length ? "resolvido" : "—"}</span></div>`; }).join("")}</div></section>
+  ${itens.filter(it => falta(it).length).map(it => `<section class="panel"><h3>${esc(it)} <small>${falta(it).length} pessoa(s)</small></h3><div class="list">${falta(it).map(p => { const pr = (chkDe(p).prov || {})[it];
+    return `<div class="li"><span class="grow"><b>${esc(p.nome)}</b> <span class="hint">${p.familia ? "· " + famTxt(p.familia) : ""}</span>${pr ? `<br><span class="hint">providenciado por ${esc(pr.por)} às ${hmDe(pr.em)}</span>` : ""}</span>
+      ${pr ? '<span class="chip ok">Providenciado</span>' : ed ? `<button class="btn sm primary" type="button" data-moch-prov="${esc(p.id + "|" + it)}">Providenciado</button>` : '<span class="chip bad">Falta</span>'}</div>`; }).join("")}</div></section>`).join("")
+    || `<section class="panel"><div class="empty">Nenhum item faltando por enquanto.</div></section>`}`;
+}
+function mochItensForm() {
+  modal(`<h3>Itens da mochila</h3><p class="hint">Um item por linha. Vale para todos os TOPs.</p>
+    <div class="field"><textarea name="t" style="min-height:220px">${esc(mochilaItens().join("\n"))}</textarea></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const lista = String(fd.get("t") || "").split("\n").map(s => s.trim()).filter(Boolean); if (!lista.length) return;
+    closeModal(); save(() => api.set("config", "mochila-itens", { lista }), "Itens salvos").then(render); });
+}
+
+// ===== 3: REMÉDIOS =====  config remed-<top> {lista:[{id,pid,remedio,horarios[],obs}], doses:{"id|dia|hora":{por,em}}}
+const remDoc = () => cfgDe(`remed-${curTopId()}`) || {};
+const remSalvar = (fn, msg) => { const D = remDoc(); return save(() => api.set("config", `remed-${curTopId()}`, { lista: D.lista || [], doses: D.doses || {}, ...fn(D), top: curTopId() }), msg).then(render); };
+const minHM = h => { const [a, b] = String(h).split(":").map(Number); return a * 60 + (b || 0); };
+function dosesHoje() {
+  const D = remDoc(), dia = hojeISO(), agora = new Date().getHours() * 60 + new Date().getMinutes();
+  return (D.lista || []).flatMap(r => (r.horarios || []).map(h => { const k = `${r.id}|${dia}|${h}`, dado = (D.doses || {})[k], dif = minHM(h) - agora;
+    return { r, h, k, dado, dif, p: S.P.find(x => x.id === r.pid) || { nome: r.nome || "?" }, st: dado ? "dado" : dif < -30 ? "atrasado" : dif <= 15 ? "agora" : "depois" }; })).sort((a, b) => minHM(a.h) - minHM(b.h));
+}
+function avisoRemedio() {
+  if (!TOP2() || !ME.acesso || S.view === "remedios") return "";
+  const L = dosesHoje().filter(d => d.st === "agora" || d.st === "atrasado"); if (!L.length) return "";
+  const at = L.filter(d => d.st === "atrasado").length;
+  return `<div class="banner aviso ${at ? "rem-atraso" : ""}"><span>💊 <b>${at ? `${at} dose(s) atrasada(s)` : "Hora do remédio"}:</b> ${esc(L[0].p.nome.split(" ")[0])} · ${esc(L[0].r.remedio)} às ${L[0].h}${L.length > 1 ? ` <small>e mais ${L.length - 1}</small>` : ""}</span><button class="btn" type="button" data-go="remedios">Ver</button></div>`;
+}
+function vRemedios() {
+  const D = remDoc(), ed = podeEditar(), H = dosesHoje(), ja = new Set((D.lista || []).map(r => r.pid));
+  const nada = v => !v || /^(n[aã]o|nenhum[a]?|-)\b/i.test(String(v).trim());
+  const sug = S.P.filter(p => !cancelado(p) && !ja.has(p.id) && saudeResp(p) && !nada(saudeResp(p).medicacoes));
+  const stTxt = { dado: ["ok", "Dado"], atrasado: ["bad", "Atrasado"], agora: ["wait", "Agora"], depois: ["", "Mais tarde"] };
+  return `
+  <div class="head"><div><h2>Remédios</h2><p>Quem toma remédio no horário certo durante o TOP. A equipe médica marca cada dose dada, e o app avisa no topo quando chega a hora ou atrasa.</p></div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Doses hoje</span><span class="val num">${H.filter(d => d.dado).length}<small style="font-size:.5em;opacity:.7"> / ${H.length}</small></span><span class="sub">dadas</span></div>
+    <div class="kpi ${H.some(d => d.st === "atrasado") ? "alert" : ""}"><span class="lbl">Atrasadas</span><span class="val num">${H.filter(d => d.st === "atrasado").length}</span><span class="sub">passou mais de 30 min</span></div>
+    <div class="kpi"><span class="lbl">Pessoas</span><span class="val num">${ja.size}</span><span class="sub">com remédio na lista</span></div>
+  </div>
+  ${ed ? `<div class="actions" style="margin:4px 0 12px"><button class="btn primary" type="button" data-rem="">${ico("plus")} Adicionar remédio</button></div>` : ""}
+  ${sug.length ? `<section class="panel apr-revisar"><h3>Da ficha de saúde <small>tomam remédio e ainda não têm horário</small></h3><div class="list">${sug.map(p => `<div class="li"><span class="grow"><b>${esc(p.nome)}</b><br><span class="hint">${esc(saudeResp(p).medicacoes)}</span></span>${ed ? `<button class="btn sm" type="button" data-rem-pid="${esc(p.id)}">Agendar</button>` : ""}</div>`).join("")}</div></section>` : ""}
+  <section class="panel"><h3>Hoje <small>${new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" })}</small></h3>
+    <div class="rem-lista">${H.map(d => `<div class="rem-li ${d.st}"><span class="rem-h num">${d.h}</span><span class="grow"><b>${esc(d.p.nome)}</b><br><span class="hint">💊 ${esc(d.r.remedio)}${d.r.obs ? " · " + esc(d.r.obs) : ""}</span>${d.dado ? `<br><small class="hint">dado por ${esc(d.dado.por)} às ${hmDe(d.dado.em)}</small>` : ""}</span>
+      ${d.dado ? `<button type="button" class="chip ok" ${ed ? `data-rem-dose="${esc(d.k)}"` : ""} title="Desfazer">✓ Dado</button>` : `<span class="chip ${stTxt[d.st][0]}">${stTxt[d.st][1]}</span>${ed ? `<button class="btn sm ${d.st === "depois" ? "" : "primary"}" type="button" data-rem-dose="${esc(d.k)}">Dar</button>` : ""}`}</div>`).join("") || `<div class="empty">Nenhuma dose marcada para hoje.</div>`}</div></section>
+  ${(D.lista || []).length ? `<section class="panel"><h3>Lista de remédios <small>${D.lista.length}</small></h3><div class="list">${D.lista.map(r => `<div class="li"><span class="grow"><b>${esc((S.P.find(x => x.id === r.pid) || {}).nome || r.nome || "?")}</b><br><span class="hint">${esc(r.remedio)} · ${(r.horarios || []).join(", ")}</span></span>${ed ? `<button class="icon-btn" type="button" data-rem="${esc(r.id)}" aria-label="Editar">${ico("edit")}</button>` : ""}</div>`).join("")}</div></section>` : ""}`;
+}
+function remForm(id, pid) {
+  const D = remDoc(), r = (D.lista || []).find(x => x.id === id) || { pid: pid || "", horarios: ["08:00"] }, pessoas = S.P.filter(p => !cancelado(p)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+  const ficha = r.pid && saudeResp(S.P.find(x => x.id === r.pid) || {}) ? saudeResp(S.P.find(x => x.id === r.pid)).medicacoes : "";
+  modal(`<h3>${r.id ? "Editar remédio" : "Adicionar remédio"}</h3>
+    <div class="form">
+      <div class="field full"><label for="f-rp">Quem</label><select id="f-rp" name="pid" required><option value="">Escolha…</option>${pessoas.map(p => `<option value="${esc(p.id)}" ${r.pid === p.id ? "selected" : ""}>${esc(p.nome)}${p.tipo === "legendario" ? " (legendário)" : ""}</option>`).join("")}</select></div>
+      ${ficha ? `<p class="hint full" style="margin:0">Na ficha de saúde: <b>${esc(ficha)}</b></p>` : ""}
+      <div class="field full"><label for="f-rr">Remédio e dose</label><input id="f-rr" name="remedio" value="${esc(r.remedio || "")}" placeholder="ex.: Losartana 50 mg, 1 comprimido" required></div>
+      <div class="field full"><label for="f-rh">Horários</label><input id="f-rh" name="horarios" value="${esc((r.horarios || []).join(", "))}" placeholder="ex.: 08:00, 20:00" required></div>
+      <div class="field full"><label for="f-ro">Observação</label><input id="f-ro" name="obs" value="${esc(r.obs || "")}" placeholder="ex.: tomar com comida, está na farmácia da base"></div>
+    </div>
+    <div class="modal-foot"><div>${r.id ? `<button class="btn danger" type="button" id="remDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const hs = String(fd.get("horarios") || "").split(/[,;\s]+/).map(h => { const m = /^(\d{1,2})(?::|h)?(\d{2})?$/.exec(h.trim()); return m ? `${m[1].padStart(2, "0")}:${m[2] || "00"}` : null; }).filter(Boolean);
+    if (!fd.get("pid") || !hs.length) { toast("Escolha a pessoa e pelo menos um horário (ex.: 08:00)."); return; }
+    const novo = { id: r.id || Date.now().toString(36), pid: fd.get("pid"), remedio: String(fd.get("remedio") || "").trim(), horarios: [...new Set(hs)].sort(), obs: String(fd.get("obs") || "").trim() };
+    closeModal(); remSalvar(D => ({ lista: [...(D.lista || []).filter(x => x.id !== novo.id), novo] }), "Remédio salvo");
+  });
+  const del = $("#remDel"); if (del) del.onclick = () => { closeModal(); remSalvar(D => ({ lista: (D.lista || []).filter(x => x.id !== r.id) }), "Excluído"); };
+}
+
+// ===== 4: EMERGÊNCIA =====  config emerg {contatos:[{nome,tel,papel}], hospitais:[{nome,tel,end,lat,lng,obs}], plano, encontro}
+const emergDoc = () => cfgDe("emerg") || {};
+const telLimpo = t => String(t || "").replace(/[^\d+]/g, "");
+function vEmergencia() {
+  const E = emergDoc(), ed = podeEditar();
+  const fixo = [["SAMU", "192", "🚑"], ["Bombeiros", "193", "🚒"], ["Polícia", "190", "🚓"]];
+  return `
+  <div class="head"><div><h2>Emergência</h2><p>Tudo o que precisa numa hora difícil, em uma tela. Funciona sem internet: o app guarda no celular.</p></div></div>
+  <div class="emg-fixos">${fixo.map(([n, t, e]) => `<a class="emg-btn" href="tel:${t}"><span>${e}</span><b>${n}</b><small class="num">${t}</small></a>`).join("")}</div>
+  ${E.encontro ? `<section class="panel emg-encontro"><h3>📍 Ponto de encontro</h3><p>${esc(E.encontro)}</p></section>` : ""}
+  <section class="panel"><h3>Equipe de emergência <small>${(E.contatos || []).length}</small>${ed ? ` <button class="linkbtn" type="button" data-act="emg-editar">editar ›</button>` : ""}</h3>
+    <div class="list">${(E.contatos || []).map(c => `<div class="li"><span class="grow"><b>${esc(c.nome)}</b><br><span class="hint">${esc(c.papel || "")}${c.tel ? " · " + esc(c.tel) : ""}</span></span>${c.tel ? `<a class="btn sm primary" href="tel:${esc(telLimpo(c.tel))}">Ligar</a>${waNumber(c.tel) ? `<a class="btn sm cel-wa" href="https://wa.me/${waNumber(c.tel)}" target="_blank" rel="noopener">${ico("wa")}</a>` : ""}` : ""}</div>`).join("") || `<div class="empty">Cadastre o médico, o motorista do carro de apoio e o coordenador geral.</div>`}</div></section>
+  <section class="panel"><h3>Hospitais e UPAs <small>${(E.hospitais || []).length}</small></h3>
+    <div class="list">${(E.hospitais || []).map(h => `<div class="li"><span class="grow"><b>${esc(h.nome)}</b><br><span class="hint">${esc(h.end || "")}${h.obs ? " · " + esc(h.obs) : ""}</span></span>
+      ${h.tel ? `<a class="btn sm" href="tel:${esc(telLimpo(h.tel))}">Ligar</a>` : ""}<a class="btn sm primary" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(h.lat && h.lng ? h.lat + "," + h.lng : h.end || h.nome)}" target="_blank" rel="noopener">Rota</a></div>`).join("") || `<div class="empty">Cadastre os hospitais mais próximos da pista.</div>`}</div></section>
+  <section class="panel"><h3>Plano de emergência</h3>${E.plano ? `<div class="pt-licoes">${esc(E.plano).replace(/\n/g, "<br>")}</div>` : `<div class="empty">Escreva o passo a passo: quem decide, quem liga, por onde sai o carro.</div>`}</section>`;
+}
+function emergForm() {
+  const E = emergDoc(), lin = (L, ks) => (L || []).map(o => ks.map(k => o[k] || "").join(" | ")).join("\n");
+  modal(`<h3>Editar emergência</h3><p class="hint">Um por linha, separando com <b>|</b>.</p>
+    <div class="field"><label>Equipe (nome | telefone | função)</label><textarea name="contatos" style="min-height:110px">${esc(lin(E.contatos, ["nome", "tel", "papel"]))}</textarea></div>
+    <div class="field"><label>Hospitais (nome | telefone | endereço | observação)</label><textarea name="hospitais" style="min-height:110px">${esc(lin(E.hospitais, ["nome", "tel", "end", "obs"]))}</textarea></div>
+    <div class="field"><label>Ponto de encontro</label><input name="encontro" value="${esc(E.encontro || "")}"></div>
+    <div class="field"><label>Plano de emergência</label><textarea name="plano" style="min-height:140px">${esc(E.plano || "")}</textarea></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const parse = (t, ks) => String(t || "").split("\n").map(l => l.split("|").map(s => s.trim())).filter(a => a[0]).map(a => Object.fromEntries(ks.map((k, i) => [k, a[i] || ""])));
+    const hosp = parse(fd.get("hospitais"), ["nome", "tel", "end", "obs"]).map(h => { const v = (E.hospitais || []).find(x => x.nome === h.nome); return v && v.lat ? { ...h, lat: v.lat, lng: v.lng } : h; });
+    closeModal(); save(() => api.set("config", "emerg", { contatos: parse(fd.get("contatos"), ["nome", "tel", "papel"]), hospitais: hosp, encontro: String(fd.get("encontro") || "").trim(), plano: String(fd.get("plano") || "").trim(), em: agoraISO(), por: ME.adm || "" }), "Emergência salva").then(render);
+  });
+}
+
+// ===== 6: TRANSPORTE =====  config transp-<top> {veiculos:[{id,nome,motorista,tel,vagas,pessoas[]}], emb:{"ida|vid|pid":{em,por}}}
+const trDoc = () => cfgDe(`transp-${curTopId()}`) || {};
+const trSalvar = (fn, msg) => { const D = trDoc(); return save(() => api.set("config", `transp-${curTopId()}`, { veiculos: D.veiculos || [], emb: D.emb || {}, ...fn(D), top: curTopId() }), msg).then(render); };
+const viajantes = () => S.P.filter(p => !cancelado(p)).sort((a, b) => (a.tipo === "legendario") - (b.tipo === "legendario") || norm(a.nome).localeCompare(norm(b.nome)));
+function vTransporte() {
+  const D = trDoc(), V = D.veiculos || [], sent = S.trSent || "ida", E = D.emb || {}, ed = podeEditar(), aberto = S.trAberto;
+  const comV = new Set(V.flatMap(v => v.pessoas || [])), sem = viajantes().filter(p => !comV.has(p.id));
+  const embN = v => (v.pessoas || []).filter(pid => E[`${sent}|${v.id}|${pid}`]).length, tot = V.reduce((a, v) => a + (v.pessoas || []).length, 0), totE = V.reduce((a, v) => a + embN(v), 0);
+  const q = norm(S.trQ || "");
+  return `
+  <div class="head"><div><h2>Transporte</h2><p>Quem vai em qual ônibus ou carro. Na hora de sair, cada responsável confere o embarque, na ida e na volta, e ninguém fica para trás.</p></div></div>
+  <div class="seg campo-abas"><button type="button" data-tr-sent="ida" aria-pressed="${sent === "ida"}">Ida</button><button type="button" data-tr-sent="volta" aria-pressed="${sent === "volta"}">Volta</button></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Embarcados (${sent})</span><span class="val num">${totE}<small style="font-size:.5em;opacity:.7"> / ${tot}</small></span><div class="bar good"><i style="width:${pct(totE, tot)}%"></i></div></div>
+    <div class="kpi"><span class="lbl">Veículos</span><span class="val num">${V.length}</span><span class="sub">${V.reduce((a, v) => a + (+v.vagas || 0), 0)} vagas</span></div>
+    <div class="kpi ${sem.length ? "alert" : ""}"><span class="lbl">Sem veículo</span><span class="val num">${sem.length}</span><span class="sub">precisam de lugar</span></div>
+  </div>
+  ${ed ? `<div class="actions" style="margin:4px 0 12px"><button class="btn primary" type="button" data-tr-v="">${ico("plus")} Novo veículo</button></div>` : ""}
+  <div class="tr-grid">${V.map(v => { const n = (v.pessoas || []).length, e = embN(v), ab = aberto === v.id;
+    return `<section class="panel tr-card ${n && e === n ? "completo" : ""}"><button type="button" class="tr-cab" data-tr-abrir="${esc(v.id)}"><span class="tr-ic">${/carro|van|apoio/i.test(v.nome) ? "🚐" : "🚌"}</span><span class="grow"><b>${esc(v.nome)}</b><small>${esc(v.motorista || "sem motorista")} · ${n}/${v.vagas || "?"} lugares</small></span><span class="tr-n num">${e}/${n}</span></button>
+      <div class="bar good"><i style="width:${pct(e, n)}%"></i></div>
+      ${ab ? `<div class="tr-lista">${(v.pessoas || []).map(pid => S.P.find(x => x.id === pid)).filter(Boolean).filter(p => !q || norm(p.nome).includes(q)).map(p => { const k = `${sent}|${v.id}|${p.id}`, ok = E[k];
+        return `<button type="button" class="tr-p ${ok ? "on" : ""}" ${ed ? `data-tr-emb="${esc(k)}"` : "disabled"}><span class="cham-box">${ico("check")}</span><span class="grow">${esc(p.nome)}${p.tipo === "legendario" ? ' <span class="tag">LGND</span>' : ""}</span>${ok ? `<small>${hmDe(ok.em)}</small>` : ""}</button>`; }).join("") || `<div class="empty">Ninguém neste veículo ainda.</div>`}
+        <div class="actions" style="margin-top:8px">${v.tel ? `<a class="btn sm" href="tel:${esc(telLimpo(v.tel))}">Ligar motorista</a>` : ""}${ed ? `<button class="btn sm" type="button" data-tr-dist="${esc(v.id)}">Quem vai aqui</button><button class="btn sm" type="button" data-tr-v="${esc(v.id)}">${ico("edit")} Editar</button>` : ""}</div></div>` : ""}</section>`; }).join("")}</div>
+  ${!V.length ? `<section class="panel"><div class="empty">Cadastre os ônibus, vans e carros e distribua as pessoas.</div></section>` : ""}
+  ${sem.length && V.length ? `<section class="panel"><h3>Sem veículo <small>${sem.length}</small></h3><p class="hint">${sem.map(p => esc(p.nome)).join(", ")}</p></section>` : ""}`;
+}
+function trVeicForm(id) {
+  const D = trDoc(), v = (D.veiculos || []).find(x => x.id === id) || { vagas: 44 };
+  modal(`<h3>${v.id ? "Editar veículo" : "Novo veículo"}</h3><div class="form">
+    <div class="field full"><label for="f-vn">Nome</label><input id="f-vn" name="nome" value="${esc(v.nome || "")}" placeholder="ex.: Ônibus 1, Van da Base, Carro de apoio" required></div>
+    <div class="field"><label for="f-vm">Motorista</label><input id="f-vm" name="motorista" value="${esc(v.motorista || "")}"></div>
+    <div class="field"><label for="f-vt">Telefone</label><input id="f-vt" name="tel" inputmode="tel" value="${esc(v.tel || "")}"></div>
+    <div class="field"><label for="f-vv">Lugares</label><input id="f-vv" name="vagas" type="number" min="1" value="${esc(v.vagas || "")}"></div></div>
+    <div class="modal-foot"><div>${v.id ? `<button class="btn danger" type="button" id="vDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const novo = { ...v, id: v.id || Date.now().toString(36), nome: String(fd.get("nome") || "").trim(), motorista: String(fd.get("motorista") || "").trim(), tel: String(fd.get("tel") || "").trim(), vagas: +fd.get("vagas") || 0, pessoas: v.pessoas || [] };
+    closeModal(); S.trAberto = novo.id; trSalvar(D => ({ veiculos: [...(D.veiculos || []).filter(x => x.id !== novo.id), novo] }), "Veículo salvo"); });
+  const d = $("#vDel"); if (d) d.onclick = () => { if (!confirm("Excluir " + v.nome + "?")) return; closeModal(); trSalvar(D => ({ veiculos: (D.veiculos || []).filter(x => x.id !== v.id) }), "Excluído"); };
+}
+function trDistForm(vid) {
+  const D = trDoc(), V = D.veiculos || [], v = V.find(x => x.id === vid); if (!v) return;
+  const outro = pid => V.find(x => x.id !== vid && (x.pessoas || []).includes(pid));
+  modal(`<h3>Quem vai no ${esc(v.nome)}</h3><p class="hint" id="trConta"></p>
+    <div class="cham-lista" style="max-height:56vh">${viajantes().map(p => { const o = outro(p.id); return `<label class="cham-p"><input type="checkbox" name="p" value="${esc(p.id)}" ${(v.pessoas || []).includes(p.id) ? "checked" : ""}><span class="cham-box">${ico("check")}</span><span class="grow">${esc(p.nome)}${p.tipo === "legendario" ? ' <span class="tag">LGND</span>' : ""}${o ? ` <small class="hint">· hoje no ${esc(o.nome)}</small>` : ""}</span></label>`; }).join("")}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const sel = fd.getAll("p"); closeModal();
+    trSalvar(D => ({ veiculos: (D.veiculos || []).map(x => x.id === vid ? { ...x, pessoas: sel } : { ...x, pessoas: (x.pessoas || []).filter(pid => !sel.includes(pid)) }) }), "Lista salva"); });
+  const c = () => { const n = $("#mform").querySelectorAll("[name=p]:checked").length; $("#trConta").innerHTML = `<b>${n}</b> de ${v.vagas || "?"} lugares${v.vagas && n > v.vagas ? ' · <span class="bad-text">passou da lotação</span>' : ""}`; };
+  $("#mform").addEventListener("change", c); c();
+}
+
+// ===== 7: FINANCEIRO =====  config fin-<top> {itens:[{id,tipo:gasto|entrada,area,desc,valor,data,por,em,foto}], orc:{area:valor}}
+const FIN_AREAS = ["Alimentação", "Logística", "Transporte", "Saúde", "Material e brindes", "Hospedagem", "Mídia", "Outros"];
+const finDoc = () => cfgDe(`fin-${curTopId()}`) || {};
+const finSalvar = (fn, msg) => { const D = finDoc(); return save(() => api.set("config", `fin-${curTopId()}`, { itens: D.itens || [], orc: D.orc || {}, ...fn(D), top: curTopId() }), msg).then(render); };
+function vFinanceiro() {
+  const D = finDoc(), I = (D.itens || []).slice().sort((a, b) => (b.data || "").localeCompare(a.data || "") || (b.em || "").localeCompare(a.em || "")), orc = D.orc || {}, ed = podeEditar();
+  const g = I.filter(i => i.tipo !== "entrada"), e = I.filter(i => i.tipo === "entrada"), sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0), totOrc = Object.values(orc).reduce((a, v) => a + (+v || 0), 0);
+  const porA = a => g.filter(i => i.area === a).reduce((s, i) => s + (+i.valor || 0), 0), areas = [...new Set([...FIN_AREAS.filter(a => porA(a) || orc[a]), ...g.map(i => i.area)])];
+  return `
+  <div class="head"><div><h2>Financeiro</h2><p>Gastos e entradas do TOP com a foto do recibo. No fim sai a prestação de contas em PDF.</p></div>
+    <div class="actions">${ed ? `<button class="btn primary" type="button" data-fin="">${ico("plus")} Lançar</button>` : ""}<button class="btn" type="button" data-act="fin-pdf">${ico("upload")} Prestação de contas</button></div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Gasto</span><span class="val num" style="font-size:24px">${brl(sg)}</span><span class="sub">${g.length} lançamento(s)</span></div>
+    <div class="kpi"><span class="lbl">Entradas</span><span class="val num" style="font-size:24px">${brl(se)}</span><span class="sub">doações e repasses</span></div>
+    <div class="kpi ${se - sg < 0 ? "alert" : ""}"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos gastos</span></div>
+    <div class="kpi ${totOrc && sg > totOrc ? "alert" : ""}"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></div>
+  </div>
+  <section class="panel"><h3>Por área ${S.isOwner ? `<button class="linkbtn" type="button" data-act="fin-orc">orçamento ›</button>` : ""}</h3>
+    <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<div class="fin-a"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></div>`; }).join("") || `<div class="empty">Nenhum gasto ainda.</div>`}</div></section>
+  <section class="panel"><h3>Lançamentos <small>${I.length}</small></h3><div class="cel-lista">${I.map(i => `<div class="cel-li ${i.tipo === "entrada" ? "guardado" : ""}">
+    ${i.foto ? `<button type="button" class="cel-foto" data-fin-foto="${esc(i.id)}" aria-label="Ver recibo"><img src="${esc(i.foto)}" alt=""></button>` : `<span class="cel-foto vazia">${i.tipo === "entrada" ? "＋" : "🧾"}</span>`}
+    <button type="button" class="cel-info" ${ed ? `data-fin="${esc(i.id)}"` : "disabled"}><b>${esc(i.desc)}</b><small>${esc(i.area || "")} · ${i.data ? new Date(i.data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""} · ${esc(i.por || "")}</small></button>
+    <b class="num fin-v ${i.tipo === "entrada" ? "ent" : ""}">${i.tipo === "entrada" ? "+" : "−"} ${brl(i.valor)}</b></div>`).join("") || `<div class="empty">Toque em Lançar para registrar o primeiro gasto.</div>`}</div></section>`;
+}
+function finForm(id) {
+  const D = finDoc(), it = (D.itens || []).find(x => x.id === id) || { tipo: "gasto", data: hojeISO(), area: "Alimentação" }; let foto = it.foto || "";
+  modal(`<h3>${it.id ? "Editar lançamento" : "Novo lançamento"}</h3>
+    <div class="seg lem-quando" style="margin-bottom:10px">${[["gasto", "Gasto"], ["entrada", "Entrada"]].map(([v, l]) => `<label><input type="radio" name="tipo" value="${v}" ${it.tipo === v ? "checked" : ""}> ${l}</label>`).join("")}</div>
+    <div class="form">
+      <div class="field full"><label for="f-fd">Descrição</label><input id="f-fd" name="desc" value="${esc(it.desc || "")}" placeholder="ex.: 40 kg de gelo, combustível da van" required></div>
+      <div class="field"><label for="f-fv">Valor (R$)</label><input id="f-fv" name="valor" inputmode="decimal" value="${it.valor != null ? String(it.valor).replace(".", ",") : ""}" required></div>
+      <div class="field"><label for="f-fdt">Data</label><input id="f-fdt" name="data" type="date" value="${esc(it.data || "")}"></div>
+      <div class="field full"><label for="f-fa">Área</label><select id="f-fa" name="area">${FIN_AREAS.map(a => `<option ${it.area === a ? "selected" : ""}>${a}</option>`).join("")}</select></div>
+      <div class="field full"><span class="lab">Recibo / nota</span><div class="cel-acoes" style="margin:0"><label class="btn">📷 ${foto ? "Trocar foto" : "Tirar foto do recibo"}<input type="file" accept="image/*" capture="environment" id="finFoto" hidden></label></div>
+        <img id="finPrev" class="cel-grande" src="${esc(foto)}" alt="" ${foto ? "" : "hidden"}></div>
+    </div>
+    <div class="modal-foot"><div>${it.id ? `<button class="btn danger" type="button" id="finDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const valor = Number(String(fd.get("valor") || "").replace(/\./g, "").replace(",", ".")); if (!(valor > 0)) { toast("Confira o valor."); return; }
+    const novo = { ...it, id: it.id || Date.now().toString(36), tipo: fd.get("tipo") || "gasto", desc: String(fd.get("desc") || "").trim(), valor, data: fd.get("data") || hojeISO(), area: fd.get("area"), foto, por: it.por || ME.adm || "", em: it.em || agoraISO() };
+    closeModal(); finSalvar(D => ({ itens: [...(D.itens || []).filter(x => x.id !== novo.id), novo] }), "Lançamento salvo"); });
+  $("#finFoto").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return; try { foto = await reduzirFoto(fl, 700); $("#finPrev").src = foto; $("#finPrev").hidden = false; } catch { toast("Não consegui abrir a foto."); } });
+  const d = $("#finDel"); if (d) d.onclick = () => { if (!confirm("Excluir este lançamento?")) return; closeModal(); finSalvar(D => ({ itens: (D.itens || []).filter(x => x.id !== it.id) }), "Excluído"); };
+}
+function finOrcForm() {
+  const o = finDoc().orc || {};
+  modal(`<h3>Orçamento por área</h3><div class="form">${FIN_AREAS.map((a, i) => `<div class="field"><label for="f-o${i}">${a}</label><input id="f-o${i}" name="${esc(a)}" inputmode="decimal" value="${o[a] ? String(o[a]).replace(".", ",") : ""}" placeholder="R$"></div>`).join("")}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const orc = Object.fromEntries(FIN_AREAS.map(a => [a, Number(String(fd.get(a) || "").replace(/\./g, "").replace(",", ".")) || 0]).filter(([, v]) => v));
+    closeModal(); finSalvar(() => ({ orc }), "Orçamento salvo"); });
+}
+function finPdf() {
+  const D = finDoc(), I = (D.itens || []).slice().sort((a, b) => (a.data || "").localeCompare(b.data || "")), g = I.filter(i => i.tipo !== "entrada"), e = I.filter(i => i.tipo === "entrada");
+  const sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0), dt = d => d ? d.split("-").reverse().slice(0, 2).join("/") : "";
+  const areas = [...new Set(g.map(i => i.area || "Outros"))].sort();
+  return gerarListaPdf({ titulo: "Prestação de contas", arquivo: "Prestacao de contas " + topName(), orient: "portrait",
+    resumo: [["Gasto", brl(sg)], ["Entradas", brl(se)], ["Saldo", brl(se - sg)]], legenda: "Gastos por área, com a foto do recibo. Entradas no fim.",
+    colunas: [{ t: "Recibo", w: 20, foto: true }, { t: "Data", w: 14 }, { t: "Descrição", bold: true }, { t: "Por", w: 26, cinza: true }, { t: "Valor", w: 26, al: "right" }],
+    secoes: [...areas.map(a => { const L = g.filter(i => (i.area || "Outros") === a); return { titulo: `${a} · ${brl(L.reduce((s, i) => s + (+i.valor || 0), 0))}`, linhas: L.map(i => [i.foto || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }; }),
+      ...(e.length ? [{ titulo: `Entradas · ${brl(se)}`, linhas: e.map(i => [i.foto || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }] : [])] }, false).catch(er => toast("Não foi possível gerar o PDF. " + er.message));
+}
 
 /* Período do backup: dia, semana (7 dias), mês (30 dias) ou o TOP todo. Num período, entra o que foi criado ou alterado dentro dele. */
 const BK_PER = [{ v: "dia", l: "Diário", d: "o que mudou hoje", dias: 1 }, { v: "semana", l: "Semanal", d: "o que mudou nos últimos 7 dias", dias: 7 },
@@ -3884,7 +4171,7 @@ function render() {
   const other = tid !== atualId() && v !== "tops"
     ? `<div class="banner"><span>Você está vendo o <b>${esc(topName())}</b>${td && td.status === "finalizado" ? " (finalizado)" : ""}. O que mudar aqui fica no histórico dele.</span><button class="btn" type="button" data-top-open="${esc(atualId())}">Voltar para o ${esc(topName(atualId()))}</button></div>` : "";
   const faixa = avisoVisivel() ? `<div class="banner aviso"><span>${ico("bell")} <b>Planilha atualizada</b> por ${esc(S.aviso.por || "um ADM")}: ${S.aviso.novosP + S.aviso.novosL} novo(s) (${S.aviso.novosP} part. · ${S.aviso.novosL} LGND).</span><button class="btn" type="button" data-aviso="abrir">Ver resumo</button></div>` : "";
-  let html = faixa + avisoLembretes() + avisoTurno() + other + (v === "painel" ? vPainel()
+  let html = faixa + avisoRemedio() + avisoLembretes() + avisoTurno() + other + (v === "painel" ? vPainel()
     : v === "tops" ? vTops()
     : v === "usuarios" ? vUsuarios()
     : v === "historico" ? vHistorico()
@@ -3907,6 +4194,11 @@ function render() {
     : v === "campo" ? vCampo()
     : v === "comunicacao" ? vComunicacao()
     : v === "celulares" ? vCelulares()
+    : v === "checkin" ? vCheckin()
+    : v === "remedios" ? vRemedios()
+    : v === "emergencia" ? vEmergencia()
+    : v === "transporte" ? vTransporte()
+    : v === "financeiro" ? vFinanceiro()
     : v === "guia" ? vGuia()
     : vPista());
   if (D2()) { if (carregando(v)) html = faixa + other + esqueleto(v); else html = vazios(html); }
@@ -4570,6 +4862,24 @@ document.addEventListener("click", e => {
   if (d.campoAba) { S.campoAba = d.campoAba; render(); return; }
   if (d.comAba) { S.comAba = d.comAba; render(); return; }
   if (d.celF) { S.celF = d.celF; render(); return; }
+  if (d.chkAba) { S.chkAba = d.chkAba; render(); return; }
+  if (d.chkF) { S.chkF = d.chkF; render(); return; }
+  if (d.chk) { const p = S.P.find(x => x.id === d.chk); if (p && podeEditar()) chkForm(p); return; }
+  if (d.mochProv) { const [pid, it] = d.mochProv.split("|"), p = S.P.find(x => x.id === pid), c = p && chkDe(p); if (c && podeEditar()) save(() => api.set("config", chkId(p), { ...c, prov: { ...(c.prov || {}), [it]: { por: ME.adm || "", em: agoraISO() } } }), "Providenciado").then(render); return; }
+  if (d.act === "moch-itens") { mochItensForm(); return; }
+  if (d.rem != null && t.matches("[data-rem]")) { if (podeEditar()) remForm(d.rem); return; }
+  if (d.remPid) { if (podeEditar()) remForm("", d.remPid); return; }
+  if (d.remDose) { if (podeEditar()) remSalvar(D => { const x = { ...(D.doses || {}) }; if (x[d.remDose]) delete x[d.remDose]; else x[d.remDose] = { por: ME.adm || "", em: agoraISO() }; return { doses: x }; }, ""); return; }
+  if (d.act === "emg-editar") { emergForm(); return; }
+  if (d.trSent) { S.trSent = d.trSent; render(); return; }
+  if (d.trAbrir) { S.trAberto = S.trAberto === d.trAbrir ? null : d.trAbrir; render(); return; }
+  if (d.trV != null && t.matches("[data-tr-v]")) { if (podeEditar()) trVeicForm(d.trV); return; }
+  if (d.trDist) { if (podeEditar()) trDistForm(d.trDist); return; }
+  if (d.trEmb) { if (podeEditar()) trSalvar(D => { const x = { ...(D.emb || {}) }; if (x[d.trEmb]) delete x[d.trEmb]; else x[d.trEmb] = { por: ME.adm || "", em: agoraISO() }; return { emb: x }; }, ""); return; }
+  if (d.fin != null && t.matches("[data-fin]")) { if (podeEditar()) finForm(d.fin); return; }
+  if (d.finFoto) { const i = (finDoc().itens || []).find(x => x.id === d.finFoto); if (i) modal(`<h3>${esc(i.desc)}</h3><img class="cel-grande" src="${esc(i.foto)}" alt="Recibo"><div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal()); return; }
+  if (d.act === "fin-orc") { finOrcForm(); return; }
+  if (d.act === "fin-pdf") { finPdf(); return; }
   if (d.celEq != null && t.matches("[data-cel-eq]")) { S.celEq = S.celEq === d.celEq ? "" : d.celEq; if (S.celEq) S.celF = "todos"; render(); return; }
   if (d.cel) { const p = S.P.find(x => x.id === d.cel); if (p && podeEditar()) celForm(p); return; }
   if (d.celNao) { const p = S.P.find(x => x.id === d.celNao); if (p && podeEditar()) celNaoForm(p); return; }
