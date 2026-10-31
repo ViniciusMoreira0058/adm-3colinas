@@ -1743,6 +1743,16 @@ const muralMsgs = () => (cfgDe(campoId("mural")) || {}).msgs || [];
 const comViAte = (m = ME.id) => (cfgDe(comVistoId(m)) || {}).ate || "";
 const comNaoLidas = () => { if (!COM() || !ME.acesso) return 0; const ate = comViAte(); return muralMsgs().filter(m => m.por !== ME.adm && (m.em || "") > ate).length; };
 const admsAtivos = () => (S.equipe || []).filter(m => m.ativo !== false);
+function comEditar(mid) {
+  const id = campoId("mural"), M = cfgDe(id) || {}, m = (M.msgs || []).find(x => x.id === mid); if (!m) return;
+  modal(`<h3>Editar recado</h3>
+    <div class="field"><textarea id="f-mt" name="txt" maxlength="200" style="min-height:100px" required>${esc(m.txt)}</textarea></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const txt = String(fd.get("txt") || "").trim(); if (!txt) { toast("Escreva o recado."); return; }
+    closeModal(); const A = cfgDe(id) || {};
+    save(() => api.set("config", id, { ...A, msgs: (A.msgs || []).map(x => x.id === mid ? { ...x, txt, editadoEm: new Date().toISOString(), editadoPor: ME.adm || "" } : x) }), "Recado editado").then(render);
+  });
+}
 function comMarcarVi(ate) {
   const atual = comViAte(); if (atual && atual >= ate) return;
   save(() => api.set("config", comVistoId(), { ate, nome: ME.adm || "", top: curTopId() }), "").then(render);
@@ -1765,15 +1775,17 @@ function vAgora() {
   const card = m => { const v = viram(m), falta = equipe.filter(e => !v.some(x => x.id === e.id || x.nome === e.nome)), novo = m.por !== ME.adm && (m.em || "") > ate;
     return `<div class="mural-msg ${m.tipo === "alerta" ? "alerta" : ""} ${m.fixo ? "fixo" : ""} ${novo ? "novo" : ""}">
       ${m.fixo ? `<span class="mural-pin">📌 Fixado</span>` : ""}<p>${esc(m.txt)}</p>
-      <div class="mural-pe"><small>${esc(m.por)} · ${hmDe(m.em)} · ${haQuanto(m.em)}</small>
+      <div class="mural-pe"><small>${esc(m.por)} · ${hmDe(m.em)} · ${haQuanto(m.em)}${m.editadoEm ? " · editado" : ""}</small>
         <span class="mural-acoes"><button type="button" class="mural-vistos" data-com-vistos="${esc(m.id)}" title="${falta.length ? "Falta ver: " + esc(falta.map(e => e.nome.split(" ")[0]).join(", ")) : "Quem viu"}">👁 ${v.length}${equipe.length ? "/" + equipe.length : ""}</button>
         ${novo ? `<button type="button" class="btn sm primary" data-com-vi="${esc(m.em)}">${ico("check")} Vi</button>` : ""}
-        ${ed ? `<button type="button" class="icon-btn" data-com-fixar="${esc(m.id)}" aria-label="${m.fixo ? "Desafixar" : "Fixar no topo"}" title="${m.fixo ? "Desafixar" : "Fixar no topo"}">📌</button>` : ""}</span></div>
+        <span class="mural-sp"></span>
+        ${ed ? `<button type="button" class="icon-btn ${m.fixo ? "on" : ""}" data-com-fixar="${esc(m.id)}" aria-label="${m.fixo ? "Desafixar" : "Fixar no topo"}" title="${m.fixo ? "Desafixar" : "Fixar no topo"}">📌</button>` : ""}
+        ${ed && (m.por === ME.adm || S.isOwner) ? `<button type="button" class="icon-btn" data-com-editar="${esc(m.id)}" aria-label="Editar recado" title="Editar">${ico("edit")}</button><button type="button" class="icon-btn" data-com-apagar="${esc(m.id)}" aria-label="Excluir recado" title="Excluir">${ico("trash")}</button>` : ""}</span></div>
       ${S.comVistos === m.id ? `<div class="mural-quem">${v.length ? `<span><b>Viram:</b> ${v.map(e => esc(String(e.nome).split(" ")[0])).join(", ")}</span>` : ""}${falta.length ? `<span class="bad-text"><b>Falta ver:</b> ${falta.map(e => esc(e.nome.split(" ")[0])).join(", ")}</span>` : ""}</div>` : ""}</div>`; };
   return `
-  ${ed ? `<section class="panel"><h3>Avisar a equipe <small>chega no sino de todos os ADMs</small></h3>
-    <div class="mural-rapido">${MURAL_RAPIDO.map(([e, t]) => `<button type="button" class="btn" data-mural="${esc(e + " " + t)}"><span aria-hidden="true">${e}</span> ${esc(t)}</button>`).join("")}</div>
-    <div class="mural-livre"><input id="muralTxt" placeholder="Ou escreva um recado curto…" maxlength="200" aria-label="Recado"><button class="btn primary" type="button" data-act="mural-enviar">Enviar</button></div></section>` : ""}
+  ${ed ? `<section class="panel"><h3>Avisar a equipe <small>todos recebem</small></h3>
+    <div class="mural-rapido">${MURAL_RAPIDO.map(([e, t]) => `<button type="button" class="mural-q" data-mural="${esc(e + " " + t)}"><span class="mural-q-e" aria-hidden="true">${e}</span><span>${esc(t)}</span></button>`).join("")}</div>
+    <div class="mural-livre"><input id="muralTxt" placeholder="Ou escreva um recado…" maxlength="200" aria-label="Recado"><button class="btn primary" type="button" data-act="mural-enviar">Enviar</button></div></section>` : ""}
   ${fixos.length ? `<section class="panel"><h3>Fixados <small>${fixos.length}</small></h3><div class="mural-lista">${fixos.map(card).join("")}</div></section>` : ""}
   <section class="panel"><h3>Recados <small>${nl ? `${nl} não lido(s) · <button type="button" class="linkbtn" data-com-vi="${esc((msgs[0] || {}).em || "")}">marcar tudo como visto</button>` : msgs.length}</small></h3>
     <div class="mural-lista">${resto.map(card).join("") || `<div class="empty">Nenhum recado ainda.</div>`}</div></section>`;
@@ -4377,6 +4389,9 @@ document.addEventListener("click", e => {
   if (d.comAba) { S.comAba = d.comAba; render(); return; }
   if (d.comVi != null && t.matches("[data-com-vi]")) { if (d.comVi) comMarcarVi(d.comVi); return; }
   if (d.comVistos) { S.comVistos = S.comVistos === d.comVistos ? null : d.comVistos; render(); return; }
+  if (d.comEditar) { comEditar(d.comEditar); return; }
+  if (d.comApagar) { const id = campoId("mural"), M = cfgDe(id) || {}, m = (M.msgs || []).find(x => x.id === d.comApagar);
+    if (m && confirm(`Excluir o recado "${m.txt.slice(0, 60)}"?`)) save(() => api.set("config", id, { ...M, msgs: M.msgs.filter(x => x.id !== m.id) }), "Recado excluído").then(render); return; }
   if (d.comFixar) { const id = campoId("mural"), M = cfgDe(id) || {}; if (podeEditar()) save(() => api.set("config", id, { ...M, msgs: (M.msgs || []).map(m => m.id === d.comFixar ? { ...m, fixo: !m.fixo } : m) }), "").then(render); return; }
   if (d.lem != null && t.matches("[data-lem]")) { if (podeEditar()) lembreteForm(d.lem); return; }
   if (d.lemFeito) { if (podeEditar()) lembreteFeito(d.lemFeito); return; }
