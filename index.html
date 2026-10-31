@@ -1109,6 +1109,15 @@ body .kpis.kpis-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bot
 .emg-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:16px 8px;border-radius:16px;background:#b91c1c;color:#fff;text-decoration:none;box-shadow:0 6px 18px rgba(185,28,28,.35)}
 .emg-btn span{font-size:28px}.emg-btn b{font-size:15px}.emg-btn small{font-size:20px;font-weight:800;opacity:.95}
 .emg-encontro p{margin:0;font-size:16px;font-weight:600}
+.car-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;align-items:start}
+.car-card{padding:12px;display:flex;flex-direction:column;gap:8px}.car-card.dentro{box-shadow:inset 3px 0 0 #46c486}.car-card.saiu{opacity:.72}.car-card.novo{border-color:var(--accent)}
+.car-cab{display:flex;gap:12px;align-items:center;background:none;border:0;padding:0;color:inherit;text-align:left;font:inherit;cursor:pointer;width:100%}
+.car-cab .grow{display:flex;flex-direction:column;min-width:0}.car-cab small{color:var(--muted)}
+.car-foto{width:76px;height:58px;border-radius:10px;background:var(--surface2);display:grid;place-items:center;overflow:hidden;flex:none}.car-foto img{width:100%;height:100%;object-fit:cover}.car-foto svg{width:30px;height:30px;opacity:.6}
+.car-placa{font-size:19px;letter-spacing:.08em;font-weight:800}.car-mod{font-weight:600}
+.car-chips{display:flex;flex-wrap:wrap;gap:6px}.car-f{flex-wrap:wrap;margin-bottom:12px}
+.car-fotos{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:10px}.car-fotos img{width:100%;border-radius:10px;max-height:240px;object-fit:cover}
+.car-up{flex-direction:column;gap:6px;width:100%}.car-up img{width:100%;max-height:140px;object-fit:cover;border-radius:8px}
 .tr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start}
 .tr-card{padding:12px}.tr-card.completo{border-color:rgba(70,196,134,.55)}
 .tr-cab{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:0;color:var(--fg);font:inherit;text-align:left;cursor:pointer;margin-bottom:8px}
@@ -1201,6 +1210,7 @@ body .kpis.kpis-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bot
   <symbol id="i-door" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h5v18h-5"/><path d="M3 12h11"/><path d="m10 8 4 4-4 4"/></symbol>
   <symbol id="i-pill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8.5" width="19" height="7" rx="3.5" transform="rotate(-45 12 12)"/><path d="m8.5 8.5 7 7"/></symbol>
   <symbol id="i-sos" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.5 20h19z"/><path d="M12 10v4.5"/><path d="M12 17.5h.01"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17H3v-5l2-5h14l2 5v5h-2"/><path d="M3 12h18"/><circle cx="7.5" cy="17" r="2"/><circle cx="16.5" cy="17" r="2"/><path d="M9.5 17h5"/></symbol>
   <symbol id="i-bus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16"/><path d="M7 21v-3M17 21v-3"/><path d="M8 15h.01M16 15h.01"/></symbol>
   <symbol id="i-money" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>

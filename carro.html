@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex"><meta name="theme-color" content="#090d13">
+<title>Cadastro do veículo · TOP 3 Colinas</title>
+<style>
+:root{--bg:#090d13;--card:#121821;--card2:#1a222d;--fg:#fff6ee;--muted:#a59d94;--line:#283240;--accent:#ff7a1a;--red:#ef4444}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;padding-bottom:48px}
+main{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{text-align:center}header img{width:72px}
+.eb{color:var(--accent);font-weight:800;font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+h1{margin:4px 0;font-size:24px}p{margin:0}.muted{color:var(--muted);font-size:14px}
+.demo{padding:10px 12px;border-radius:10px;border:1px solid var(--accent);background:rgba(255,122,26,.1);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+h2{margin:0 0 10px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}h2.red{color:var(--red)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:1/-1}
+label.l{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+input,select,textarea{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit}
+textarea{min-height:70px;resize:vertical}
+output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2);font-weight:800}
+.foto{display:flex;flex-direction:column;align-items:center;gap:8px}
+.foto img,.foto .v{width:110px;height:110px;border-radius:50%;object-fit:cover;background:var(--card2);display:grid;place-items:center;color:var(--muted);font-size:40px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit;font-weight:700;cursor:pointer}
+.primary{background:var(--accent);border-color:var(--accent);color:#111;width:100%;font-size:17px}
+.c{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+.sn{display:flex;gap:4px}.sn label{position:relative}.sn input{position:absolute;opacity:0;inset:0}
+.sn span{display:block;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card2);font-weight:700;font-size:14px;cursor:pointer}
+.sn input:checked+span{background:var(--accent);border-color:var(--accent);color:#111}
+.sn label:first-child input:checked+span{background:var(--red);border-color:var(--red);color:#fff}
+.ck{display:flex;gap:10px;align-items:flex-start;font-size:15px}.ck input{width:auto;margin-top:4px}
+.err{color:var(--red);font-weight:700}
+.ok{text-align:center;padding:30px 16px}.ok b{font-size:44px;display:block}
+@media (max-width:480px){.grid{grid-template-columns:1fr}}
+.fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px}.fotos .foto img,.fotos .foto .v{width:100%;height:120px;border-radius:12px}
+#placa{text-transform:uppercase;letter-spacing:.1em;font-weight:800;font-size:20px}
+</style></head>
+<body><main>
+<header><img src="assets/logo.png" alt="Track 3 Colinas"><div class="eb">TOP 3 Colinas · Veículos</div><h1>Cadastre o seu veículo</h1>
+<p class="muted">Leva uns 2 minutos. A equipe ADM usa estes dados para organizar a chegada e o estacionamento dos carros no TOP.</p></header>
+<div class="demo" id="aviso" hidden><b>Demonstração:</b> o cadastro fica guardado só neste aparelho, para você ver como chega na página Carros.</div>
+<div class="card err" id="semLink" hidden>Este link não está completo. Peça um link novo para a equipe ADM.</div>
+<form id="f" novalidate>
+<div class="card"><h2>Responsável pelo veículo</h2><div class="grid">
+<div class="full"><label class="l" for="nome">Nome completo</label><input id="nome" required autocomplete="name"></div>
+<div class="full"><label class="l" for="tel">Telefone / WhatsApp</label><input id="tel" inputmode="tel" autocomplete="tel" placeholder="(16) 99999-0000" required></div>
+<div class="full"><label class="l" for="func">Vai como</label><select id="func" required><option value="">Selecione</option><option>Apoio</option><option>Ambulância</option><option>Visitante</option><optgroup label="Área / equipe"><option>ADM</option><option>Logística</option><option>Mídia</option><option>Segurança</option><option>Voz</option><option>Hakunas</option><option>Intercessão</option><option>Eventos</option><option>Produção</option><option>Base</option><option>Coordenação</option></optgroup></select></div>
+</div></div>
+<div class="card"><h2>Veículo</h2><div class="grid">
+<div class="full"><label class="l" for="placa">Placa</label><input id="placa" maxlength="8" placeholder="ABC-1D23" required autocomplete="off"></div>
+<div><label class="l" for="mod">Modelo</label><input id="mod" placeholder="ex.: Hilux, Gol" required></div>
+<div><label class="l" for="cor">Cor</label><input id="cor"></div>
+<div><label class="l" for="vag">Lugares</label><input id="vag" type="number" min="1" max="60" inputmode="numeric"></div>
+<div class="full"><label class="l" for="obs">Observação</label><textarea id="obs" placeholder="ex.: chego sexta à noite, levo material da Logística"></textarea></div>
+</div></div>
+<div class="card"><h2>Fotos</h2><div class="fotos">
+<div class="foto"><img id="i1" hidden alt="Foto do carro"><span class="v" id="v1">🚗</span><label class="btn">📷 Foto do carro<input type="file" accept="image/*" capture="environment" id="a1" hidden></label></div>
+<div class="foto"><img id="i2" hidden alt="Foto da placa"><span class="v" id="v2">🔢</span><label class="btn">📷 Foto da placa<input type="file" accept="image/*" capture="environment" id="a2" hidden></label></div>
+</div></div>
+<div class="card"><label class="ck"><input type="checkbox" id="consent"> Autorizo a equipe do TOP a usar estes dados só para organizar os veículos durante o evento.</label>
+<p class="err" id="err" hidden></p><div style="margin-top:14px"><button class="btn primary" type="submit">Enviar cadastro</button></div></div>
+</form></main>
+<script>
+(function () {
+  const $ = s => document.querySelector(s), f = $("#f"), q = new URLSearchParams(location.search), demo = q.has("demo"), token = q.get("t") || "", top = q.get("top") || "";
+  $("#aviso").hidden = !demo;
+  if (!token) { $("#semLink").hidden = false; f.hidden = true; return; }
+  const fotos = {};
+  const reduz = (fl, lado) => new Promise((ok, erro) => { const img = new Image(), u = URL.createObjectURL(fl);
+    img.onload = () => { const k = Math.min(1, lado / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); ok(c.toDataURL("image/jpeg", .78)); }; img.onerror = erro; img.src = u; });
+  [1, 2].forEach(n => $("#a" + n).onchange = async e => { const a = e.target.files[0]; if (!a) return; try { fotos[n] = await reduz(a, 700); $("#i" + n).src = fotos[n]; $("#i" + n).hidden = false; $("#v" + n).hidden = true; } catch (x) {} });
+  const placa = p => p.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^([A-Z]{3})(\d[A-Z0-9]\d{2})$/, "$1-$2");
+  $("#placa").addEventListener("blur", e => { e.target.value = placa(e.target.value); });
+  f.addEventListener("submit", e => {
+    e.preventDefault(); const err = $("#err"), falta = [], v = id => $("#" + id).value.trim();
+    if (!v("nome")) falta.push("seu nome"); if (v("tel").replace(/\D/g, "").length < 10) falta.push("o telefone com DDD");
+    if (!v("func")) falta.push("como você vai"); if (placa(v("placa")).replace("-", "").length < 7) falta.push("a placa"); if (!v("mod")) falta.push("o modelo");
+    if (!$("#consent").checked) falta.push("a autorização no fim");
+    if (falta.length) { err.textContent = "Falta preencher: " + falta.join(", ") + "."; err.hidden = false; return; }
+    const carro = { id: "lk" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), top, token, nome: v("nome"), tel: v("tel"), funcao: v("func"), placa: placa(v("placa")), modelo: v("mod"), cor: v("cor"), vagas: +v("vag") || "", obs: v("obs"), foto: fotos[1] || "", fotoPlaca: fotos[2] || "", origem: "link", em: new Date().toISOString() };
+    const fim = () => { document.querySelector("main").innerHTML = `<div class="card ok"><b>✅</b><h1>Veículo cadastrado!</h1><p class="muted">Obrigado, ${carro.nome.split(" ")[0].replace(/[<>&]/g, "")}. A equipe ADM já recebeu o ${carro.modelo.replace(/[<>&]/g, "")} placa ${carro.placa}. Até o TOP!</p>${demo ? '<p class="demo" style="margin-top:16px">Demonstração: abra a página Carros neste aparelho para ver o cadastro.</p>' : ""}</div>`; scrollTo(0, 0); };
+    if (demo) { try { const L = JSON.parse(localStorage.getItem("adm3-carros-link") || "[]"); L.push(carro); localStorage.setItem("adm3-carros-link", JSON.stringify(L)); } catch (x) { err.textContent = "Não consegui guardar neste aparelho (pouco espaço ou modo anônimo)."; err.hidden = false; return; } fim(); return; }
+    err.textContent = "O cadastro pelo link ainda está em teste. Fale com a equipe ADM."; err.hidden = false;
+  });
+})();
+</script></body></html>

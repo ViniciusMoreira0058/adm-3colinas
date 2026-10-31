@@ -1828,3 +1828,13 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     foto: "", parcelas: [{ n: 1, de: 2, venc: dia(5), valor: 320, pago: false }, { n: 2, de: 2, venc: dia(35), valor: 320, pago: false }],
     status: "aprovado", decPor: "Vinicius Moreira", decEm: new Date().toISOString(), por: "Fábio Henrique Alves", em: new Date(Date.now() - 864e5).toISOString() });
 })();
+// CARROS: veículos fictícios que vão ao TOP (um chegou pelo link do dono e ainda não foi conferido)
+(function () {
+  const D = window.ADM_DEMO.docs, h = m => new Date(Date.now() - m * 6e4).toISOString();
+  D.push({ col: "config", id: "carros-top1922", data: { top: "top1922", token: "demo3col", apagados: [], lista: [
+    { id: "c1", nome: "Diego Souza", tel: "16 99999-5555", placa: "FRA-2B34", modelo: "Hilux", cor: "Prata", funcao: "Logística", vagas: 5, local: "Estacionamento da base", origem: "adm", em: h(4000), chegou: h(180), saiu: "", foto: "", fotoPlaca: "" },
+    { id: "c2", nome: "Dr. Paulo (fictício)", tel: "16 99000-0001", placa: "AMB-1A92", modelo: "Sprinter ambulância", cor: "Branca", funcao: "Ambulância", vagas: 3, local: "Ao lado do galpão, saída livre", origem: "adm", em: h(3900), chegou: h(240), saiu: "", foto: "", fotoPlaca: "" },
+    { id: "c3", nome: "Rafael Lima", tel: "16 98888-1212", placa: "SEG-7C11", modelo: "Duster", cor: "Preta", funcao: "Segurança", vagas: 5, local: "Portaria", origem: "adm", em: h(3000), chegou: "", saiu: "", foto: "", fotoPlaca: "" },
+    { id: "c4", nome: "Carla Mendes", tel: "16 97777-3434", placa: "VIS-4D56", modelo: "Onix", cor: "Vermelho", funcao: "Visitante", vagas: 4, local: "", origem: "adm", em: h(2000), chegou: h(900), saiu: h(600), foto: "", fotoPlaca: "" },
+    { id: "c5", nome: "Marcos Tavares", tel: "16 96666-7878", placa: "APO-9E01", modelo: "Saveiro", cor: "Branca", funcao: "Apoio", vagas: 2, local: "", obs: "Levo as caixas de água na sexta", origem: "link", conferido: false, em: h(45), chegou: "", saiu: "", foto: "", fotoPlaca: "" }] } });
+})();
