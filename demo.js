@@ -1663,3 +1663,31 @@ window.ADM_DEMO.notifs = [
 window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "1288", em: new Date().toISOString(), por: "Vinicius" } });
 // uma ficha alterada depois de gravar a tag, para mostrar o aviso "regravar"
 (function () { const d = window.ADM_DEMO.docs.find(x => x.id === "saude-ex03"); if (d) d.data.respondidoEm = new Date(Date.now() - 20 * 6e4).toISOString(); })();
+// CAMPO: chamadas, mural, turnos, entregas e equipe no mapa (fictícios)
+(function () {
+  const D = window.ADM_DEMO.docs, h = m => new Date(Date.now() - m * 6e4).toISOString(), f = m => new Date(Date.now() + m * 6e4).toISOString();
+  const pid = fam => D.filter(d => d.col === "pessoas" && d.data.tipo !== "legendario" && Number(d.data.familia) === fam).map(d => d.id);
+  const c = (id, fam, ponto, min, faltam, extra) => D.push({ col: "config", id: "chamada-top1922-" + id, data: { familia: fam, ponto, presentes: pid(fam).filter(x => !faltam.includes(x)), faltam, por: "Thalisson", em: h(min), top: "top1922", ...(extra || {}) } });
+  c("a1", 1, "Camp D1", 190, []);
+  c("a2", 2, "Camp D1", 186, [pid(2)[1]].filter(Boolean), { resolvida: true, resolvidaEm: h(170), resolvidaPor: "Henrique" });
+  c("a3", 1, "Segunda Revista", 35, []);
+  c("a4", 2, "Segunda Revista", 31, [pid(2)[0]].filter(Boolean));
+  D.push({ col: "config", id: "mural-top1922", data: { top: "top1922", msgs: [
+    { id: "m5", txt: "🍽️ Refeição pronta", por: "Diego Souza", em: h(6) },
+    { id: "m4", txt: "🚨 Família 02 em Segunda Revista: faltou 1. Já estamos procurando na trilha de baixo.", tipo: "alerta", por: "Thalisson", em: h(30) },
+    { id: "m3", txt: "⏱️ Atraso de 20 min", por: "Henrique", em: h(75) },
+    { id: "m2", txt: "💧 Faltando água no ponto do Cemitério, mandem o carro", por: "Rafael Lima", em: h(140) },
+    { id: "m1", txt: "🚌 Ônibus chegou", por: "Bruno Costa", em: h(320) }] } });
+  D.push({ col: "config", id: "turnos-top1922", data: { top: "top1922", lista: [
+    { id: "t1", funcao: "Vigília", ini: h(240), fim: h(120), adms: ["Rafael Lima", "Bruno Costa"] },
+    { id: "t2", funcao: "Apoio na pista", ini: h(90), fim: f(60), adms: ["Thalisson", "Henrique"] },
+    { id: "t3", funcao: "Carro de apoio", ini: h(90), fim: f(150), adms: ["Diego Souza"] },
+    { id: "t4", funcao: "Camp", ini: f(20), fim: f(200), adms: ["Vinicius Moreira", "Rafael Lima"] },
+    { id: "t5", funcao: "Vigília", ini: f(600), fim: f(780), adms: ["Thalisson", "Bruno Costa"] }] } });
+  const reg = {}, por = n => ({ por: n, em: h(n === "Diego Souza" ? 50 : 200) });
+  [1, 2, 3].forEach(fam => { reg[`d1|${fam}|agua`] = por("Diego Souza"); reg[`d1|${fam}|mre`] = por("Rafael Lima"); });
+  reg["d1|1|gelo"] = por("Diego Souza"); reg["d1|3|equip"] = por("Bruno Costa");
+  D.push({ col: "config", id: "entregas-top1922", data: { top: "top1922", reg } });
+  [["m-thal", "Thalisson", -20.2163, -47.2805, 2], ["m-hen", "Henrique", -20.2296, -47.3027, 4], ["carro", "Carro de apoio · Diego", -20.2111, -47.2697, 1]]
+    .forEach(([id, nome, lat, lng, min]) => D.push({ col: "config", id: `loc-top1922-${id}`, data: { lat, lng, nome, em: h(min), top: "top1922" } }));
+})();
