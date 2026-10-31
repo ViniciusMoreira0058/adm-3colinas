@@ -209,6 +209,7 @@ const canSee = v => {
   if (v.id === "campo" && !CAMPO()) return false;
   if (v.id === "celulares" && !CEL()) return false;
   if (TOP2_VIEWS.includes(v.id) && !TOP2()) return false;
+  if ((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
   if (!ME.acesso) return v.id === "painel";
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
@@ -1900,9 +1901,10 @@ async function celFotoData(c) {   // para o PDF: a foto como data URL
   if (c.foto) return c.foto; if (!c.fotoPath || !sb) return "";
   try { const r = await sb.storage.from("adm-fotos").download(c.fotoPath); if (!r.data) return ""; return await reduzirFoto(r.data, 360); } catch { return ""; }
 }
-async function celGuardarFoto(p, fl) {
+async function celGuardarFoto(p, fl) { return fotoGuardar(fl, `celulares/${curTopId()}/${p.id}`); }
+async function fotoGuardar(fl, base) {
   if (!DEMO && sb && navigator.onLine !== false) {
-    try { const grande = await reduzirFoto(fl, 1000), blob = await (await fetch(grande)).blob(), path = `celulares/${curTopId()}/${p.id}-${Date.now().toString(36)}.jpg`;
+    try { const grande = await reduzirFoto(fl, 1000), blob = await (await fetch(grande)).blob(), path = `${base}-${Date.now().toString(36)}.jpg`;
       const r = await sb.storage.from("adm-fotos").upload(path, blob, { contentType: "image/jpeg", upsert: true });
       if (!r.error) { fotoUrls[path] = grande; return { foto: "", fotoPath: path }; }
     } catch (e) {}
@@ -2056,7 +2058,8 @@ document.addEventListener("input", e => { if (e.target && e.target.id === "celQ"
 
 /* ---------- TOP completo (só na demo): Check-in + Mochila, Remédios, Emergência, Transporte e Financeiro ---------- */
 const TOP2 = () => DEMO;
-const TOP2_VIEWS = ["checkin", "remedios", "emergencia", "transporte", "financeiro"];
+const TOP2_VIEWS = ["checkin", "remedios", "transporte"];
+const TOP3 = () => true;   // Financeiro e Emergência: liberados no app real em 31/10/2026
 const senderistas = () => S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
 const agoraISO = () => new Date().toISOString();
 const linhaSel = (k, v) => `data-${k}="${esc(v)}"`;
@@ -2275,6 +2278,7 @@ function trDistForm(vid) {
 }
 
 // ===== 7: FINANCEIRO =====  config fin-<top> {itens:[{id,tipo:gasto|entrada,area,desc,valor,data,por,em,foto}], orc:{area:valor}}
+let finFotoArq = null;
 const FIN_AREAS = ["Alimentação", "Logística", "Transporte", "Saúde", "Material e brindes", "Hospedagem", "Mídia", "Outros"];
 const finDoc = () => cfgDe(`fin-${curTopId()}`) || {};
 const finSalvar = (fn, msg) => { const D = finDoc(); return save(() => api.set("config", `fin-${curTopId()}`, { itens: D.itens || [], orc: D.orc || {}, ...fn(D), top: curTopId() }), msg).then(render); };
@@ -2294,12 +2298,12 @@ function vFinanceiro() {
   <section class="panel"><h3>Por área ${S.isOwner ? `<button class="linkbtn" type="button" data-act="fin-orc">orçamento ›</button>` : ""}</h3>
     <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<div class="fin-a"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></div>`; }).join("") || `<div class="empty">Nenhum gasto ainda.</div>`}</div></section>
   <section class="panel"><h3>Lançamentos <small>${I.length}</small></h3><div class="cel-lista">${I.map(i => `<div class="cel-li ${i.tipo === "entrada" ? "guardado" : ""}">
-    ${i.foto ? `<button type="button" class="cel-foto" data-fin-foto="${esc(i.id)}" aria-label="Ver recibo"><img src="${esc(i.foto)}" alt=""></button>` : `<span class="cel-foto vazia">${i.tipo === "entrada" ? "＋" : "🧾"}</span>`}
+    ${i.foto || i.fotoPath ? `<button type="button" class="cel-foto" data-fin-foto="${esc(i.id)}" aria-label="Ver recibo">${celFotoSrc(i) ? `<img src="${esc(celFotoSrc(i))}" alt="">` : "🧾"}</button>` : `<span class="cel-foto vazia">${i.tipo === "entrada" ? "＋" : "🧾"}</span>`}
     <button type="button" class="cel-info" ${ed ? `data-fin="${esc(i.id)}"` : "disabled"}><b>${esc(i.desc)}</b><small>${esc(i.area || "")} · ${i.data ? new Date(i.data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""} · ${esc(i.por || "")}</small></button>
     <b class="num fin-v ${i.tipo === "entrada" ? "ent" : ""}">${i.tipo === "entrada" ? "+" : "−"} ${brl(i.valor)}</b></div>`).join("") || `<div class="empty">Toque em Lançar para registrar o primeiro gasto.</div>`}</div></section>`;
 }
 function finForm(id) {
-  const D = finDoc(), it = (D.itens || []).find(x => x.id === id) || { tipo: "gasto", data: hojeISO(), area: "Alimentação" }; let foto = it.foto || "";
+  const D = finDoc(), it = (D.itens || []).find(x => x.id === id) || { tipo: "gasto", data: hojeISO(), area: "Alimentação" }; let foto = celFotoSrc(it) || ""; finFotoArq = null;
   modal(`<h3>${it.id ? "Editar lançamento" : "Novo lançamento"}</h3>
     <div class="seg lem-quando" style="margin-bottom:10px">${[["gasto", "Gasto"], ["entrada", "Entrada"]].map(([v, l]) => `<label><input type="radio" name="tipo" value="${v}" ${it.tipo === v ? "checked" : ""}> ${l}</label>`).join("")}</div>
     <div class="form">
@@ -2312,9 +2316,11 @@ function finForm(id) {
     </div>
     <div class="modal-foot"><div>${it.id ? `<button class="btn danger" type="button" id="finDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
     const valor = Number(String(fd.get("valor") || "").replace(/\./g, "").replace(",", ".")); if (!(valor > 0)) { toast("Confira o valor."); return; }
-    const novo = { ...it, id: it.id || Date.now().toString(36), tipo: fd.get("tipo") || "gasto", desc: String(fd.get("desc") || "").trim(), valor, data: fd.get("data") || hojeISO(), area: fd.get("area"), foto, por: it.por || ME.adm || "", em: it.em || agoraISO() };
-    closeModal(); finSalvar(D => ({ itens: [...(D.itens || []).filter(x => x.id !== novo.id), novo] }), "Lançamento salvo"); });
-  $("#finFoto").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return; try { foto = await reduzirFoto(fl, 700); $("#finPrev").src = foto; $("#finPrev").hidden = false; } catch { toast("Não consegui abrir a foto."); } });
+    const arq = finFotoArq; closeModal();
+    (async () => { const f = arq ? await fotoGuardar(arq, `financeiro/${curTopId()}/recibo`) : { foto: it.foto || "", fotoPath: it.fotoPath || "" };
+      const novo = { ...it, id: it.id || Date.now().toString(36), tipo: fd.get("tipo") || "gasto", desc: String(fd.get("desc") || "").trim(), valor, data: fd.get("data") || hojeISO(), area: fd.get("area"), ...f, por: it.por || ME.adm || "", em: it.em || agoraISO() };
+      finSalvar(D => ({ itens: [...(D.itens || []).filter(x => x.id !== novo.id), novo] }), "Lançamento salvo"); })(); });
+  $("#finFoto").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return; finFotoArq = fl; try { foto = await reduzirFoto(fl, 700); $("#finPrev").src = foto; $("#finPrev").hidden = false; } catch { toast("Não consegui abrir a foto."); } });
   const d = $("#finDel"); if (d) d.onclick = () => { if (!confirm("Excluir este lançamento?")) return; closeModal(); finSalvar(D => ({ itens: (D.itens || []).filter(x => x.id !== it.id) }), "Excluído"); };
 }
 function finOrcForm() {
@@ -2324,15 +2330,17 @@ function finOrcForm() {
     const orc = Object.fromEntries(FIN_AREAS.map(a => [a, Number(String(fd.get(a) || "").replace(/\./g, "").replace(",", ".")) || 0]).filter(([, v]) => v));
     closeModal(); finSalvar(() => ({ orc }), "Orçamento salvo"); });
 }
-function finPdf() {
+async function finPdf() {
+  toast("Montando o PDF com os recibos…");
+  const fotos = {}; await Promise.all((finDoc().itens || []).map(async i => { fotos[i.id] = await celFotoData(i); }));
   const D = finDoc(), I = (D.itens || []).slice().sort((a, b) => (a.data || "").localeCompare(b.data || "")), g = I.filter(i => i.tipo !== "entrada"), e = I.filter(i => i.tipo === "entrada");
   const sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0), dt = d => d ? d.split("-").reverse().slice(0, 2).join("/") : "";
   const areas = [...new Set(g.map(i => i.area || "Outros"))].sort();
   return gerarListaPdf({ titulo: "Prestação de contas", arquivo: "Prestacao de contas " + topName(), orient: "portrait",
     resumo: [["Gasto", brl(sg)], ["Entradas", brl(se)], ["Saldo", brl(se - sg)]], legenda: "Gastos por área, com a foto do recibo. Entradas no fim.",
     colunas: [{ t: "Recibo", w: 20, foto: true }, { t: "Data", w: 14 }, { t: "Descrição", bold: true }, { t: "Por", w: 26, cinza: true }, { t: "Valor", w: 26, al: "right" }],
-    secoes: [...areas.map(a => { const L = g.filter(i => (i.area || "Outros") === a); return { titulo: `${a} · ${brl(L.reduce((s, i) => s + (+i.valor || 0), 0))}`, linhas: L.map(i => [i.foto || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }; }),
-      ...(e.length ? [{ titulo: `Entradas · ${brl(se)}`, linhas: e.map(i => [i.foto || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }] : [])] }, false).catch(er => toast("Não foi possível gerar o PDF. " + er.message));
+    secoes: [...areas.map(a => { const L = g.filter(i => (i.area || "Outros") === a); return { titulo: `${a} · ${brl(L.reduce((s, i) => s + (+i.valor || 0), 0))}`, linhas: L.map(i => [fotos[i.id] || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }; }),
+      ...(e.length ? [{ titulo: `Entradas · ${brl(se)}`, linhas: e.map(i => [fotos[i.id] || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }] : [])] }, false).catch(er => toast("Não foi possível gerar o PDF. " + er.message));
 }
 
 /* Período do backup: dia, semana (7 dias), mês (30 dias) ou o TOP todo. Num período, entra o que foi criado ou alterado dentro dele. */
@@ -4877,7 +4885,7 @@ document.addEventListener("click", e => {
   if (d.trDist) { if (podeEditar()) trDistForm(d.trDist); return; }
   if (d.trEmb) { if (podeEditar()) trSalvar(D => { const x = { ...(D.emb || {}) }; if (x[d.trEmb]) delete x[d.trEmb]; else x[d.trEmb] = { por: ME.adm || "", em: agoraISO() }; return { emb: x }; }, ""); return; }
   if (d.fin != null && t.matches("[data-fin]")) { if (podeEditar()) finForm(d.fin); return; }
-  if (d.finFoto) { const i = (finDoc().itens || []).find(x => x.id === d.finFoto); if (i) modal(`<h3>${esc(i.desc)}</h3><img class="cel-grande" src="${esc(i.foto)}" alt="Recibo"><div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal()); return; }
+  if (d.finFoto) { const i = (finDoc().itens || []).find(x => x.id === d.finFoto); if (i) modal(`<h3>${esc(i.desc)}</h3><img class="cel-grande" src="${esc(celFotoSrc(i))}" alt="Recibo"><div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal()); return; }
   if (d.act === "fin-orc") { finOrcForm(); return; }
   if (d.act === "fin-pdf") { finPdf(); return; }
   if (d.celEq != null && t.matches("[data-cel-eq]")) { S.celEq = S.celEq === d.celEq ? "" : d.celEq; if (S.celEq) S.celF = "todos"; render(); return; }
