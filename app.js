@@ -2389,7 +2389,7 @@ function finForm(id) {
 }
 /* ---------- Contas a pagar (demo): forma de pagamento, pago ou a pagar, vencimento e parcelas de cada saída ----------
    no item: pag, fornecedor, sit (pago|apagar), parcelas:[{n,de,venc,valor,pago,pagoEm,pagoPor}] (vazio = pago à vista) */
-const CONTAS = () => DEMO;
+const CONTAS = () => true;   // liberado no app real em 31/10/2026
 const CONTA_PAG = ["Pix", "Dinheiro", "Cartão de débito", "Cartão de crédito", "Boleto", "Transferência"];
 const somaMes = (iso, n) => { const d = new Date(iso + "T12:00"), dia = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n); d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); return d.toISOString().slice(0, 10); };
 function contaCampos(it) {
@@ -2554,7 +2554,7 @@ document.addEventListener("change", async e => {
   } catch (x) { toast("Não consegui ler a planilha. " + (x.message || "")); }
 });
 /* Taxa da Legendários Global (demo): a comissão do coprodutor que a TicketAndGo separa de cada venda */
-const TAXA_GLOBAL = () => DEMO;
+const TAXA_GLOBAL = () => true;   // liberado no app real em 31/10/2026
 function vendasImportForm(linhas, arquivo) {
   const L = vendasLer(linhas), V = vendasResumo(L), antes = vendasDoc().linhas || [], ja = new Set(antes.map(x => x.k));
   const novas = L.filter(x => !ja.has(x.k)).length, mudou = L.filter(x => { const a = antes.find(y => y.k === x.k); return a && (a.stat !== x.stat || a.repasse !== x.repasse); }).length;
