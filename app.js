@@ -1896,7 +1896,7 @@ function celSalvar(p, dados, msg) {
 function vCelulares() {
   const L = celLgs(), ed = podeEditar(), q = norm(S.celQ || ""), f = S.celF || "falta";
   const conta = s => L.filter(p => celSt(p) === s).length, nG = conta("guardado"), nF = conta("falta"), nN = conta("nao"), nD = conta("devolvido");
-  const vis = L.filter(p => (!q || norm(p.nome).includes(q)) && (f === "todos" || celSt(p) === f || (f === "guardado" && celSt(p) === "devolvido" && false)));
+  const eqSel = S.celEq || "", vis = L.filter(p => (!q || norm(p.nome).includes(q)) && (!eqSel || (p.equipe || "Sem equipe") === eqSel) && (f === "todos" || celSt(p) === f));
   const porEq = {}; vis.forEach(p => (porEq[p.equipe || "Sem equipe"] = porEq[p.equipe || "Sem equipe"] || []).push(p));
   const eqs = [...new Set(L.map(p => p.equipe || "Sem equipe"))].sort();
   const fb = (v, l, n) => `<button type="button" data-cel-f="${v}" aria-pressed="${f === v}">${l}${n != null ? ` <span class="num" style="opacity:.75">${n}</span>` : ""}</button>`;
@@ -1915,6 +1915,11 @@ function vCelulares() {
     <div class="kpi"><span class="lbl">Não entregaram</span><span class="val num">${nN}</span><span class="sub">com motivo</span></div>
     <div class="kpi"><span class="lbl">Devolvidos</span><span class="val num">${nD}</span><span class="sub">${nG ? nG + " ainda guardado(s)" : "nenhum pendente"}</span></div>
   </div>
+  <div class="cel-areas">${eqs.map(eq => { const m = L.filter(p => (p.equipe || "Sem equipe") === eq), g = m.filter(p => ["guardado", "devolvido"].includes(celSt(p))).length, n = m.filter(p => celSt(p) === "nao").length, fl = m.length - g - n;
+    return `<button type="button" class="cel-area ${eqSel === eq ? "on" : ""} ${fl ? "" : "completa"}" data-cel-eq="${esc(eq)}" aria-pressed="${eqSel === eq}">
+      <span class="cel-area-n">${esc(eq)}</span><span class="cel-area-v num"><b>${g}</b> / ${m.length}</span><span class="cel-area-s">${m.length} servo${m.length === 1 ? "" : "s"} · ${g} ${g === 1 ? "entregou" : "entregaram"}</span>
+      <span class="bar good"><i style="width:${pct(g, m.length)}%"></i></span><span class="cel-area-f">${fl ? `faltam ${fl}` : "✓ completa"}${n ? ` · ${n} não entregou` : ""}</span></button>`; }).join("")}</div>
+  ${eqSel ? `<p class="hint" style="margin:0">Mostrando só <b>${esc(eqSel)}</b>. <button type="button" class="linkbtn" data-cel-eq="">ver todas as áreas</button></p>` : ""}
   <div class="cel-busca"><input id="celQ" type="search" placeholder="Buscar legendário pelo nome…" value="${esc(S.celQ || "")}" aria-label="Buscar"></div>
   <div class="seg cel-filtro">${fb("falta", "Faltam", nF)}${fb("guardado", "Guardados", nG)}${fb("nao", "Não entregou", nN)}${fb("devolvido", "Devolvidos", nD)}${fb("todos", "Todos")}</div>
   ${Object.keys(porEq).sort().map(eq => { const cd = celCoord(eq);
@@ -4508,6 +4513,7 @@ document.addEventListener("click", e => {
   if (d.campoAba) { S.campoAba = d.campoAba; render(); return; }
   if (d.comAba) { S.comAba = d.comAba; render(); return; }
   if (d.celF) { S.celF = d.celF; render(); return; }
+  if (d.celEq != null && t.matches("[data-cel-eq]")) { S.celEq = S.celEq === d.celEq ? "" : d.celEq; if (S.celEq) S.celF = "todos"; render(); return; }
   if (d.cel) { const p = S.P.find(x => x.id === d.cel); if (p && podeEditar()) celForm(p); return; }
   if (d.celNao) { const p = S.P.find(x => x.id === d.celNao); if (p && podeEditar()) celNaoForm(p); return; }
   if (d.celDev) { const p = S.P.find(x => x.id === d.celDev); if (p && podeEditar()) celSalvar(p, { status: "devolvido", devolvidoEm: new Date().toISOString(), devolvidoPor: ME.adm || "" }, `Celular devolvido a ${p.nome.split(" ")[0]}`); return; }
