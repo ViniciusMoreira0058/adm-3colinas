@@ -1,9 +1,9 @@
 /* Service worker do ADM 3Colinas: deixa o app instalável e faz ele abrir sem internet.
    Os arquivos do app vêm da rede quando dá (sempre a versão mais nova) e da cópia guardada quando não dá.
    Os dados não passam por aqui: ficam guardados pelo próprio app (dados.js) e vão para o Supabase quando a internet volta. */
-const CACHE = "adm3-v84";
+const CACHE = "adm3-v85";
 const ARQUIVOS = ["./", "index.html", "app.js", "dados.js", "cronograma.js", "demo.js", "nfc.js", "e.html", "manifest.webmanifest",
-  "assets/bg.jpg", "assets/logo.png", "icons/icon-192.png", "icons/icon-512.png"];
+  "assets/bg.jpg", "assets/logo.png", "icons/v2/icon-192.png", "icons/v2/icon-512.png"];
 // bibliotecas e fontes de fora (supabase-js, leitor de planilha, fonte Plus Jakarta Sans)
 const EXTERNOS = ["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js",
   "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"];

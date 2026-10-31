@@ -1176,7 +1176,7 @@ function vGuia() {
    nunca os dados: a ficha abre no app para quem está logado. Atendimento vira uma ocorrência (tipo "Atendimento médico") com sinais vitais. */
 const NFC = () => DEMO;
 /* Visual 2 (só na demo por enquanto): telas de carregamento com esqueleto, telas vazias com ícone e versão de computador mais larga */
-const D2 = () => DEMO;
+const D2 = () => true;
 // o que cada tela precisa já ter carregado para aparecer (enquanto não chega, mostra o esqueleto)
 const PRECISA = { painel: ["pessoas", "tarefas", "estoque"], participantes: ["pessoas"], legendarios: ["pessoas"], pendencias: ["pessoas"], nfc: ["pessoas", "config"],
   familias: ["pessoas"], equipes: ["pessoas"], consagracao: ["pessoas"], checklist: ["tarefas"], estoque: ["estoque"], pista: ["pista"], aovivo: ["pista", "config"],
