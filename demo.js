@@ -1713,3 +1713,23 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     { id: "b1", area: "Alimentação", tipo: "funcionou", txt: "Refeição pronta 20 min antes da chegada da corrente.", por: "Diego Souza", em: h(40) },
     { id: "b2", area: "Pista", tipo: "mudar", txt: "A chamada na Segunda Revista demorou: fazer por família em fila.", por: "Thalisson", em: h(25) }] } });
 })();
+// CELULARES: mais legendários fictícios com coordenadores e celulares guardados no check-in
+(function () {
+  const D = window.ADM_DEMO.docs, h = m => new Date(Date.now() - m * 6e4).toISOString();
+  const novos = [["lg10", "Fábio Henrique Alves", "Segurança", "Chefe", "16 99110-0010"], ["lg11", "Marcelo Duarte Lima", "Segurança", "", "16 99110-0011"], ["lg12", "Paulo Roberto Nunes", "Segurança", "", "16 99110-0012"],
+    ["lg13", "Gustavo Ferreira Reis", "Mídia", "Chefe", "16 99110-0013"], ["lg14", "Leonardo Prado Souza", "Mídia", "", "16 99110-0014"], ["lg15", "Anderson Silva Rocha", "Logística", "Chefe", "16 99110-0015"],
+    ["lg16", "Ricardo Moura Campos", "Logística", "", "16 99110-0016"], ["lg17", "Eduardo Teixeira Luz", "Intercessão", "Chefe", "16 99110-0017"], ["lg18", "Tiago Bastos Moreira", "Intercessão", "", "16 99110-0018"]];
+  novos.forEach(([id, nome, equipe, funcao, tel]) => D.push({ col: "pessoas", id, data: { nome, tipo: "legendario", equipe, ...(funcao ? { funcao } : {}), telefone: "+55 " + tel, termo: "assinado", atestado: "apto", exemplo: true, top: "top1922" } }));
+  const nome = id => (D.find(d => d.col === "pessoas" && d.id === id) || {}).data.nome;
+  // "foto" do saquinho: desenhada na hora (fictícia)
+  const foto = (n, cor) => { try { const c = document.createElement("canvas"); c.width = 300; c.height = 400; const g = c.getContext("2d");
+    g.fillStyle = "#3a3f47"; g.fillRect(0, 0, 300, 400); g.fillStyle = cor; g.beginPath(); g.roundRect ? g.roundRect(45, 40, 210, 320, 18) : g.rect(45, 40, 210, 320); g.fill();
+    g.fillStyle = "rgba(255,255,255,.25)"; g.fillRect(45, 40, 210, 26); g.fillStyle = "#111"; g.fillRect(95, 130, 110, 170);
+    g.fillStyle = "#fff"; g.fillRect(70, 315, 160, 34); g.fillStyle = "#111"; g.font = "bold 20px sans-serif"; g.textAlign = "center"; g.fillText(n.split(" ")[0].toUpperCase(), 150, 339);
+    return c.toDataURL("image/jpeg", .7); } catch (e) { return ""; } };
+  const cel = (id, data) => D.push({ col: "config", id: `cel-top1922-${id}`, data: { pessoaId: id, nome: nome(id), top: "top1922", ...data } });
+  const cores = ["#c9d8e8", "#e8dcc9", "#d4e8c9", "#e8c9d6"];
+  [["lg10", 95], ["lg11", 93], ["lg13", 90], ["lg15", 88], ["lg16", 86], ["lg17", 80], ["ex10", 78]].forEach(([id, m], i) => cel(id, { status: "guardado", foto: foto(nome(id) || "?", cores[i % 4]), em: h(m), por: i % 2 ? "Thalisson" : "Henrique" }));
+  cel("lg12", { status: "nao", motivo: "Liberado pela coordenação", obs: "Plantão médico, fica com o celular no modo avião", em: h(84), por: "Thalisson" });
+  cel("lg14", { status: "nao", motivo: "Esqueceu no carro", obs: "Vai entregar no intervalo", em: h(70), por: "Henrique" });
+})();

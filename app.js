@@ -164,6 +164,7 @@ const VIEWS = [
   { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "comunicacao", l: "Comunicação", c: "Comunicação", i: "chat", all: true, menu: true },   // recados, lembretes e aprendizados
+  { id: "celulares", l: "Celulares", c: "Celulares", i: "phone", need: ["legendarios"] },   // celulares dos legendários no check-in
   { id: "campo", l: "Campo", c: "Campo", i: "group", need: ["participantes"], demo: true },   // chamada, mural, turnos e entregas com o TOP rodando
   { id: "nfc", l: "NFC 3COLINAS", c: "NFC", i: "nfc", need: ["participantes", "legendarios"], nfc: true },   // ficha de saúde + tag NFC
   { id: "familias", l: "Famílias", i: "fam" },
@@ -201,6 +202,7 @@ const canSee = v => {
   if (v.extra && !EXTRA()) return false;
   if (v.nfc && !NFC()) return false;
   if (v.id === "campo" && !CAMPO()) return false;
+  if (v.id === "celulares" && !CEL()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
   if (!ME.acesso) return v.id === "painel";
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
@@ -998,7 +1000,7 @@ const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
 const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "nfc", "familias", "consagracao"]],
-  ["Operação", ["cronograma", "aovivo", "comunicacao", "campo", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
+  ["Operação", ["cronograma", "aovivo", "comunicacao", "campo", "celulares", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
 /* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
@@ -1876,6 +1878,114 @@ function vAprendizados() {
 }
 function aprendSalvar(fn, msg) { const D = aprendDoc(); save(() => api.set("config", `aprend-${curTopId()}`, { itens: D.itens || [], revisados: D.revisados || {}, ...fn(D), topNome: topName(), em: new Date().toISOString(), top: curTopId() }), msg).then(render); }
 
+/* ---------- Celulares dos legendários (só na demo): guardar no check-in com foto, motivo de quem não entregou, devolução e relatório por equipe ----------
+   config cel-<top>-<pessoaId> {status: guardado|nao|devolvido, foto, motivo, obs, em, por, devolvidoEm, devolvidoPor} */
+const CEL = () => DEMO;
+const CEL_MOTIVOS = ["Esqueceu no carro", "Liberado pela coordenação", "Precisa por trabalho", "Precisa pela família", "Não veio ao TOP", "Outro"];
+const celId = p => `cel-${curTopId()}-${p.id}`;
+const celDe = p => cfgDe(celId(p)) || {};
+const celSt = p => celDe(p).status || "falta";
+const CEL_TXT = { falta: "Falta entregar", guardado: "Guardado", nao: "Não entregou", devolvido: "Devolvido" };
+const CEL_CHIP = { falta: "wait", guardado: "ok", nao: "bad", devolvido: "ok" };
+const celLgs = () => S.P.filter(p => p.tipo === "legendario" && !cancelado(p)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+const celCoord = eq => celLgs().filter(p => (p.equipe || "Sem equipe") === eq && p.funcao).sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao))[0] || null;
+function celSalvar(p, dados, msg) {
+  const atual = celDe(p);
+  return save(() => api.set("config", celId(p), { ...atual, ...dados, pessoaId: p.id, nome: p.nome, equipe: p.equipe || "", top: curTopId() }), msg).then(render);
+}
+function vCelulares() {
+  const L = celLgs(), ed = podeEditar(), q = norm(S.celQ || ""), f = S.celF || "falta";
+  const conta = s => L.filter(p => celSt(p) === s).length, nG = conta("guardado"), nF = conta("falta"), nN = conta("nao"), nD = conta("devolvido");
+  const vis = L.filter(p => (!q || norm(p.nome).includes(q)) && (f === "todos" || celSt(p) === f || (f === "guardado" && celSt(p) === "devolvido" && false)));
+  const porEq = {}; vis.forEach(p => (porEq[p.equipe || "Sem equipe"] = porEq[p.equipe || "Sem equipe"] || []).push(p));
+  const eqs = [...new Set(L.map(p => p.equipe || "Sem equipe"))].sort();
+  const fb = (v, l, n) => `<button type="button" data-cel-f="${v}" aria-pressed="${f === v}">${l}${n != null ? ` <span class="num" style="opacity:.75">${n}</span>` : ""}</button>`;
+  const linha = p => { const c = celDe(p), st = celSt(p);
+    return `<div class="cel-li ${st}">
+      ${c.foto ? `<button type="button" class="cel-foto" data-cel-ver="${esc(p.id)}" aria-label="Ver foto"><img src="${esc(c.foto)}" alt=""></button>` : `<span class="cel-foto vazia">${st === "nao" ? "✕" : "📱"}</span>`}
+      <button type="button" class="cel-info" ${ed ? `data-cel="${esc(p.id)}"` : "disabled"}><b>${esc(p.nome)}</b>
+        <small>${p.funcao ? esc(p.funcao) + " · " : ""}<span class="chip ${CEL_CHIP[st]}">${CEL_TXT[st]}</span>${c.em && st !== "falta" ? ` ${hmDe(st === "devolvido" ? c.devolvidoEm : c.em)}` : ""}${st === "nao" && c.motivo ? ` · ${esc(c.motivo)}` : ""}</small></button>
+      ${ed ? (st === "falta" ? `<label class="btn sm primary cel-cam">📷 Guardar<input type="file" accept="image/*" capture="environment" data-cel-foto="${esc(p.id)}" hidden></label><button class="btn sm" type="button" data-cel-nao="${esc(p.id)}">Não entregou</button>`
+        : st === "guardado" ? `<button class="btn sm" type="button" data-cel-dev="${esc(p.id)}">Devolver</button>` : "") : ""}</div>`; };
+  return `
+  <div class="head"><div><h2>Celulares</h2><p>No check-in: guarde o celular, tire a foto do saquinho com o nome e pronto. Quem não entregar fica com o motivo. No fim do TOP, marque a devolução. Cada coordenador recebe o relatório da equipe dele.</p></div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Guardados</span><span class="val num">${nG + nD}<small style="font-size:.5em;opacity:.7"> / ${L.length}</small></span><div class="bar good"><i style="width:${pct(nG + nD, L.length)}%"></i></div></div>
+    <div class="kpi ${nF ? "alert" : ""}"><span class="lbl">Faltam</span><span class="val num">${nF}</span><span class="sub">ainda não passaram</span></div>
+    <div class="kpi"><span class="lbl">Não entregaram</span><span class="val num">${nN}</span><span class="sub">com motivo</span></div>
+    <div class="kpi"><span class="lbl">Devolvidos</span><span class="val num">${nD}</span><span class="sub">${nG ? nG + " ainda guardado(s)" : "nenhum pendente"}</span></div>
+  </div>
+  <div class="cel-busca"><input id="celQ" type="search" placeholder="Buscar legendário pelo nome…" value="${esc(S.celQ || "")}" aria-label="Buscar"></div>
+  <div class="seg cel-filtro">${fb("falta", "Faltam", nF)}${fb("guardado", "Guardados", nG)}${fb("nao", "Não entregou", nN)}${fb("devolvido", "Devolvidos", nD)}${fb("todos", "Todos")}</div>
+  ${Object.keys(porEq).sort().map(eq => { const cd = celCoord(eq);
+    return `<section class="panel"><h3>${esc(eq)} <small>${porEq[eq].length}${cd ? ` · coord. ${esc(cd.nome.split(" ")[0])}` : ""}</small></h3><div class="cel-lista">${porEq[eq].map(linha).join("")}</div></section>`; }).join("")
+    || `<section class="panel"><div class="empty">${q ? "Ninguém com esse nome aqui." : f === "falta" ? "Todos os celulares já foram recolhidos. 🎉" : "Ninguém nesta lista."}</div></section>`}
+  <section class="panel"><h3>Relatório para os coordenadores <small>um por equipe</small></h3>
+    <div class="list">${eqs.map(eq => { const cd = celCoord(eq), m = L.filter(p => (p.equipe || "Sem equipe") === eq), g = m.filter(p => ["guardado", "devolvido"].includes(celSt(p))).length, n = m.filter(p => celSt(p) === "nao").length, fl = m.filter(p => celSt(p) === "falta").length;
+      return `<div class="li"><span class="grow"><b>${esc(eq)}</b><br><span class="hint">${cd ? `Coord.: ${esc(cd.nome)}` : "sem coordenador marcado nas Equipes LGND"} · ${g} guardado(s)${n ? ` · ${n} não entregou` : ""}${fl ? ` · ${fl} falta(m)` : ""}</span></span>
+        <span class="actions"><button class="btn sm" type="button" data-cel-pdf="${esc(eq)}">PDF</button>${cd && waNumber(cd.telefone) ? `<button class="btn sm cel-wa" type="button" data-cel-wa="${esc(eq)}">${ico("wa")} Enviar</button>` : ""}</span></div>`; }).join("")}
+      <div class="li"><span class="grow"><b>Todas as equipes</b><br><span class="hint">um PDF só, com uma seção por equipe</span></span><button class="btn sm" type="button" data-cel-pdf="">PDF geral</button></div></div></section>`;
+}
+async function celFotoTirada(inp) {
+  const p = S.P.find(x => x.id === inp.dataset.celFoto), fl = inp.files[0]; if (!p || !fl) return;
+  try { const foto = await reduzirFoto(fl, 420); celSalvar(p, { status: "guardado", foto, em: new Date().toISOString(), por: ME.adm || "", motivo: "", obs: "" }, `Celular de ${p.nome.split(" ")[0]} guardado`); }
+  catch { toast("Não consegui abrir a foto. Tente de novo."); }
+}
+function celNaoForm(p) {
+  const c = celDe(p);
+  modal(`<h3>${esc(p.nome)} não entregou</h3>
+    <div class="field"><span class="lab">Motivo</span><div class="cel-motivos">${CEL_MOTIVOS.map((m, i) => `<label><input type="radio" name="motivo" value="${esc(m)}" ${c.motivo === m || (!c.motivo && !i) ? "checked" : ""}> ${esc(m)}</label>`).join("")}</div></div>
+    <div class="field"><label for="f-co">Detalhe (opcional)</label><input id="f-co" name="obs" value="${esc(c.obs || "")}" placeholder="ex.: entrega amanhã cedo, liberado pelo Pr. João"></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const motivo = fd.get("motivo") || "Outro", obs = String(fd.get("obs") || "").trim(); if (motivo === "Outro" && !obs) { toast("Conte o motivo no detalhe."); return; }
+    closeModal(); celSalvar(p, { status: "nao", motivo, obs, em: new Date().toISOString(), por: ME.adm || "", foto: "" }, "Registrado: não entregou");
+  });
+}
+function celForm(p) {
+  const c = celDe(p), st = celSt(p);
+  modal(`<h3>${esc(p.nome)}</h3>
+    <p class="hint" style="margin:-6px 0 10px">${esc(p.equipe || "Sem equipe")}${p.funcao ? " · " + esc(p.funcao) : ""}</p>
+    <div class="cel-ficha"><span class="chip ${CEL_CHIP[st]}">${CEL_TXT[st]}</span>
+      ${st !== "falta" ? `<p>${st === "nao" ? `Motivo: <b>${esc(c.motivo || "-")}</b>${c.obs ? ` · ${esc(c.obs)}` : ""}<br>` : ""}Registrado às ${hmDe(c.em)} por ${esc(c.por || "ADM")}${st === "devolvido" ? `<br>Devolvido às ${hmDe(c.devolvidoEm)} por ${esc(c.devolvidoPor || "ADM")}` : ""}</p>` : ""}
+      ${c.foto ? `<img class="cel-grande" src="${esc(c.foto)}" alt="Foto do celular guardado">` : ""}</div>
+    <div class="cel-acoes">
+      <label class="btn ${st === "falta" ? "primary" : ""}">📷 ${c.foto ? "Trocar foto" : "Guardar com foto"}<input type="file" accept="image/*" capture="environment" data-cel-foto="${esc(p.id)}" hidden></label>
+      ${st === "falta" ? `<button class="btn" type="button" id="celSemFoto">Guardar sem foto</button>` : ""}
+      ${st !== "nao" ? `<button class="btn" type="button" id="celNao">Não entregou</button>` : `<button class="btn" type="button" id="celNao">Mudar motivo</button>`}
+      ${st === "guardado" ? `<button class="btn" type="button" id="celDev">Devolvido</button>` : ""}
+      ${st !== "falta" ? `<button class="btn ghost" type="button" id="celVolta">Voltar para "falta entregar"</button>` : ""}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
+  const on = (id, fn) => { const b = $("#" + id); if (b) b.onclick = fn; };
+  on("celSemFoto", () => { closeModal(); celSalvar(p, { status: "guardado", foto: "", em: new Date().toISOString(), por: ME.adm || "" }, "Celular guardado"); });
+  on("celNao", () => { closeModal(); celNaoForm(p); });
+  on("celDev", () => { closeModal(); celSalvar(p, { status: "devolvido", devolvidoEm: new Date().toISOString(), devolvidoPor: ME.adm || "" }, "Celular devolvido"); });
+  on("celVolta", () => { closeModal(); celSalvar(p, { status: "falta", foto: "", motivo: "", obs: "", em: "", devolvidoEm: "" }, "Voltou para falta entregar"); });
+}
+function celPdf(eq, wa) {
+  const L = celLgs(), eqs = eq ? [eq] : [...new Set(L.map(p => p.equipe || "Sem equipe"))].sort();
+  const ordem = { nao: 0, falta: 1, guardado: 2, devolvido: 3 };
+  const secoes = eqs.map(e => { const cd = celCoord(e);
+    return { titulo: `${e}${cd ? " · coord. " + cd.nome : ""}`, linhas: L.filter(p => (p.equipe || "Sem equipe") === e).sort((a, b) => ordem[celSt(a)] - ordem[celSt(b)] || norm(a.nome).localeCompare(norm(b.nome))).map(p => { const c = celDe(p), st = celSt(p);
+      return [c.foto || "", p.nome, p.funcao || "", CEL_TXT[st], st === "falta" ? "" : (c.em ? new Date(c.em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "") + (st === "devolvido" && c.devolvidoEm ? ` · devolvido ${hmDe(c.devolvidoEm)}` : ""),
+        st === "nao" ? [c.motivo, c.obs].filter(Boolean).join(" · ") : c.por ? "Recebido por " + c.por : ""]; }) }; });
+  const m = L.filter(p => eqs.includes(p.equipe || "Sem equipe")), cnt = s => m.filter(p => celSt(p) === s).length;
+  return gerarListaPdf({ titulo: eq ? `Celulares · ${eq}` : "Celulares dos legendários", arquivo: `Celulares ${eq || "todas as equipes"} ${topName()}`, orient: "portrait",
+    resumo: [["Guardados", `${cnt("guardado") + cnt("devolvido")} de ${m.length}`], ["Não entregaram", cnt("nao")], ["Faltam", cnt("falta")]],
+    legenda: "Foto do saquinho com o nome tirada no check-in. Quem não entregou aparece primeiro, com o motivo.",
+    colunas: [{ t: "Foto", w: 20, foto: true }, { t: "Nome", bold: true }, { t: "Função", w: 26, cinza: true }, { t: "Situação", w: 26, status: true }, { t: "Hora", w: 24 }, { t: "Motivo / quem recebeu", w: 46 }], secoes }, wa)
+    .catch(e => toast("Não foi possível gerar o PDF. " + e.message));
+}
+function celResumoWa(eq) {
+  const L = celLgs().filter(p => (p.equipe || "Sem equipe") === eq), cd = celCoord(eq); if (!cd) return;
+  const g = L.filter(p => ["guardado", "devolvido"].includes(celSt(p))), n = L.filter(p => celSt(p) === "nao"), f = L.filter(p => celSt(p) === "falta");
+  const txt = `*Celulares · ${eq} · ${topName()}*\n\nOlá, ${cd.nome.split(" ")[0]}! Resumo da sua equipe:\n✅ Guardados: ${g.length} de ${L.length}` +
+    (n.length ? `\n\n❌ *Não entregaram (${n.length}):*\n` + n.map(p => `• ${p.nome}: ${[celDe(p).motivo, celDe(p).obs].filter(Boolean).join(" · ")}`).join("\n") : "") +
+    (f.length ? `\n\n⏳ *Ainda não passaram (${f.length}):*\n` + f.map(p => `• ${p.nome}`).join("\n") : "") + `\n\nO PDF com as fotos vai em seguida. ADM 3Colinas`;
+  window.open(`https://wa.me/${waNumber(cd.telefone)}?text=${encodeURIComponent(txt)}`, "_blank");
+}
+document.addEventListener("change", e => { const i = e.target; if (i && i.matches && i.matches("input[data-cel-foto]")) { if ($("#modalRoot").innerHTML) closeModal(); celFotoTirada(i); } });
+document.addEventListener("input", e => { if (e.target && e.target.id === "celQ") { S.celQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $("#celQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } } });
+
 /* Período do backup: dia, semana (7 dias), mês (30 dias) ou o TOP todo. Num período, entra o que foi criado ou alterado dentro dele. */
 const BK_PER = [{ v: "dia", l: "Diário", d: "o que mudou hoje", dias: 1 }, { v: "semana", l: "Semanal", d: "o que mudou nos últimos 7 dias", dias: 7 },
   { v: "mes", l: "Mensal", d: "o que mudou nos últimos 30 dias", dias: 30 }, { v: "top", l: "TOP todo", d: "tudo do TOP, completo", dias: 0 }];
@@ -2702,9 +2812,9 @@ async function gerarCsgPdf(modo, de, ate, wa, hora = "") {
    faixa azul-marinho com a montanha, título, cartões de resumo e tabela. */
 const PDF_COR = { NAVY: [11, 17, 25], LARANJA: [255, 122, 26], TINTA: [30, 20, 11], CINZA: [123, 101, 83], LINHA: [241, 220, 199], CREME: [255, 248, 242], VERDE: [29, 138, 85], AMBAR: [168, 111, 0], VERMELHO: [192, 57, 43] };
 const simNao = v => v ? "Sim" : "Não";
-const corStatus = t => /^(confirmado|apto|assinado|sim|ok|pronto|entregue|ativa|pago)/i.test(t) ? PDF_COR.VERDE
-  : /^(zerado|não assinou|cancelad|bloquead)/i.test(t) ? PDF_COR.VERMELHO
-  : /^(pendente|baixo|aguardando|msg enviada|em andamento|a fazer|não|conferir|boleto)/i.test(t) ? PDF_COR.AMBAR : null;
+const corStatus = t => /^(confirmado|apto|assinado|sim|ok|pronto|entregue|ativa|pago|guardado|devolvido)/i.test(t) ? PDF_COR.VERDE
+  : /^(zerado|não assinou|não entregou|cancelad|bloquead)/i.test(t) ? PDF_COR.VERMELHO
+  : /^(pendente|baixo|aguardando|msg enviada|em andamento|a fazer|não|conferir|boleto|falta)/i.test(t) ? PDF_COR.AMBAR : null;
 // versão "só nomes": fica o # e a coluna do nome (marcada com nome: true ou a primeira em negrito), em retrato
 function pdfSimples(sp) {
   if (sp.simples) return { ...sp, orient: "portrait", arquivo: (sp.arquivo || sp.titulo) + " nomes", ...sp.simples };   // página que define o próprio PDF simples
@@ -2778,8 +2888,14 @@ async function gerarListaPdf(sp, wa) {
     columnStyles: colStyles,
     didParseCell: c => {
       if (c.section === "head") { c.cell.styles.halign = (cols[c.column.index] || {}).al || "left"; return; }
-      const col = cols[c.column.index]; if (!col || !col.status || c.cell.colSpan > 1) return;
+      const col = cols[c.column.index]; if (col && col.foto && c.cell.colSpan === 1) { c.cell.text = []; c.cell.styles.minCellHeight = 22; return; }
+      if (!col || !col.status || c.cell.colSpan > 1) return;
       const cor = corStatus(String(c.cell.raw || "")); if (cor) { c.cell.styles.textColor = cor; c.cell.styles.fontStyle = "bold"; }
+    },
+    didDrawCell: c => {
+      const col = cols[c.column.index], raw = String(c.cell.raw || ""); if (c.section !== "body" || !col || !col.foto || !raw.startsWith("data:image")) return;
+      try { const pr = doc.getImageProperties(raw), mw = c.cell.width - 2, mh = c.cell.height - 2, k = Math.min(mw / pr.width, mh / pr.height);
+        doc.addImage(raw, "JPEG", c.cell.x + 1 + (mw - pr.width * k) / 2, c.cell.y + 1 + (mh - pr.height * k) / 2, pr.width * k, pr.height * k); } catch (e) {}
     },
     didDrawPage: () => { if (doc.internal.getCurrentPageInfo().pageNumber > p1) cabecalho(false); },
   });
@@ -3728,6 +3844,7 @@ function render() {
     : v === "nfc" ? vNfc()
     : v === "campo" ? vCampo()
     : v === "comunicacao" ? vComunicacao()
+    : v === "celulares" ? vCelulares()
     : v === "guia" ? vGuia()
     : vPista());
   if (D2()) { if (carregando(v)) html = faixa + other + esqueleto(v); else html = vazios(html); }
@@ -4390,6 +4507,13 @@ document.addEventListener("click", e => {
   if (d.gAba) { S.gAba = d.gAba; render(); return; }
   if (d.campoAba) { S.campoAba = d.campoAba; render(); return; }
   if (d.comAba) { S.comAba = d.comAba; render(); return; }
+  if (d.celF) { S.celF = d.celF; render(); return; }
+  if (d.cel) { const p = S.P.find(x => x.id === d.cel); if (p && podeEditar()) celForm(p); return; }
+  if (d.celNao) { const p = S.P.find(x => x.id === d.celNao); if (p && podeEditar()) celNaoForm(p); return; }
+  if (d.celDev) { const p = S.P.find(x => x.id === d.celDev); if (p && podeEditar()) celSalvar(p, { status: "devolvido", devolvidoEm: new Date().toISOString(), devolvidoPor: ME.adm || "" }, `Celular devolvido a ${p.nome.split(" ")[0]}`); return; }
+  if (d.celVer) { const p = S.P.find(x => x.id === d.celVer); if (p) celForm(p); return; }
+  if (d.celPdf != null && t.matches("[data-cel-pdf]")) { celPdf(d.celPdf, false); return; }
+  if (d.celWa) { celResumoWa(d.celWa); return; }
   if (d.comVi != null && t.matches("[data-com-vi]")) { if (d.comVi) comMarcarVi(d.comVi); return; }
   if (d.comVistos) { S.comVistos = S.comVistos === d.comVistos ? null : d.comVistos; render(); return; }
   if (d.comEditar) { comEditar(d.comEditar); return; }

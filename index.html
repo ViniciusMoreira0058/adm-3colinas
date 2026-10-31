@@ -982,6 +982,29 @@ body.d2 .empty.e2.busca .e2-ic { background: var(--surface2); color: var(--muted
 .apr-novo select{width:auto;flex:none}.apr-novo input{flex:1 1 220px;min-width:0}
 @media (max-width:600px){.apr-item{flex-wrap:wrap}.apr-tipo{width:auto}}
 
+/* CELULARES */
+.cel-busca input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font-size:16px}
+.cel-busca input:focus{border-color:var(--accent);outline:none}
+.cel-filtro{margin:10px 0 4px;flex-wrap:wrap}
+.cel-lista{display:flex;flex-direction:column;gap:6px}
+.cel-li{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);flex-wrap:wrap}
+.cel-li.nao{box-shadow:inset 3px 0 0 #ef4444}.cel-li.guardado{box-shadow:inset 3px 0 0 #46c486}.cel-li.devolvido{opacity:.7}
+.cel-foto{flex:none;width:46px;height:46px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;padding:0;cursor:pointer;font-size:18px;color:var(--muted)}
+.cel-foto img{width:100%;height:100%;object-fit:cover;display:block}
+.cel-foto.vazia{cursor:default}
+.cel-info{flex:1 1 160px;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:none;border:0;padding:0;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.cel-info b{font-size:15px;overflow-wrap:anywhere}.cel-info small{color:var(--muted);font-size:12px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.cel-cam{cursor:pointer}
+.btn.cel-wa{background:#25d366!important;border-color:#25d366!important;color:#fff!important}.btn.cel-wa svg{width:16px;height:16px}
+@media (max-width:600px){.cel-li>.btn,.cel-li>label.btn{flex:1;justify-content:center}}
+.cel-motivos{display:flex;flex-direction:column;gap:6px}
+.cel-motivos label{display:flex!important;flex-direction:row!important;align-items:center;gap:10px;text-transform:none!important;letter-spacing:0!important;font-size:15px!important;font-weight:500!important;color:var(--fg)!important;margin:0!important;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.cel-motivos label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.cel-motivos input{accent-color:var(--accent);width:18px;height:18px;margin:0}
+.cel-ficha p{margin:8px 0;font-size:14px;color:var(--muted)}.cel-ficha p b{color:var(--fg)}
+.cel-grande{display:block;width:100%;max-height:46vh;object-fit:contain;border-radius:12px;border:1px solid var(--line);background:#000;margin-top:8px}
+.cel-acoes{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}.cel-acoes label.btn{cursor:pointer}
+
 /* NFC 3COLINAS */
 .nfc-row { display: flex; align-items: center; gap: 12px; }
 .nfc-row .actions { flex-wrap: wrap; justify-content: flex-end; }
@@ -1057,6 +1080,7 @@ body.d2 .empty.e2.busca .e2-ic { background: var(--surface2); color: var(--muted
   <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 14.8c2 .7 3.2 2.4 3.6 5.2"/></symbol>
   <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/></symbol>
   <symbol id="i-fam" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 20h18z"/><path d="M12 11v9"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="18" rx="2"/><path d="M9 3.5V2h6v1.5"/><path d="m8 11 1.5 1.5L12 10"/><path d="M14 11.5h3"/><path d="m8 16.5 1.5 1.5L12 15.5"/><path d="M14 17h3"/></symbol>
   <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></symbol>
