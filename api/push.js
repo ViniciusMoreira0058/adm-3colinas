@@ -34,6 +34,7 @@ function mensagem(b) {
     const a = novo;
     return { title: "Planilha atualizada · ADM 3Colinas", body: `${a.novosP || 0} novo(s) senderista(s) e ${a.novosL || 0} legendário(s)${a.pagPend ? ` · ${a.pagPend} com pagamento pendente` : ""}. Importado por ${a.por || quem}.`, tag: "adm3-aviso" };
   }
+  if (b.tipo === "mural") { const m = (novo.msgs || [])[0] || {}; return { title: `${m.por || quem} · Comunicação`, body: String(m.txt || "Novo recado").slice(0, 300), tag: "adm3-mural-" + (m.id || "") }; }
   if (b.tipo === "novidade") return { title: (novo.tipo === "msg" ? "" : "Novidade no app: ") + (novo.titulo || "ADM 3Colinas"), body: String(novo.texto || "").slice(0, 300), tag: "adm3-novidade" };
   let txt = null;
   if (b.col === "pessoas") {

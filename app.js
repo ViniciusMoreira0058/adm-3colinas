@@ -163,7 +163,7 @@ const VIEWS = [
   { id: "legendarios", l: "Legendários", i: "shield" },
   { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
-  { id: "comunicacao", l: "Comunicação", c: "Comunicação", i: "chat", need: [] },   // recados, lembretes e aprendizados
+  { id: "comunicacao", l: "Comunicação", c: "Comunicação", i: "chat", all: true, menu: true },   // recados, lembretes e aprendizados
   { id: "campo", l: "Campo", c: "Campo", i: "group", need: ["participantes"], demo: true },   // chamada, mural, turnos e entregas com o TOP rodando
   { id: "nfc", l: "NFC 3COLINAS", c: "NFC", i: "nfc", need: ["participantes", "legendarios"], nfc: true },   // ficha de saúde + tag NFC
   { id: "familias", l: "Famílias", i: "fam" },
@@ -200,7 +200,8 @@ const canSee = v => {
   if (v.org && !ORG()) return false;
   if (v.extra && !EXTRA()) return false;
   if (v.nfc && !NFC()) return false;
-  if ((v.id === "campo" || v.id === "comunicacao") && !CAMPO()) return false;
+  if (v.id === "campo" && !CAMPO()) return false;
+  if (v.id === "comunicacao" && !COM()) return false;
   if (!ME.acesso) return v.id === "painel";
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
   if (S.isOwner || (VIEWS.find(x => x.id === v.id) || v).all) return true;
@@ -1529,6 +1530,7 @@ var nfcPendente = (new URLSearchParams(location.search).get("nfc") || "");
    Chamada por família (config chamada-<top>-<id>), mural rápido (config mural-<top>), escala de turnos (config turnos-<top>),
    entregas no camp (config entregas-<top>), clima na pista (Open-Meteo, sem chave) e ADMs no mapa do Ao vivo (config loc-<top>-<membro>). */
 const CAMPO = () => DEMO;
+const COM = () => true;   // aba Comunicação: liberada no app real em 31/10/2026 (o resto do Campo segue só na demo)
 const cfgDe = id => (S.cfgDocs || {})[id] || null;
 const campoId = k => `${k}-${curTopId()}`;
 const hmDe = iso => iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
@@ -1739,7 +1741,7 @@ if (CAMPO() && store.get("adm3-loc") === "1") setTimeout(() => { if (ME.acesso) 
 const comVistoId = (m = ME.id) => `comvisto-${curTopId()}-${m || "eu"}`;
 const muralMsgs = () => (cfgDe(campoId("mural")) || {}).msgs || [];
 const comViAte = (m = ME.id) => (cfgDe(comVistoId(m)) || {}).ate || "";
-const comNaoLidas = () => { if (!CAMPO() || !ME.acesso) return 0; const ate = comViAte(); return muralMsgs().filter(m => m.por !== ME.adm && (m.em || "") > ate).length; };
+const comNaoLidas = () => { if (!COM() || !ME.acesso) return 0; const ate = comViAte(); return muralMsgs().filter(m => m.por !== ME.adm && (m.em || "") > ate).length; };
 const admsAtivos = () => (S.equipe || []).filter(m => m.ativo !== false);
 function comMarcarVi(ate) {
   const atual = comViAte(); if (atual && atual >= ate) return;
@@ -1756,15 +1758,18 @@ function vComunicacao() {
 function vAgora() {
   const msgs = muralMsgs(), ed = podeEditar(), ate = comViAte(), equipe = admsAtivos();
   const fixos = msgs.filter(m => m.fixo), resto = msgs.filter(m => !m.fixo), nl = comNaoLidas();
-  const viram = m => equipe.filter(e => e.nome === m.por || (comViAte(e.id) || "") >= m.em);
-  const card = m => { const v = viram(m), falta = equipe.filter(e => !v.includes(e)), novo = m.por !== ME.adm && (m.em || "") > ate;
+  // quem viu sai dos registros de "Vi" (comvisto-<top>-<membro>); a lista completa da equipe só o dono tem
+  const vistos = Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`comvisto-${curTopId()}-`)).map(([k, d]) => ({ id: k.slice(`comvisto-${curTopId()}-`.length), nome: d.nome || "", ate: d.ate || "" }));
+  const nomeDe = e => e.nome || ((equipe.find(x => x.id === e.id) || {}).nome) || "ADM";
+  const viram = m => { const L = vistos.filter(e => e.ate >= m.em).map(e => ({ id: e.id, nome: nomeDe(e) })); if (m.por && !L.some(e => e.nome === m.por)) L.unshift({ id: "", nome: m.por }); return L; };
+  const card = m => { const v = viram(m), falta = equipe.filter(e => !v.some(x => x.id === e.id || x.nome === e.nome)), novo = m.por !== ME.adm && (m.em || "") > ate;
     return `<div class="mural-msg ${m.tipo === "alerta" ? "alerta" : ""} ${m.fixo ? "fixo" : ""} ${novo ? "novo" : ""}">
       ${m.fixo ? `<span class="mural-pin">📌 Fixado</span>` : ""}<p>${esc(m.txt)}</p>
       <div class="mural-pe"><small>${esc(m.por)} · ${hmDe(m.em)} · ${haQuanto(m.em)}</small>
-        <span class="mural-acoes">${equipe.length ? `<button type="button" class="mural-vistos" data-com-vistos="${esc(m.id)}" title="${falta.length ? "Falta ver: " + esc(falta.map(e => e.nome.split(" ")[0]).join(", ")) : "Todos viram"}">👁 ${v.length}/${equipe.length}</button>` : ""}
+        <span class="mural-acoes"><button type="button" class="mural-vistos" data-com-vistos="${esc(m.id)}" title="${falta.length ? "Falta ver: " + esc(falta.map(e => e.nome.split(" ")[0]).join(", ")) : "Quem viu"}">👁 ${v.length}${equipe.length ? "/" + equipe.length : ""}</button>
         ${novo ? `<button type="button" class="btn sm primary" data-com-vi="${esc(m.em)}">${ico("check")} Vi</button>` : ""}
         ${ed ? `<button type="button" class="icon-btn" data-com-fixar="${esc(m.id)}" aria-label="${m.fixo ? "Desafixar" : "Fixar no topo"}" title="${m.fixo ? "Desafixar" : "Fixar no topo"}">📌</button>` : ""}</span></div>
-      ${S.comVistos === m.id ? `<div class="mural-quem">${v.length ? `<span><b>Viram:</b> ${v.map(e => esc(e.nome.split(" ")[0])).join(", ")}</span>` : ""}${falta.length ? `<span class="bad-text"><b>Falta ver:</b> ${falta.map(e => esc(e.nome.split(" ")[0])).join(", ")}</span>` : ""}</div>` : ""}</div>`; };
+      ${S.comVistos === m.id ? `<div class="mural-quem">${v.length ? `<span><b>Viram:</b> ${v.map(e => esc(String(e.nome).split(" ")[0])).join(", ")}</span>` : ""}${falta.length ? `<span class="bad-text"><b>Falta ver:</b> ${falta.map(e => esc(e.nome.split(" ")[0])).join(", ")}</span>` : ""}</div>` : ""}</div>`; };
   return `
   ${ed ? `<section class="panel"><h3>Avisar a equipe <small>chega no sino de todos os ADMs</small></h3>
     <div class="mural-rapido">${MURAL_RAPIDO.map(([e, t]) => `<button type="button" class="btn" data-mural="${esc(e + " " + t)}"><span aria-hidden="true">${e}</span> ${esc(t)}</button>`).join("")}</div>
@@ -1782,7 +1787,7 @@ function lembreteVence(l) {
   if (l.quando === "dia") { if (l.top !== curTopId()) return false; const plano = cronoPlano(), ids = plano.map(d => d.id), at = ids.indexOf(cronoDiaAtual(plano)); return at >= 0 && at >= ids.indexOf(l.dia); }
   return false;
 }
-const lembretesHoje = () => CAMPO() && ME.acesso ? lembretes().filter(lembreteVence) : [];
+const lembretesHoje = () => COM() && ME.acesso ? lembretes().filter(lembreteVence) : [];
 const lembreteQuando = l => l.quando === "data" ? (l.data === hojeISO() ? "hoje" : new Date(l.data + "T12:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }))
   : l.quando === "dia" ? `${(cronoPlano().find(d => d.id === l.dia) || {}).nome || l.dia} do ${l.topNome || "TOP"}` : `próximo TOP (anotado no ${l.topNome || "TOP anterior"})`;
 function vLembretes() {
@@ -1827,7 +1832,7 @@ function lembreteFeito(id) {
 const lemAvisados = new Set();
 function avisoLembretes() {
   const L = lembretesHoje();
-  L.filter(l => !lemAvisados.has(l.id)).forEach(l => { lemAvisados.add(l.id); if (DEMO) setTimeout(() => novaNotif({ id: "lem-" + l.id + "-" + hojeISO(), em: new Date().toISOString(), ator: null, ator_nome: l.por || "ADM", publico: "todos", col: "config", doc_id: "lembretes", acao: "lembrete", nome: "📌 " + l.txt }), 0); });
+  L.filter(l => !lemAvisados.has(l.id)).forEach(l => { lemAvisados.add(l.id); setTimeout(() => novaNotif({ id: "lem-" + l.id + "-" + hojeISO(), em: new Date().toISOString(), ator: null, ator_nome: l.por || "ADM", publico: "todos", col: "config", doc_id: "lembretes", acao: "lembrete", nome: "📌 " + l.txt }), 0); });
   if (!L.length || S.view === "comunicacao") return "";
   return `<div class="banner aviso lem-banner"><span>📌 <b>${L.length === 1 ? "Lembrete" : L.length + " lembretes"}:</b> ${esc(L[0].txt)}${L.length > 1 ? ` <small>e mais ${L.length - 1}</small>` : ""}</span>
     <span class="actions">${podeEditar() && L.length === 1 ? `<button class="btn" type="button" data-lem-feito="${esc(L[0].id)}">Feito</button>` : ""}<button class="btn" type="button" data-go="comunicacao" data-com-ir="lembretes">Ver</button></span></div>`;
@@ -1838,7 +1843,7 @@ function aprendAnterior() {
   const outros = Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith("aprend-") && k !== `aprend-${curTopId()}`).map(([k, d]) => ({ top: k.slice(7), ...d })).filter(d => (d.itens || []).length);
   return outros.sort((a, b) => (b.em || "").localeCompare(a.em || ""))[0] || null;
 }
-const aprendPraRevisar = () => { if (!CAMPO()) return []; const A = aprendAnterior(), rev = aprendDoc().revisados || {}; return A ? A.itens.filter(i => !rev[A.top + "|" + i.id]) : []; };
+const aprendPraRevisar = () => { if (!COM()) return []; const A = aprendAnterior(), rev = aprendDoc().revisados || {}; return A ? A.itens.filter(i => !rev[A.top + "|" + i.id]) : []; };
 function vAprendizados() {
   const D = aprendDoc(), itens = D.itens || [], ed = podeEditar(), A = aprendAnterior(), rev = D.revisados || {};
   const grupo = (lista, ant) => { const por = {}; lista.forEach(i => (por[i.area || "Geral"] = por[i.area || "Geral"] || []).push(i));
@@ -3433,7 +3438,7 @@ function relatorioPdf(R) {
       ...(R.pt && (R.pt.R.length || ptLicoes()) ? [{ titulo: `Pós-TOP: avaliação dos ADMs (${R.pt.R.length})`, linhas: [["Nota geral", notaTxt(R.pt.geral)], ...R.pt.itens.map(it => [it.l, notaTxt(it.m)]),
           ...R.pt.R.filter(r => r.bom).map(r => [`Foi bom · ${r.por || "ADM"}`, r.bom]), ...R.pt.R.filter(r => r.melhorar).map(r => [`Melhorar · ${r.por || "ADM"}`, r.melhorar]),
           ...(ptLicoes() ? [["Lições para o próximo TOP", ptLicoes()]] : [])] }] : []),
-      ...(CAMPO() && (aprendDoc().itens || []).length ? [{ titulo: `Aprendizados do TOP (${aprendDoc().itens.length})`, linhas: aprendDoc().itens.map(i => [`${i.tipo === "funcionou" ? "Funcionou" : "Mudar"} · ${i.area || "Geral"}`, i.txt]) }] : []),
+      ...(COM() && (aprendDoc().itens || []).length ? [{ titulo: `Aprendizados do TOP (${aprendDoc().itens.length})`, linhas: aprendDoc().itens.map(i => [`${i.tipo === "funcionou" ? "Funcionou" : "Mudar"} · ${i.area || "Geral"}`, i.txt]) }] : []),
     ] };
 }
 
@@ -5375,7 +5380,7 @@ function notifTexto(n) {
     else if (/^cronoplano-/.test(n.doc_id)) { i = "clock"; a = "Cronograma"; c = "Mudou o plano do cronograma"; }
     else if (/^mural-/.test(n.doc_id) && n.acao === "mural") { i = "chat"; a = "Comunicação"; c = n.nome || "Novo recado"; }
     else if (n.doc_id === "lembretes" && n.acao === "lembrete") { i = "clock"; a = "Comunicação"; return { i, a, t: "Lembrete para hoje", c: n.nome || "" }; }
-    else if (/^mural-|^comvisto-|^lembretes$|^aprend-|^chamada-|^turnos-|^entregas-|^loc-/.test(n.doc_id) && CAMPO()) { i = "chat"; a = "Comunicação"; c = /^chamada-/.test(n.doc_id) ? "Fez uma chamada" : /^turnos-/.test(n.doc_id) ? "Mudou a escala de turnos" : /^entregas-/.test(n.doc_id) ? "Marcou entregas no camp" : /^aprend-/.test(n.doc_id) ? "Anotou um aprendizado" : /^lembretes$/.test(n.doc_id) ? "Mexeu nos lembretes" : null; if (!c) return null; }
+    else if (/^mural-|^comvisto-|^lembretes$|^aprend-|^chamada-|^turnos-|^entregas-|^loc-/.test(n.doc_id) && (COM() || CAMPO())) { i = "chat"; a = "Comunicação"; c = /^chamada-/.test(n.doc_id) ? "Fez uma chamada" : /^turnos-/.test(n.doc_id) ? "Mudou a escala de turnos" : /^entregas-/.test(n.doc_id) ? "Marcou entregas no camp" : /^aprend-/.test(n.doc_id) ? "Anotou um aprendizado" : /^lembretes$/.test(n.doc_id) ? "Mexeu nos lembretes" : null; if (!c) return null; }
     else if (n.doc_id === "consag-alias") { i = "group"; a = "Consagração"; c = "Consagração: uniu ou separou nomes"; }
     else c = "Mudou as configurações";
   } else c = `${a}: ${n.nome || "registro"} ${n.acao === "criou" ? "criado" : "atualizado"}`;
