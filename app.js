@@ -2316,33 +2316,38 @@ const carSalvar = (fn, msg) => { const D = carDoc(), out = { token: D.token || "
   out.lista = carEnxuga(out.lista); return save(() => api.set("config", carId(), out), msg).then(render); };
 const carLink = () => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}carro.html?t=${encodeURIComponent(carDoc().token || "")}&top=${encodeURIComponent(curTopId())}${DEMO ? "&demo=1" : ""}`;
 const carTexto = () => `Olá! Aqui é ${ME.adm ? ME.adm.split(" ")[0] + ", " : ""}da equipe ADM do ${topName()}.\n\nVocê vai levar um veículo ao TOP. Cadastre ele pelo link abaixo (leva 2 minutos, com foto do carro e da placa):\n${carLink()}`;
+const carPend = c => c.origem === "link" && !c.conferido;   // chegou pelo link e ainda não foi aprovado por um ADM
 function vCarros() {
-  const L = carLista(), ed = podeEditar(), q = norm(S.carQ || ""), f = S.carF || "";
-  const n = st => L.filter(c => carSt(c) === st).length, novos = L.filter(c => c.origem === "link" && !c.conferido);
-  const V = L.filter(c => (!f || (f === "novos" ? c.origem === "link" && !c.conferido : c.funcao === f)) && (!q || [c.nome, c.placa, carPlaca(c.placa), c.modelo, c.cor].some(x => norm(x || "").includes(q))))
-    .sort((a, b) => (a.origem === "link" && !a.conferido ? 0 : 1) - (b.origem === "link" && !b.conferido ? 0 : 1) || norm(a.nome).localeCompare(norm(b.nome)));
+  const T = carLista(), ed = podeEditar(), q = norm(S.carQ || ""), f = S.carF || "";
+  const pend = T.filter(carPend), L = T.filter(c => !carPend(c)), n = st => L.filter(c => carSt(c) === st).length;
+  const V = L.filter(c => (!f || c.funcao === f) && (!q || [c.nome, c.placa, carPlaca(c.placa), c.modelo, c.cor].some(x => norm(x || "").includes(q)))).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
   const funcs = CAR_FUNC.filter(x => L.some(c => c.funcao === x));
-  return `
-  <div class="head"><div><h2>Carros</h2><p>Todos os veículos que vão ao TOP: de quem é, telefone, modelo, placa e foto. Mande o link e o próprio dono cadastra o carro.</p></div>
-    <div class="actions">${ed ? `<button class="btn primary" type="button" data-car="">${ico("plus")} Cadastrar carro</button><button class="btn" type="button" data-act="car-link">${ico("wa")} Link para o dono</button>` : ""}</div></div>
-  <div class="kpis">
-    <div class="kpi"><span class="lbl">Cadastrados</span><span class="val num">${L.length}</span><span class="sub">${L.reduce((a, c) => a + (+c.vagas || 0), 0)} lugares</span></div>
-    <div class="kpi"><span class="lbl">No TOP agora</span><span class="val num">${n("dentro")}</span><span class="sub">chegaram e não saíram</span></div>
-    <div class="kpi"><span class="lbl">Saíram</span><span class="val num">${n("saiu")}</span><span class="sub">${n("espera")} ainda não chegaram</span></div>
-    <button type="button" class="kpi kpi-btn ${novos.length ? "alert" : ""}" data-car-f="${f === "novos" ? "" : "novos"}"><span class="lbl">Novos pelo link</span><span class="val num">${novos.length}</span><span class="sub">${novos.length ? "toque para conferir" : "nada para conferir"}</span></button>
-  </div>
-  <div class="cel-busca"><input id="carQ" type="search" placeholder="Buscar por placa, nome ou modelo…" value="${esc(S.carQ || "")}" aria-label="Buscar carro"></div>
-  ${funcs.length > 1 || f ? `<div class="seg campo-abas car-f"><button type="button" data-car-f="" aria-pressed="${!f}">Todos</button>${funcs.map(x => `<button type="button" data-car-f="${esc(x)}" aria-pressed="${f === x}">${esc(x)}</button>`).join("")}${f === "novos" ? `<button type="button" data-car-f="novos" aria-pressed="true">Novos</button>` : ""}</div>` : ""}
-  <div class="car-grid">${V.map(c => { const st = carSt(c), [stl, stc] = CAR_ST[st], novo = c.origem === "link" && !c.conferido;
-    return `<section class="panel car-card ${st}${novo ? " novo" : ""}">
-      <button type="button" class="car-cab" data-car-ver="${esc(c.id)}">
+  const cab = c => `<button type="button" class="car-cab" data-car-ver="${esc(c.id)}">
         <span class="car-foto">${carImg(c) ? `<img src="${esc(carImg(c))}" alt="">` : ico("car")}</span>
         <span class="grow"><b class="car-placa num">${esc(carPlaca(c.placa) || "SEM PLACA")}</b><span class="car-mod">${esc([c.modelo, c.cor].filter(Boolean).join(" · "))}</span>
-          <small>${esc(c.nome || "")}${c.funcao ? " · " + esc(c.funcao) : ""}</small></span></button>
-      <div class="car-chips"><span class="chip ${stc}">${stl}${c.chegou && !c.saiu ? " " + hmDe(c.chegou) : c.saiu ? " " + hmDe(c.saiu) : ""}</span>${novo ? `<span class="chip wait">Novo · pelo link</span>` : ""}${c.vagas ? `<span class="chip">${esc(c.vagas)} lugares</span>` : ""}${c.local ? `<span class="chip">${esc(c.local)}</span>` : ""}</div>
-      <div class="actions">${waNumber(c.tel) ? `<a class="btn sm" href="https://wa.me/${waNumber(c.tel)}" target="_blank" rel="noopener">${ico("wa")} WhatsApp</a>` : ""}${ed ? (st === "dentro" ? `<button class="btn sm" type="button" data-car-st="${esc(c.id)}|saiu">Saiu</button>` : `<button class="btn sm primary" type="button" data-car-st="${esc(c.id)}|chegou">Chegou</button>`)
-        + (novo ? `<button class="btn sm" type="button" data-car-ok="${esc(c.id)}">${ico("check")} Conferido</button>` : "") : ""}</div></section>`; }).join("")}</div>
-  ${!V.length ? `<section class="panel"><div class="empty">${L.length ? "Nenhum carro com essa busca." : "Nenhum carro ainda. Cadastre aqui ou mande o link para o dono do carro."}</div></section>` : ""}`;
+          <small>${esc(c.nome || "")}${c.funcao ? " · " + esc(c.funcao) : ""}</small></span></button>`;
+  const wa = c => waNumber(c.tel) ? `<a class="btn sm" href="https://wa.me/${waNumber(c.tel)}" target="_blank" rel="noopener">${ico("wa")} WhatsApp</a>` : "";
+  return `
+  <div class="head"><div><h2>Carros</h2><p>Todos os veículos que vão ao TOP: de quem é, telefone, modelo, placa e foto. Mande o link e o próprio dono cadastra o carro; ele só entra na lista depois que um ADM aprovar.</p></div>
+    <div class="actions">${ed ? `<button class="btn primary" type="button" data-car="">${ico("plus")} Cadastrar carro</button><button class="btn" type="button" data-act="car-link">${ico("wa")} Link para o dono</button>` : ""}</div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Aprovados</span><span class="val num">${L.length}</span><span class="sub">${L.reduce((a, c) => a + (+c.vagas || 0), 0)} lugares</span></div>
+    <div class="kpi"><span class="lbl">No TOP agora</span><span class="val num">${n("dentro")}</span><span class="sub">chegaram e não saíram</span></div>
+    <div class="kpi"><span class="lbl">Saíram</span><span class="val num">${n("saiu")}</span><span class="sub">${n("espera")} ainda não chegaram</span></div>
+    <div class="kpi ${pend.length ? "alert" : ""}"><span class="lbl">Para aprovar</span><span class="val num">${pend.length}</span><span class="sub">${pend.length ? "cadastrados pelo link" : "nada esperando"}</span></div>
+  </div>
+  ${pend.length ? `<section class="panel car-pend"><h3>Para aprovar <small>${pend.length}</small></h3><p class="hint">Cadastrados pelo dono, pelo link. Confira os dados e as fotos: só depois de aprovado o carro entra na lista.</p>
+    <div class="car-grid">${pend.map(c => `<section class="panel car-card novo">${cab(c)}
+      <div class="car-chips"><span class="chip wait">Aguardando aprovação</span>${c.vagas ? `<span class="chip">${esc(c.vagas)} lugares</span>` : ""}${c.em ? `<span class="chip">${esc(quando(c.em))}</span>` : ""}</div>
+      ${c.obs ? `<p class="hint" style="margin:0">${esc(c.obs)}</p>` : ""}
+      <div class="actions">${wa(c)}${ed ? `<button class="btn sm danger" type="button" data-car-nao="${esc(c.id)}">Recusar</button><button class="btn sm primary" type="button" data-car-ok="${esc(c.id)}">${ico("check")} Aprovar</button>` : ""}</div></section>`).join("")}</div></section>` : ""}
+  <div class="cel-busca"><input id="carQ" type="search" placeholder="Buscar por placa, nome ou modelo…" value="${esc(S.carQ || "")}" aria-label="Buscar carro"></div>
+  ${funcs.length > 1 || f ? `<div class="seg campo-abas car-f"><button type="button" data-car-f="" aria-pressed="${!f}">Todos</button>${funcs.map(x => `<button type="button" data-car-f="${esc(x)}" aria-pressed="${f === x}">${esc(x)}</button>`).join("")}</div>` : ""}
+  <div class="car-grid">${V.map(c => { const st = carSt(c), [stl, stc] = CAR_ST[st];
+    return `<section class="panel car-card ${st}">${cab(c)}
+      <div class="car-chips"><span class="chip ${stc}">${stl}${c.chegou && !c.saiu ? " " + hmDe(c.chegou) : c.saiu ? " " + hmDe(c.saiu) : ""}</span>${c.origem === "link" ? `<span class="chip">pelo link</span>` : ""}${c.vagas ? `<span class="chip">${esc(c.vagas)} lugares</span>` : ""}${c.local ? `<span class="chip">${esc(c.local)}</span>` : ""}</div>
+      <div class="actions">${wa(c)}${ed ? (st === "dentro" ? `<button class="btn sm" type="button" data-car-st="${esc(c.id)}|saiu">Saiu</button>` : `<button class="btn sm primary" type="button" data-car-st="${esc(c.id)}|chegou">Chegou</button>`) : ""}</div></section>`; }).join("")}</div>
+  ${!V.length ? `<section class="panel"><div class="empty">${L.length ? "Nenhum carro com essa busca." : pend.length ? "Nenhum carro aprovado ainda." : "Nenhum carro ainda. Cadastre aqui ou mande o link para o dono do carro."}</div></section>` : ""}`;
 }
 function carVer(id) {
   const c = carLista().find(x => x.id === id); if (!c) return; const ed = podeEditar(), dt = s => s ? new Date(s).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
@@ -2356,7 +2361,7 @@ function carVer(id) {
       <div class="li"><span class="grow">Chegou · Saiu</span><b>${dt(c.chegou)} · ${dt(c.saiu)}</b></div>
       ${c.obs ? `<div class="li"><span class="grow">${esc(c.obs)}</span></div>` : ""}
       <div class="li"><span class="grow hint">${c.origem === "link" ? "Cadastrado pelo dono, pelo link" : "Cadastrado pela ADM"}${c.em ? " em " + dt(c.em) : ""}</span></div></div>
-    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button>${ed ? `<button class="btn primary" type="button" data-car="${esc(c.id)}">${ico("edit")} Editar</button>` : ""}</div></div>`, () => closeModal());
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button>${ed ? `<button class="btn" type="button" data-car="${esc(c.id)}">${ico("edit")} Editar</button>` : ""}${ed && carPend(c) ? `<button class="btn primary" type="button" data-car-ok="${esc(c.id)}">${ico("check")} Aprovar</button>` : ""}</div></div>`, () => closeModal());
 }
 function carForm(id) {
   const c = carLista().find(x => x.id === id) || { funcao: "Apoio" }, arq = {};
@@ -5428,7 +5433,9 @@ document.addEventListener("click", e => {
   if (d.car != null && t.matches("[data-car]")) { if (podeEditar()) carForm(d.car); return; }
   if (d.carVer) { carVer(d.carVer); return; }
   if (d.carF != null && t.matches("[data-car-f]")) { S.carF = d.carF; render(); return; }
-  if (d.carOk) { carSalvar(D => ({ lista: D.lista.map(x => x.id === d.carOk ? { ...x, conferido: true } : x) }), "Conferido"); return; }
+  if (d.carOk) { if (!podeEditar()) return; if ($("#modalRoot").innerHTML) closeModal(); carSalvar(D => ({ lista: D.lista.map(x => x.id === d.carOk ? { ...x, conferido: true, aprovPor: ME.adm || "", aprovEm: new Date().toISOString() } : x) }), "Carro aprovado"); return; }
+  if (d.carNao) { const c = carLista().find(x => x.id === d.carNao); if (!c || !podeEditar() || !confirm(`Recusar o carro ${carPlaca(c.placa)} de ${c.nome}? Ele sai da lista.`)) return;
+    carSalvar(D => ({ lista: D.lista.filter(x => x.id !== c.id), apagados: [...(D.apagados || []), c.id] }), "Cadastro recusado").then(() => { if (!DEMO && c.id.startsWith("carlink-")) api.remove("config", c.id).catch(() => {}); }); return; }
   if (d.carSt) { const [cid, ac] = d.carSt.split("|"), agora = new Date().toISOString();
     carSalvar(D => ({ lista: D.lista.map(x => x.id !== cid ? x : ac === "chegou" ? { ...x, chegou: agora, saiu: "" } : { ...x, saiu: agora }) }), ac === "chegou" ? "Chegada registrada" : "Saída registrada"); return; }
   if (d.trV != null && t.matches("[data-tr-v]")) { if (podeEditar()) trVeicForm(d.trV); return; }
