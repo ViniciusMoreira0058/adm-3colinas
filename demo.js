@@ -1691,3 +1691,25 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
   [["m-thal", "Thalisson", -20.2163, -47.2805, 2], ["m-hen", "Henrique", -20.2296, -47.3027, 4], ["carro", "Carro de apoio · Diego", -20.2111, -47.2697, 1]]
     .forEach(([id, nome, lat, lng, min]) => D.push({ col: "config", id: `loc-top1922-${id}`, data: { lat, lng, nome, em: h(min), top: "top1922" } }));
 })();
+// COMUNICAÇÃO: fixado, quem viu, lembretes e aprendizados (fictícios)
+(function () {
+  const D = window.ADM_DEMO.docs, h = m => new Date(Date.now() - m * 6e4).toISOString();
+  const dia = n => { const d = new Date(Date.now() + n * 864e5); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const M = D.find(d => d.id === "mural-top1922"); if (M) M.data.msgs.push({ id: "m0", txt: "📻 Rádios no canal 3. Segurança no canal 5. Médico no 7.", fixo: true, por: "Vinicius Moreira", em: h(400) });
+  M.data.msgs.sort((a, b) => b.em.localeCompare(a.em));
+  [["m-thal", 3], ["m-hen", 40], ["m-rafa", 130], ["m-dono", 60]].forEach(([m, min]) => D.push({ col: "config", id: `comvisto-top1922-${m}`, data: { ate: h(min), top: "top1922" } }));
+  D.push({ col: "config", id: "lembretes", data: { lista: [
+    { id: "l1", txt: "Conferir se todos os rádios estão carregados antes da vigília", quando: "data", data: dia(0), area: "Comunicação", top: "top1922", topNome: "TOP 1922", por: "Thalisson", em: h(600) },
+    { id: "l2", txt: "Chegar 1 hora antes no ponto da Segunda Revista: no último TOP o carro atolou", quando: "proximo", area: "Pista", top: "top1821", topNome: "TOP 1821", por: "Henrique", em: h(60 * 24 * 70) },
+    { id: "l3", txt: "Levar mais gelo para o camp", quando: "dia", dia: "d2", area: "Alimentação", top: "top1922", topNome: "TOP 1922", por: "Diego Souza", em: h(300) },
+    { id: "l4", txt: "Imprimir a lista de famílias para a chamada", quando: "data", data: dia(1), area: "Logística", top: "top1922", topNome: "TOP 1922", por: "Vinicius Moreira", em: h(200) },
+    { id: "l5", txt: "Separar as pulseiras +40", quando: "data", data: dia(-1), area: "Inscrições", top: "top1922", topNome: "TOP 1922", por: "Rafael Lima", em: h(2000), feito: true, feitoPor: "Rafael Lima", feitoEm: h(1500) }] } });
+  D.push({ col: "config", id: "aprend-top1821", data: { top: "top1821", topNome: "TOP 1821", em: h(60 * 24 * 60), revisados: {}, itens: [
+    { id: "a1", area: "Logística", tipo: "mudar", txt: "Água acabou no camp do D2. Levar 30% a mais e deixar reserva no carro de apoio.", por: "Diego Souza" },
+    { id: "a2", area: "Pista", tipo: "mudar", txt: "Trecho do Cemitério sem sinal: combinar ponto de encontro antes de sair.", por: "Henrique" },
+    { id: "a3", area: "Saúde", tipo: "funcionou", txt: "Ficha de saúde impressa por família ajudou muito o médico.", por: "Thalisson" },
+    { id: "a4", area: "Comunicação", tipo: "funcionou", txt: "Canal de rádio separado para a segurança.", por: "Vinicius Moreira" }] } });
+  D.push({ col: "config", id: "aprend-top1922", data: { top: "top1922", topNome: "TOP 1922", em: h(30), revisados: { "top1821|a3": { por: "Thalisson", em: h(3000) }, "top1821|a4": { por: "Vinicius Moreira", em: h(3000) } }, itens: [
+    { id: "b1", area: "Alimentação", tipo: "funcionou", txt: "Refeição pronta 20 min antes da chegada da corrente.", por: "Diego Souza", em: h(40) },
+    { id: "b2", area: "Pista", tipo: "mudar", txt: "A chamada na Segunda Revista demorou: fazer por família em fila.", por: "Thalisson", em: h(25) }] } });
+})();

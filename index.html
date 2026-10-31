@@ -946,6 +946,36 @@ body.d2 .empty.e2.busca .e2-ic { background: var(--surface2); color: var(--muted
 .clima-horas small{font-size:11px;color:var(--muted)}.clima-horas i{font-style:normal;font-size:11px;color:#7aa7ff}
 :root[data-theme="light"] .adm-pin i{border-color:#fff}
 
+/* COMUNICAÇÃO */
+.mural-livre input,.apr-novo input,.apr-novo select{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);min-height:42px}
+.mural-livre input:focus,.apr-novo input:focus,.apr-novo select:focus{border-color:var(--accent);outline:none}
+.li.lembrete .grow,.li.lembrete .grow *{white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+.com-n{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:11px;font-weight:800;margin-left:2px}
+.mural-msg{position:relative}
+.mural-msg.fixo{border-color:rgba(255,122,26,.6);background:var(--accent-soft)}
+.mural-pin{display:block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.mural-msg.novo::before{content:"";position:absolute;top:14px;right:14px;width:9px;height:9px;border-radius:50%;background:#ef4444}
+.mural-pe{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px}
+.mural-acoes{display:flex;align-items:center;gap:6px}
+.mural-acoes .icon-btn{width:34px;height:34px;font-size:15px}
+.mural-vistos{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:4px 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.mural-quem{display:flex;flex-direction:column;gap:2px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:13px}
+.lem-quando{display:flex;flex-wrap:wrap}
+.lem-quando label{display:inline-flex!important;flex-direction:row!important;align-items:center;gap:6px;text-transform:none!important;letter-spacing:0!important;font-size:14px!important;font-weight:600!important;color:var(--fg)!important;margin:0!important;padding:8px 12px;cursor:pointer;border-radius:8px}
+.lem-quando label:has(input:checked){background:var(--accent);color:var(--on-accent)!important}
+.lem-quando input{position:absolute;opacity:0;pointer-events:none}
+.li.lembrete.passou{opacity:.55}.li.lembrete.passou b{text-decoration:line-through}
+.lem-banner small{opacity:.8}
+.apr-area{margin-top:12px}.apr-area>b{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.apr-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);margin-bottom:6px;background:var(--surface2)}
+.apr-item.ok{box-shadow:inset 3px 0 0 #46c486}.apr-item.mudar{box-shadow:inset 3px 0 0 var(--accent)}
+.apr-item.feito{opacity:.6}
+.apr-tipo{flex:none;font-size:12px;font-weight:800;width:92px}
+.apr-revisar{border-color:rgba(255,122,26,.6)}
+.apr-novo{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.apr-novo select{width:auto;flex:none}.apr-novo input{flex:1 1 220px;min-width:0}
+@media (max-width:600px){.apr-item{flex-wrap:wrap}.apr-tipo{width:auto}}
+
 /* NFC 3COLINAS */
 .nfc-row { display: flex; align-items: center; gap: 12px; }
 .nfc-row .actions { flex-wrap: wrap; justify-content: flex-end; }

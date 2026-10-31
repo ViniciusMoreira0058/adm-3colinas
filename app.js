@@ -163,6 +163,7 @@ const VIEWS = [
   { id: "legendarios", l: "Legendários", i: "shield" },
   { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
+  { id: "comunicacao", l: "Comunicação", c: "Comunicação", i: "chat", need: [] },   // recados, lembretes e aprendizados
   { id: "campo", l: "Campo", c: "Campo", i: "group", need: ["participantes"], demo: true },   // chamada, mural, turnos e entregas com o TOP rodando
   { id: "nfc", l: "NFC 3COLINAS", c: "NFC", i: "nfc", need: ["participantes", "legendarios"], nfc: true },   // ficha de saúde + tag NFC
   { id: "familias", l: "Famílias", i: "fam" },
@@ -199,7 +200,7 @@ const canSee = v => {
   if (v.org && !ORG()) return false;
   if (v.extra && !EXTRA()) return false;
   if (v.nfc && !NFC()) return false;
-  if (v.id === "campo" && !CAMPO()) return false;
+  if ((v.id === "campo" || v.id === "comunicacao") && !CAMPO()) return false;
   if (!ME.acesso) return v.id === "painel";
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
   if (S.isOwner || (VIEWS.find(x => x.id === v.id) || v).all) return true;
@@ -257,7 +258,7 @@ function renderNav() {
   const online = onlineAdms().length;
   counts.usuarios = online ? `${online} on` : null;
   const novas = ME.acesso ? notifNovas() : 0;
-  const navBtn = v => `<button type="button" data-go="${v.id}" title="${esc(v.l)}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : v.id === "importacao" && impFaltam() ? `<span class="badge num">${impFaltam()}</span>` : ""}</button>`;
+  const navBtn = v => `<button type="button" data-go="${v.id}" title="${esc(v.l)}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : v.id === "comunicacao" && comNaoLidas() + lembretesHoje().length ? `<span class="badge num">${comNaoLidas() + lembretesHoje().length}</span>` : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : v.id === "importacao" && impFaltam() ? `<span class="badge num">${impFaltam()}</span>` : ""}</button>`;
   const vis = VIEWS.filter(v => canSee(v) && (!v.all || v.menu));
   document.body.classList.toggle("org", ORG());
   document.body.classList.toggle("d2", D2());
@@ -993,7 +994,7 @@ const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
 const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "nfc", "familias", "consagracao"]],
-  ["Operação", ["cronograma", "aovivo", "campo", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
+  ["Operação", ["cronograma", "aovivo", "comunicacao", "campo", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
 /* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
@@ -1544,9 +1545,9 @@ function vCampo() {
   const mural = (cfgDe(campoId("mural")) || {}).msgs || [];
   const novas = mural.filter(m => Date.now() - new Date(m.em) < 30 * 6e4).length;
   return `
-  <div class="head"><div><h2>Campo</h2><p>O que a equipe usa com o TOP rodando: chamada das famílias em cada ponto, recados rápidos, escala de turnos e entregas no camp. Funciona sem internet: o que marcar aqui vai quando o sinal voltar.</p></div></div>
-  <div class="seg campo-abas">${ab("chamada", "Chamada")}${ab("mural", "Mural", novas || "")}${ab("turnos", "Turnos")}${ab("entregas", "Entregas")}</div>
-  ${aba === "mural" ? vMural(mural) : aba === "turnos" ? vTurnos() : aba === "entregas" ? vEntregas() : vChamada()}`;
+  <div class="head"><div><h2>Campo</h2><p>O que a equipe usa com o TOP rodando: chamada das famílias em cada ponto, escala de turnos e entregas no camp. Funciona sem internet: o que marcar aqui vai quando o sinal voltar.</p></div></div>
+  <div class="seg campo-abas">${ab("chamada", "Chamada")}${ab("turnos", "Turnos")}${ab("entregas", "Entregas")}</div>
+  ${aba === "turnos" ? vTurnos() : aba === "entregas" ? vEntregas() : vChamada()}`;
 }
 function vChamada() {
   const fams = Array.from({ length: 12 }, (_, i) => i + 1).filter(f => famDe(f).length), ed = podeEditar();
@@ -1732,6 +1733,128 @@ function equipeNoMapa(L, map) {
       .addTo(map).bindTooltip(`${esc(l.nome)} · ${haQuanto(l.em)}`, { direction: "top" }); });
 }
 if (CAMPO() && store.get("adm3-loc") === "1") setTimeout(() => { if (ME.acesso) locLigar(true); }, 4000);
+
+/* ---------- Comunicação (só na demo): Agora (mural com fixar e "vi"), Lembretes com data e Aprendizados do TOP ----------
+   config mural-<top> {msgs}, comvisto-<top>-<membro> {ate}, lembretes {lista}, aprend-<top> {itens, revisados}. */
+const comVistoId = (m = ME.id) => `comvisto-${curTopId()}-${m || "eu"}`;
+const muralMsgs = () => (cfgDe(campoId("mural")) || {}).msgs || [];
+const comViAte = (m = ME.id) => (cfgDe(comVistoId(m)) || {}).ate || "";
+const comNaoLidas = () => { if (!CAMPO() || !ME.acesso) return 0; const ate = comViAte(); return muralMsgs().filter(m => m.por !== ME.adm && (m.em || "") > ate).length; };
+const admsAtivos = () => (S.equipe || []).filter(m => m.ativo !== false);
+function comMarcarVi(ate) {
+  const atual = comViAte(); if (atual && atual >= ate) return;
+  save(() => api.set("config", comVistoId(), { ate, nome: ME.adm || "", top: curTopId() }), "").then(render);
+}
+function vComunicacao() {
+  const aba = S.comAba || "agora", nl = comNaoLidas(), lh = lembretesHoje().length, rev = aprendPraRevisar().length;
+  const ab = (v, l, n) => `<button type="button" data-com-aba="${v}" aria-pressed="${aba === v}">${l}${n ? ` <span class="com-n num">${n}</span>` : ""}</button>`;
+  return `
+  <div class="head"><div><h2>Comunicação</h2><p>Recados da equipe na hora, lembretes para o dia certo e o que aprendemos para o próximo TOP.</p></div></div>
+  <div class="seg campo-abas">${ab("agora", "Agora", nl)}${ab("lembretes", "Lembretes", lh)}${ab("aprendizados", "Aprendizados", rev)}</div>
+  ${aba === "lembretes" ? vLembretes() : aba === "aprendizados" ? vAprendizados() : vAgora()}`;
+}
+function vAgora() {
+  const msgs = muralMsgs(), ed = podeEditar(), ate = comViAte(), equipe = admsAtivos();
+  const fixos = msgs.filter(m => m.fixo), resto = msgs.filter(m => !m.fixo), nl = comNaoLidas();
+  const viram = m => equipe.filter(e => e.nome === m.por || (comViAte(e.id) || "") >= m.em);
+  const card = m => { const v = viram(m), falta = equipe.filter(e => !v.includes(e)), novo = m.por !== ME.adm && (m.em || "") > ate;
+    return `<div class="mural-msg ${m.tipo === "alerta" ? "alerta" : ""} ${m.fixo ? "fixo" : ""} ${novo ? "novo" : ""}">
+      ${m.fixo ? `<span class="mural-pin">📌 Fixado</span>` : ""}<p>${esc(m.txt)}</p>
+      <div class="mural-pe"><small>${esc(m.por)} · ${hmDe(m.em)} · ${haQuanto(m.em)}</small>
+        <span class="mural-acoes">${equipe.length ? `<button type="button" class="mural-vistos" data-com-vistos="${esc(m.id)}" title="${falta.length ? "Falta ver: " + esc(falta.map(e => e.nome.split(" ")[0]).join(", ")) : "Todos viram"}">👁 ${v.length}/${equipe.length}</button>` : ""}
+        ${novo ? `<button type="button" class="btn sm primary" data-com-vi="${esc(m.em)}">${ico("check")} Vi</button>` : ""}
+        ${ed ? `<button type="button" class="icon-btn" data-com-fixar="${esc(m.id)}" aria-label="${m.fixo ? "Desafixar" : "Fixar no topo"}" title="${m.fixo ? "Desafixar" : "Fixar no topo"}">📌</button>` : ""}</span></div>
+      ${S.comVistos === m.id ? `<div class="mural-quem">${v.length ? `<span><b>Viram:</b> ${v.map(e => esc(e.nome.split(" ")[0])).join(", ")}</span>` : ""}${falta.length ? `<span class="bad-text"><b>Falta ver:</b> ${falta.map(e => esc(e.nome.split(" ")[0])).join(", ")}</span>` : ""}</div>` : ""}</div>`; };
+  return `
+  ${ed ? `<section class="panel"><h3>Avisar a equipe <small>chega no sino de todos os ADMs</small></h3>
+    <div class="mural-rapido">${MURAL_RAPIDO.map(([e, t]) => `<button type="button" class="btn" data-mural="${esc(e + " " + t)}"><span aria-hidden="true">${e}</span> ${esc(t)}</button>`).join("")}</div>
+    <div class="mural-livre"><input id="muralTxt" placeholder="Ou escreva um recado curto…" maxlength="200" aria-label="Recado"><button class="btn primary" type="button" data-act="mural-enviar">Enviar</button></div></section>` : ""}
+  ${fixos.length ? `<section class="panel"><h3>Fixados <small>${fixos.length}</small></h3><div class="mural-lista">${fixos.map(card).join("")}</div></section>` : ""}
+  <section class="panel"><h3>Recados <small>${nl ? `${nl} não lido(s) · <button type="button" class="linkbtn" data-com-vi="${esc((msgs[0] || {}).em || "")}">marcar tudo como visto</button>` : msgs.length}</small></h3>
+    <div class="mural-lista">${resto.map(card).join("") || `<div class="empty">Nenhum recado ainda.</div>`}</div></section>`;
+}
+// lembretes: valem para uma data, um dia do TOP (D1, D2…) ou para o próximo TOP
+const lembretes = () => (cfgDe("lembretes") || {}).lista || [];
+function lembreteVence(l) {
+  if (l.feito) return false;
+  if (l.quando === "data") return (l.data || "") <= hojeISO();
+  if (l.quando === "proximo") return l.top !== curTopId();
+  if (l.quando === "dia") { if (l.top !== curTopId()) return false; const plano = cronoPlano(), ids = plano.map(d => d.id), at = ids.indexOf(cronoDiaAtual(plano)); return at >= 0 && at >= ids.indexOf(l.dia); }
+  return false;
+}
+const lembretesHoje = () => CAMPO() && ME.acesso ? lembretes().filter(lembreteVence) : [];
+const lembreteQuando = l => l.quando === "data" ? (l.data === hojeISO() ? "hoje" : new Date(l.data + "T12:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }))
+  : l.quando === "dia" ? `${(cronoPlano().find(d => d.id === l.dia) || {}).nome || l.dia} do ${l.topNome || "TOP"}` : `próximo TOP (anotado no ${l.topNome || "TOP anterior"})`;
+function vLembretes() {
+  const L = lembretes(), ed = podeEditar(), hoje = L.filter(lembreteVence), depois = L.filter(l => !l.feito && !lembreteVence(l)), feitos = L.filter(l => l.feito).slice(0, 10);
+  const item = l => `<div class="li lembrete ${l.feito ? "passou" : ""}"><span class="grow"><b>${esc(l.txt)}</b><br><span class="hint">📅 ${esc(lembreteQuando(l))}${l.area ? " · " + esc(l.area) : ""} · por ${esc(l.por || "ADM")}${l.feito ? ` · feito por ${esc(l.feitoPor || "")}` : ""}</span></span>
+    ${ed && !l.feito ? `<button class="btn sm" type="button" data-lem-feito="${esc(l.id)}">${ico("check")} Feito</button>` : ""}${ed ? `<button class="icon-btn" type="button" data-lem="${esc(l.id)}" aria-label="Editar lembrete">${ico("edit")}</button>` : ""}</div>`;
+  return `
+  ${ed ? `<div class="actions" style="margin:4px 0 12px"><button class="btn primary" type="button" data-lem="">${ico("plus")} Novo lembrete</button></div>` : ""}
+  <section class="panel"><h3>Para agora <small>${hoje.length}</small></h3><div class="list">${hoje.map(item).join("") || `<div class="empty">Nada para hoje.</div>`}</div></section>
+  <section class="panel"><h3>Mais pra frente <small>${depois.length}</small></h3><div class="list">${depois.map(item).join("") || `<div class="empty">Nenhum lembrete marcado. Anote algo para amanhã, para um dia do TOP ou para o próximo TOP.</div>`}</div></section>
+  ${feitos.length ? `<section class="panel"><h3>Feitos <small>${feitos.length}</small></h3><div class="list">${feitos.map(item).join("")}</div></section>` : ""}`;
+}
+const AREAS = ["Logística", "Pista", "Saúde", "Alimentação", "Comunicação", "Inscrições", "Geral"];
+function lembreteForm(id) {
+  const L = lembretes(), l = L.find(x => x.id === id) || { quando: "data", data: (() => { const d = new Date(Date.now() + 864e5); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); })() };
+  const dias = cronoPlano();
+  modal(`
+    <h3>${l.id ? "Editar lembrete" : "Novo lembrete"}</h3>
+    <div class="form">
+      <div class="field full"><label for="f-lt">O que lembrar</label><textarea id="f-lt" name="txt" style="min-height:80px" required placeholder="ex.: levar mais gelo para o camp do D2">${esc(l.txt || "")}</textarea></div>
+      <div class="field full"><span class="lab">Para quando</span><div class="seg lem-quando">
+        ${[["data", "Uma data"], ["dia", "Dia do TOP"], ["proximo", "Próximo TOP"]].map(([v, t]) => `<label><input type="radio" name="quando" value="${v}" ${l.quando === v ? "checked" : ""}> ${t}</label>`).join("")}</div></div>
+      <div class="field" data-lq="data"><label for="f-ld">Data</label><input id="f-ld" name="data" type="date" value="${esc(l.data || "")}"></div>
+      <div class="field" data-lq="dia"><label for="f-ldia">Dia</label><select id="f-ldia" name="dia">${dias.map(d => `<option value="${esc(d.id)}" ${l.dia === d.id ? "selected" : ""}>${esc(d.nome)}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-la">Área</label><select id="f-la" name="area"><option value="">—</option>${AREAS.map(a => `<option ${l.area === a ? "selected" : ""}>${a}</option>`).join("")}</select></div>
+    </div>
+    <div class="modal-foot"><div>${l.id ? `<button class="btn danger" type="button" id="lDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const txt = String(fd.get("txt") || "").trim(), quando = fd.get("quando") || "data"; if (!txt) { toast("Escreva o lembrete."); return; }
+    if (quando === "data" && !fd.get("data")) { toast("Escolha a data."); return; }
+    const novo = { ...l, id: l.id || Date.now().toString(36), txt, quando, data: quando === "data" ? fd.get("data") : "", dia: quando === "dia" ? fd.get("dia") : "", area: fd.get("area") || "",
+      top: l.top || curTopId(), topNome: l.topNome || topName(), por: l.por || ME.adm || "", em: l.em || new Date().toISOString() };
+    closeModal(); save(() => api.set("config", "lembretes", { lista: [...L.filter(x => x.id !== novo.id), novo] }), "Lembrete salvo").then(render);
+  });
+  const sync = () => { const q = ($("#mform [name=quando]:checked") || {}).value; $("#mform").querySelectorAll("[data-lq]").forEach(el => { el.hidden = el.dataset.lq !== q; }); };
+  $("#mform").addEventListener("change", sync); sync();
+  const del = $("#lDel"); if (del) del.onclick = () => { closeModal(); save(() => api.set("config", "lembretes", { lista: L.filter(x => x.id !== l.id) }), "Lembrete excluído").then(render); };
+}
+function lembreteFeito(id) {
+  const L = lembretes().map(l => l.id === id ? { ...l, feito: true, feitoPor: ME.adm || "", feitoEm: new Date().toISOString() } : l);
+  save(() => api.set("config", "lembretes", { lista: L }), "Lembrete feito").then(render);
+}
+const lemAvisados = new Set();
+function avisoLembretes() {
+  const L = lembretesHoje();
+  L.filter(l => !lemAvisados.has(l.id)).forEach(l => { lemAvisados.add(l.id); if (DEMO) setTimeout(() => novaNotif({ id: "lem-" + l.id + "-" + hojeISO(), em: new Date().toISOString(), ator: null, ator_nome: l.por || "ADM", publico: "todos", col: "config", doc_id: "lembretes", acao: "lembrete", nome: "📌 " + l.txt }), 0); });
+  if (!L.length || S.view === "comunicacao") return "";
+  return `<div class="banner aviso lem-banner"><span>📌 <b>${L.length === 1 ? "Lembrete" : L.length + " lembretes"}:</b> ${esc(L[0].txt)}${L.length > 1 ? ` <small>e mais ${L.length - 1}</small>` : ""}</span>
+    <span class="actions">${podeEditar() && L.length === 1 ? `<button class="btn" type="button" data-lem-feito="${esc(L[0].id)}">Feito</button>` : ""}<button class="btn" type="button" data-go="comunicacao" data-com-ir="lembretes">Ver</button></span></div>`;
+}
+// aprendizados: o que funcionou e o que mudar, por área. Os do TOP anterior aparecem para revisar antes de começar.
+const aprendDoc = (t = curTopId()) => cfgDe(`aprend-${t}`) || {};
+function aprendAnterior() {
+  const outros = Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith("aprend-") && k !== `aprend-${curTopId()}`).map(([k, d]) => ({ top: k.slice(7), ...d })).filter(d => (d.itens || []).length);
+  return outros.sort((a, b) => (b.em || "").localeCompare(a.em || ""))[0] || null;
+}
+const aprendPraRevisar = () => { if (!CAMPO()) return []; const A = aprendAnterior(), rev = aprendDoc().revisados || {}; return A ? A.itens.filter(i => !rev[A.top + "|" + i.id]) : []; };
+function vAprendizados() {
+  const D = aprendDoc(), itens = D.itens || [], ed = podeEditar(), A = aprendAnterior(), rev = D.revisados || {};
+  const grupo = (lista, ant) => { const por = {}; lista.forEach(i => (por[i.area || "Geral"] = por[i.area || "Geral"] || []).push(i));
+    return Object.entries(por).map(([a, is]) => `<div class="apr-area"><b>${esc(a)}</b>${is.map(i => { const k = ant ? A.top + "|" + i.id : "";
+      return `<div class="apr-item ${i.tipo === "funcionou" ? "ok" : "mudar"} ${ant && rev[k] ? "feito" : ""}"><span class="apr-tipo">${i.tipo === "funcionou" ? "👍 Funcionou" : "🔧 Mudar"}</span><span class="grow">${esc(i.txt)}<br><small class="hint">${esc(i.por || "ADM")}</small></span>
+        ${ant && ed ? `<button type="button" class="btn sm ${rev[k] ? "" : "primary"}" data-apr-rev="${esc(k)}">${rev[k] ? "Revisado ✓" : "Revisar"}</button>` : !ant && ed ? `<button class="icon-btn" type="button" data-apr-del="${esc(i.id)}" aria-label="Apagar">${ico("trash")}</button>` : ""}</div>`; }).join("")}</div>`).join(""); };
+  const falta = A ? A.itens.filter(i => !rev[A.top + "|" + i.id]).length : 0;
+  return `
+  ${A ? `<section class="panel ${falta ? "apr-revisar" : ""}"><h3>Do ${esc(A.topNome || "TOP anterior")} <small>${falta ? `${falta} para revisar antes de começar` : "tudo revisado"}</small></h3>${grupo(A.itens, true)}</section>` : ""}
+  ${ed ? `<section class="panel"><h3>Anotar um aprendizado <small>vai para o Relatório final</small></h3>
+    <div class="apr-novo"><select id="aprArea" aria-label="Área">${AREAS.map(a => `<option>${a}</option>`).join("")}</select>
+      <div class="seg"><button type="button" data-apr-tipo="funcionou" aria-pressed="${S.aprTipo !== "mudar"}">👍 Funcionou</button><button type="button" data-apr-tipo="mudar" aria-pressed="${S.aprTipo === "mudar"}">🔧 Mudar</button></div>
+      <input id="aprTxt" maxlength="240" placeholder="ex.: separar água por família antes do camp" aria-label="Aprendizado"><button class="btn primary" type="button" data-act="apr-add">Anotar</button></div></section>` : ""}
+  <section class="panel"><h3>Deste TOP <small>${itens.length}</small></h3>${grupo(itens, false) || `<div class="empty">Ainda nada anotado. Anote durante o TOP, na hora em que acontece.</div>`}</section>`;
+}
+function aprendSalvar(fn, msg) { const D = aprendDoc(); save(() => api.set("config", `aprend-${curTopId()}`, { itens: D.itens || [], revisados: D.revisados || {}, ...fn(D), topNome: topName(), em: new Date().toISOString(), top: curTopId() }), msg).then(render); }
 
 /* Período do backup: dia, semana (7 dias), mês (30 dias) ou o TOP todo. Num período, entra o que foi criado ou alterado dentro dele. */
 const BK_PER = [{ v: "dia", l: "Diário", d: "o que mudou hoje", dias: 1 }, { v: "semana", l: "Semanal", d: "o que mudou nos últimos 7 dias", dias: 7 },
@@ -3310,6 +3433,7 @@ function relatorioPdf(R) {
       ...(R.pt && (R.pt.R.length || ptLicoes()) ? [{ titulo: `Pós-TOP: avaliação dos ADMs (${R.pt.R.length})`, linhas: [["Nota geral", notaTxt(R.pt.geral)], ...R.pt.itens.map(it => [it.l, notaTxt(it.m)]),
           ...R.pt.R.filter(r => r.bom).map(r => [`Foi bom · ${r.por || "ADM"}`, r.bom]), ...R.pt.R.filter(r => r.melhorar).map(r => [`Melhorar · ${r.por || "ADM"}`, r.melhorar]),
           ...(ptLicoes() ? [["Lições para o próximo TOP", ptLicoes()]] : [])] }] : []),
+      ...(CAMPO() && (aprendDoc().itens || []).length ? [{ titulo: `Aprendizados do TOP (${aprendDoc().itens.length})`, linhas: aprendDoc().itens.map(i => [`${i.tipo === "funcionou" ? "Funcionou" : "Mudar"} · ${i.area || "Geral"}`, i.txt]) }] : []),
     ] };
 }
 
@@ -3562,7 +3686,7 @@ function render() {
   const other = tid !== atualId() && v !== "tops"
     ? `<div class="banner"><span>Você está vendo o <b>${esc(topName())}</b>${td && td.status === "finalizado" ? " (finalizado)" : ""}. O que mudar aqui fica no histórico dele.</span><button class="btn" type="button" data-top-open="${esc(atualId())}">Voltar para o ${esc(topName(atualId()))}</button></div>` : "";
   const faixa = avisoVisivel() ? `<div class="banner aviso"><span>${ico("bell")} <b>Planilha atualizada</b> por ${esc(S.aviso.por || "um ADM")}: ${S.aviso.novosP + S.aviso.novosL} novo(s) (${S.aviso.novosP} part. · ${S.aviso.novosL} LGND).</span><button class="btn" type="button" data-aviso="abrir">Ver resumo</button></div>` : "";
-  let html = faixa + avisoTurno() + other + (v === "painel" ? vPainel()
+  let html = faixa + avisoLembretes() + avisoTurno() + other + (v === "painel" ? vPainel()
     : v === "tops" ? vTops()
     : v === "usuarios" ? vUsuarios()
     : v === "historico" ? vHistorico()
@@ -3583,6 +3707,7 @@ function render() {
     : v === "postop" ? vPosTop()
     : v === "nfc" ? vNfc()
     : v === "campo" ? vCampo()
+    : v === "comunicacao" ? vComunicacao()
     : v === "guia" ? vGuia()
     : vPista());
   if (D2()) { if (carregando(v)) html = faixa + other + esqueleto(v); else html = vazios(html); }
@@ -4194,6 +4319,7 @@ document.addEventListener("click", e => {
   if (d.go) { if (d.pinIr) S.pinf = { lote: "", q: "", ...(S.pinf || {}), st: d.pinIr };
     if (d.pfSet) d.pfSet.split(";").forEach(x => { const [k, v] = x.split(":"); S.pf[k] = v; if (k === "aba") store.set("pend-aba", v); });
     if (d.campoIr) S.campoAba = d.campoIr;
+    if (d.comIr) S.comAba = d.comIr;
     go(d.go); return; }
   if (d.pf) { S.pf[d.pf] = d.v; if (d.pf === "aba") store.set("pend-aba", d.v); render(); return; }
   if (d.aviso) {
@@ -4243,6 +4369,17 @@ document.addEventListener("click", e => {
   if (d.act === "nfc-codigo") { if (podeEditar()) codigoForm(); return; }
   if (d.gAba) { S.gAba = d.gAba; render(); return; }
   if (d.campoAba) { S.campoAba = d.campoAba; render(); return; }
+  if (d.comAba) { S.comAba = d.comAba; render(); return; }
+  if (d.comVi != null && t.matches("[data-com-vi]")) { if (d.comVi) comMarcarVi(d.comVi); return; }
+  if (d.comVistos) { S.comVistos = S.comVistos === d.comVistos ? null : d.comVistos; render(); return; }
+  if (d.comFixar) { const id = campoId("mural"), M = cfgDe(id) || {}; if (podeEditar()) save(() => api.set("config", id, { ...M, msgs: (M.msgs || []).map(m => m.id === d.comFixar ? { ...m, fixo: !m.fixo } : m) }), "").then(render); return; }
+  if (d.lem != null && t.matches("[data-lem]")) { if (podeEditar()) lembreteForm(d.lem); return; }
+  if (d.lemFeito) { if (podeEditar()) lembreteFeito(d.lemFeito); return; }
+  if (d.aprTipo) { S.aprTipo = d.aprTipo; render(); return; }
+  if (d.act === "apr-add") { const tx = ($("#aprTxt") || {}).value, area = ($("#aprArea") || {}).value; if (tx && tx.trim() && podeEditar()) { S.aprArea = area;
+      aprendSalvar(D => ({ itens: [...(D.itens || []), { id: Date.now().toString(36), area, tipo: S.aprTipo === "mudar" ? "mudar" : "funcionou", txt: tx.trim(), por: ME.adm || "", em: new Date().toISOString() }] }), "Aprendizado anotado"); } return; }
+  if (d.aprDel) { if (podeEditar()) aprendSalvar(D => ({ itens: (D.itens || []).filter(i => i.id !== d.aprDel) }), "Apagado"); return; }
+  if (d.aprRev) { if (podeEditar()) aprendSalvar(D => { const r = { ...(D.revisados || {}) }; if (r[d.aprRev]) delete r[d.aprRev]; else r[d.aprRev] = { por: ME.adm || "", em: new Date().toISOString() }; return { revisados: r }; }, ""); return; }
   if (d.chamada) { if (podeEditar()) chamadaForm(Number(d.chamada)); return; }
   if (d.chamadaOk) { const c = cfgDe(d.chamadaOk); if (c && podeEditar()) save(() => api.set("config", d.chamadaOk, { ...c, resolvida: true, resolvidaEm: new Date().toISOString(), resolvidaPor: ME.adm || "" }), "Marcado como encontrado").then(render); return; }
   if (d.mural) { if (podeEditar()) muralPostar(d.mural); toast("Recado enviado para a equipe"); return; }
@@ -5236,6 +5373,9 @@ function notifTexto(n) {
     } else if (/^pin-/.test(n.doc_id)) { if (!M.status) return null; i = "check"; a = "Pins"; c = `Pins: ${n.nome || "alguém"} ${novo("status") === "entregue" ? "recebeu o pin" : "voltou para pendente"}`; }
     else if (/^equipes-/.test(n.doc_id)) { i = "users"; a = "Cronograma"; c = "Mudou as equipes do cronograma"; }
     else if (/^cronoplano-/.test(n.doc_id)) { i = "clock"; a = "Cronograma"; c = "Mudou o plano do cronograma"; }
+    else if (/^mural-/.test(n.doc_id) && n.acao === "mural") { i = "chat"; a = "Comunicação"; c = n.nome || "Novo recado"; }
+    else if (n.doc_id === "lembretes" && n.acao === "lembrete") { i = "clock"; a = "Comunicação"; return { i, a, t: "Lembrete para hoje", c: n.nome || "" }; }
+    else if (/^mural-|^comvisto-|^lembretes$|^aprend-|^chamada-|^turnos-|^entregas-|^loc-/.test(n.doc_id) && CAMPO()) { i = "chat"; a = "Comunicação"; c = /^chamada-/.test(n.doc_id) ? "Fez uma chamada" : /^turnos-/.test(n.doc_id) ? "Mudou a escala de turnos" : /^entregas-/.test(n.doc_id) ? "Marcou entregas no camp" : /^aprend-/.test(n.doc_id) ? "Anotou um aprendizado" : /^lembretes$/.test(n.doc_id) ? "Mexeu nos lembretes" : null; if (!c) return null; }
     else if (n.doc_id === "consag-alias") { i = "group"; a = "Consagração"; c = "Consagração: uniu ou separou nomes"; }
     else c = "Mudou as configurações";
   } else c = `${a}: ${n.nome || "registro"} ${n.acao === "criou" ? "criado" : "atualizado"}`;
