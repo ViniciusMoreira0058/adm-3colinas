@@ -2298,27 +2298,72 @@ function vFinanceiro() {
   const g = [...I.filter(i => i.tipo !== "entrada"), ...feqAprovados()], e = I.filter(i => i.tipo === "entrada"), sg = g.reduce((a, i) => a + (+i.valor || 0), 0), vl = vendasResumo().liq, se = e.reduce((a, i) => a + (+i.valor || 0), 0) + vl, totOrc = Object.values(orc).reduce((a, v) => a + (+v || 0), 0);
   const porA = a => g.filter(i => i.area === a).reduce((s, i) => s + (+i.valor || 0), 0), areas = [...new Set([...FIN_AREAS.filter(a => porA(a) || orc[a]), ...g.map(i => i.area)])];
   return `
-  <div class="head"><div><h2>Financeiro</h2><p>Gastos e entradas do TOP com a foto do recibo. No fim sai a prestação de contas em PDF.</p></div>
+  <div class="head"><div><h2>Financeiro</h2><p>Saídas e entradas do TOP com a foto do recibo. No fim sai a prestação de contas em PDF.</p></div>
     <div class="actions">${ed ? `<button class="btn primary" type="button" data-fin="">${ico("plus")} Lançar</button>` : ""}${VENDAS() && ed ? `<label class="btn">${ico("upload")} Importar vendas<input type="file" accept=".xlsx,.xls,.csv" id="vendasArq" hidden></label>` : ""}<button class="btn" type="button" data-act="fin-pdf">${ico("upload")} Prestação de contas</button></div></div>
   <div class="kpis">
-    <div class="kpi"><span class="lbl">Gasto</span><span class="val num" style="font-size:24px">${brl(sg)}</span><span class="sub">${g.length} lançamento(s)${feqAprovados().length ? ` · ${feqAprovados().length} das equipes` : ""}</span></div>
-    <div class="kpi"><span class="lbl">Entradas</span><span class="val num" style="font-size:24px">${brl(se)}</span><span class="sub">${vl ? `vendas ${brl(vl)} + doações` : "doações e repasses"}</span></div>
-    <div class="kpi ${se - sg < 0 ? "alert" : ""}"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos gastos</span></div>
-    <div class="kpi ${totOrc && sg > totOrc ? "alert" : ""}"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></div>
+    <button type="button" class="kpi kpi-btn" data-fin-det="saidas"><span class="lbl">Saídas</span><span class="val num" style="font-size:24px">${brl(sg)}</span><span class="sub">${g.length} lançamento(s)${feqAprovados().length ? ` · ${feqAprovados().length} das equipes` : ""}</span></button>
+    <button type="button" class="kpi kpi-btn" data-fin-det="entradas"><span class="lbl">Entradas</span><span class="val num" style="font-size:24px">${brl(se)}</span><span class="sub">${vl ? `vendas ${brl(vl)} + doações` : "doações e repasses"}</span></button>
+    <button type="button" class="kpi kpi-btn ${se - sg < 0 ? "alert" : ""}" data-fin-det="saldo"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos saídas</span></button>
+    <button type="button" class="kpi kpi-btn ${totOrc && sg > totOrc ? "alert" : ""}" data-fin-det="orc"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></button>
   </div>
   <section class="panel"><h3>Por área ${S.isOwner ? `<button class="linkbtn" type="button" data-act="fin-orc">orçamento ›</button>` : ""}</h3>
-    <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<div class="fin-a"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></div>`; }).join("") || `<div class="empty">Nenhum gasto ainda.</div>`}</div></section>
+    <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<button type="button" class="fin-a" data-fin-det="${esc("area:" + a)}"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></button>`; }).join("") || `<div class="empty">Nenhuma saída ainda.</div>`}</div></section>
   ${VENDAS() ? vendasPainel(ed) : ""}
   ${COORD() ? feqPainel(ed) : ""}
   <section class="panel"><h3>Lançamentos <small>${I.length}</small></h3><div class="cel-lista">${I.map(i => `<div class="cel-li ${i.tipo === "entrada" ? "guardado" : ""}">
     ${i.foto || i.fotoPath ? `<button type="button" class="cel-foto" data-fin-foto="${esc(i.id)}" aria-label="Ver recibo">${celFotoSrc(i) ? `<img src="${esc(celFotoSrc(i))}" alt="">` : "🧾"}</button>` : `<span class="cel-foto vazia">${i.tipo === "entrada" ? "＋" : "🧾"}</span>`}
     <button type="button" class="cel-info" ${ed ? `data-fin="${esc(i.id)}"` : "disabled"}><b>${esc(i.desc)}</b><small>${esc(i.area || "")} · ${i.data ? new Date(i.data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""} · ${esc(i.por || "")}</small></button>
-    <b class="num fin-v ${i.tipo === "entrada" ? "ent" : ""}">${i.tipo === "entrada" ? "+" : "−"} ${brl(i.valor)}</b></div>`).join("") || `<div class="empty">Toque em Lançar para registrar o primeiro gasto.</div>`}</div></section>`;
+    <b class="num fin-v ${i.tipo === "entrada" ? "ent" : ""}">${i.tipo === "entrada" ? "+" : "−"} ${brl(i.valor)}</b></div>`).join("") || `<div class="empty">Toque em Lançar para registrar a primeira saída.</div>`}</div></section>`;
+}
+/* Detalhe de um card do Financeiro: todas as entradas ou saídas que formam aquele número */
+function finDetalhe(key) {
+  const D = finDoc(), man = D.itens || [], orc = D.orc || {}, VL = VENDAS() ? (vendasDoc().linhas || []) : [];
+  const dd = d => d ? new Date(d + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "";
+  const saiM = man.filter(i => i.tipo !== "entrada").map(i => ({ d: i.data, t: i.desc, s: [i.area, i.por].filter(Boolean).join(" · "), v: +i.valor || 0, sn: -1, foto: (i.foto || i.fotoPath) ? i.id : "" }));
+  const saiE = feqAprovados().map(i => ({ d: i.data, t: i.desc, s: [i.area, "Equipe " + i.equipe, i.por, FEQ_TXT[i.status]].filter(Boolean).join(" · "), v: +i.valor || 0, sn: -1, area: i.area }));
+  const entM = man.filter(i => i.tipo === "entrada").map(i => ({ d: i.data, t: i.desc, s: [i.area, i.por].filter(Boolean).join(" · "), v: +i.valor || 0, sn: 1, foto: (i.foto || i.fotoPath) ? i.id : "" }));
+  const vend = L => L.map(x => ({ d: x.data, t: x.nome || "Comprador", s: [x.oferta, x.parc && "parcela " + x.parc, x.pag, VEND_TXT[x.stat], x.repasse && "repasse " + dd(x.repasse)].filter(Boolean).join(" · "), v: +x.liq || 0, sn: 1, bruto: +x.bruto || 0 }));
+  const ap = VL.filter(x => x.stat === "aprovado");
+  saiM.forEach((x, i) => x.area = (man.filter(i => i.tipo !== "entrada")[i] || {}).area);
+  let titulo = "", L = [], nota = "", campo = "v";
+  const [tipo, val] = key.includes(":") ? [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)] : [key, ""];
+  if (key === "saidas") { titulo = "Saídas"; L = [...saiM, ...saiE]; }
+  else if (key === "entradas") { titulo = "Entradas"; L = [...entM, ...vend(ap)]; nota = ap.length ? "Vendas pelo valor que fica com a base." : ""; }
+  else if (key === "saldo") { titulo = "Saldo: entradas e saídas"; L = [...entM, ...vend(ap), ...saiM, ...saiE]; }
+  else if (key === "orc") {
+    const areas = [...new Set([...FIN_AREAS, ...[...saiM, ...saiE].map(i => i.area)])].filter(Boolean);
+    L = areas.map(a => { const v = [...saiM, ...saiE].filter(i => i.area === a).reduce((s, i) => s + i.v, 0), o = +orc[a] || 0; return { t: a, s: o ? `orçamento ${brl(o)} · ${pct(v, o)}% usado${v > o ? " · estourou " + brl(v - o) : " · sobra " + brl(o - v)}` : "sem orçamento definido", v, sn: -1, area: a }; }).filter(x => x.v || +orc[x.t]);
+    titulo = "Orçamento por área"; nota = "Toque em uma área para ver as saídas dela.";
+  }
+  else if (tipo === "area") { titulo = "Saídas · " + val; L = [...saiM, ...saiE].filter(i => i.area === val); const o = +orc[val] || 0; if (o) nota = `Orçamento ${brl(o)}.`; }
+  else if (tipo === "of") { titulo = val; L = vend(ap.filter(x => x.oferta === val)); }
+  else if (tipo === "rep") { const [d, id] = val.split("|"); titulo = `Repasse ${id} · ${dd(d)}`; L = vend(ap.filter(x => x.repasse === d && x.repId === id)); }
+  else if (key === "v:vendido") { titulo = "Vendido (valor pago pelo comprador)"; L = vend(ap); campo = "bruto"; }
+  else if (key === "v:coprod") { titulo = "Comissão da Legendários Internacional"; L = ap.filter(x => +x.coprod).map(x => ({ ...vend([x])[0], v: +x.coprod })); }
+  else if (key === "v:liq") { titulo = "Fica com a base"; L = vend(ap); }
+  else if (key === "v:repassado") { titulo = "Já repassado"; L = vend(ap.filter(x => x.repasse)); }
+  else if (key === "v:liberar") { titulo = "A liberar (aprovado, sem repasse)"; L = vend(ap.filter(x => !x.repasse)); }
+  else if (key === "v:aberto") { titulo = "Boletos em aberto"; L = VL.filter(x => x.stat === "pendente").map(x => ({ ...vend([x])[0], v: +x.pend || +x.bruto || 0 })); nota = "Valor que falta pagar."; }
+  else if (key === "v:parc") {
+    titulo = "Parcelas a vencer"; const porTx = {}; ap.filter(x => /^\d+x\d+$/.test(x.parc || "")).forEach(x => (porTx[x.tx] = porTx[x.tx] || []).push(x));
+    L = Object.values(porTx).map(A => { const n = Math.max(...A.map(x => +x.parc.split("x")[1])), falta = n - A.length, u = A[A.length - 1]; return falta > 0 ? { d: u.data, t: u.nome || "Comprador", s: `${u.oferta} · pagou ${A.length} de ${n} · faltam ${falta}`, v: falta * (+u.liq || 0), sn: 1 } : null; }).filter(Boolean);
+  }
+  else if (key === "v:canc") { titulo = "Canceladas e estornadas"; L = VL.filter(x => x.stat === "cancelado" || x.stat === "estornado").map(x => ({ ...vend([x])[0], v: +x.pend || +x.bruto || 0, sn: 0 })); nota = "Não entram no Financeiro."; }
+  if (campo === "bruto") L.forEach(x => x.v = x.bruto);
+  L.sort((a, b) => (b.d || "").localeCompare(a.d || "") || b.v - a.v);
+  const tot = L.reduce((s, x) => s + (x.sn === 0 ? x.v : x.sn * x.v), 0);
+  modal(`<h3>${esc(titulo)}</h3>
+    <p class="hint" style="margin:0 0 8px">${L.length} item(ns) · total <b class="num">${brl(key === "saldo" ? tot : Math.abs(tot))}</b>${nota ? " · " + esc(nota) : ""}</p>
+    <div class="fin-det">${L.map(x => `<div class="li ${key === "orc" ? "li-btn" : ""}" ${key === "orc" ? `role="button" tabindex="0" data-fin-det="${esc("area:" + x.t)}"` : ""}>
+      <span class="grow"><b>${esc(x.t)}</b><br><span class="hint">${esc([x.d && dd(x.d), x.s].filter(Boolean).join(" · "))}</span></span>
+      ${x.foto ? `<button class="linkbtn" type="button" data-fin-foto="${esc(x.foto)}" aria-label="Ver recibo">🧾</button>` : ""}
+      <b class="num fin-v ${x.sn > 0 ? "ent" : ""}">${x.sn > 0 ? "+ " : x.sn < 0 && key === "saldo" ? "− " : ""}${brl(x.v)}</b></div>`).join("") || `<div class="empty">Nada aqui ainda.</div>`}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn primary" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
 }
 function finForm(id) {
   const D = finDoc(), it = (D.itens || []).find(x => x.id === id) || { tipo: "gasto", data: hojeISO(), area: "Alimentação" }; let foto = celFotoSrc(it) || ""; finFotoArq = null;
   modal(`<h3>${it.id ? "Editar lançamento" : "Novo lançamento"}</h3>
-    <div class="seg lem-quando" style="margin-bottom:10px">${[["gasto", "Gasto"], ["entrada", "Entrada"]].map(([v, l]) => `<label><input type="radio" name="tipo" value="${v}" ${it.tipo === v ? "checked" : ""}> ${l}</label>`).join("")}</div>
+    <div class="seg lem-quando" style="margin-bottom:10px">${[["gasto", "Saída"], ["entrada", "Entrada"]].map(([v, l]) => `<label><input type="radio" name="tipo" value="${v}" ${it.tipo === v ? "checked" : ""}> ${l}</label>`).join("")}</div>
     <div class="form">
       <div class="field full"><label for="f-fd">Descrição</label><input id="f-fd" name="desc" value="${esc(it.desc || "")}" placeholder="ex.: 40 kg de gelo, combustível da van" required></div>
       <div class="field"><label for="f-fv">Valor (R$)</label><input id="f-fv" name="valor" inputmode="decimal" value="${it.valor != null ? String(it.valor).replace(".", ",") : ""}" required></div>
@@ -2352,7 +2397,7 @@ async function finPdf() {
   const sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0) + V.liq, dt = d => d ? d.split("-").reverse().slice(0, 2).join("/") : "";
   const areas = [...new Set(g.map(i => i.area || "Outros"))].sort();
   return gerarListaPdf({ titulo: "Prestação de contas", arquivo: "Prestacao de contas " + topName(), orient: "portrait",
-    resumo: [["Gasto", brl(sg)], ["Entradas", brl(se)], ["Saldo", brl(se - sg)]], legenda: "Gastos por área, com a foto do recibo. Entradas no fim.",
+    resumo: [["Saídas", brl(sg)], ["Entradas", brl(se)], ["Saldo", brl(se - sg)]], legenda: "Saídas por área, com a foto do recibo. Entradas no fim.",
     colunas: [{ t: "Recibo", w: 20, foto: true }, { t: "Data", w: 14 }, { t: "Descrição", bold: true }, { t: "Por", w: 26, cinza: true }, { t: "Valor", w: 26, al: "right" }],
     secoes: [...areas.map(a => { const L = g.filter(i => (i.area || "Outros") === a); return { titulo: `${a} · ${brl(L.reduce((s, i) => s + (+i.valor || 0), 0))}`, linhas: L.map(i => [fotos[i.id] || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }; }),
       ...(V.liq ? [{ titulo: `Vendas do TOP (TicketAndGo) · ${brl(V.liq)} líquido`, linhas: V.ofertas.map(o => ["", "", `${o.oferta} (${o.n})`, `bruto ${brl(o.bruto)}`, brl(o.liq)]) }] : []),
@@ -2410,18 +2455,18 @@ function vendasPainel(ed) {
   return `<section class="panel vend"><h3>Vendas do TOP <small>TicketAndGo</small></h3>
     <p class="hint" style="margin:0 0 10px">Importado ${D.importadoEm ? new Date(D.importadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}${D.por ? " por " + esc(D.por) : ""} · ${V.linhas} linha(s) da planilha.</p>
     <div class="vend-kpis">
-      <div><span>Vendido</span><b class="num">${brl(V.bruto)}</b><small>${V.nAp} venda(s) aprovada(s)</small></div>
-      <div><span>Legendários Internacional</span><b class="num">${brl(V.coprod)}</b><small>comissão do coprodutor</small></div>
-      <div class="ok"><span>Fica com a base</span><b class="num">${brl(V.liq)}</b><small>entra no Financeiro</small></div>
-      <div><span>Já repassado</span><b class="num">${brl(V.repassado)}</b><small>${brl(V.aReceber)} a liberar</small></div>
-      <div class="${V.aberto ? "wait" : ""}"><span>Boletos em aberto</span><b class="num">${V.aberto}</b><small>${V.aberto ? brl(V.abertoV) : "nenhum"}</small></div>
-      <div><span>Parcelas a vencer</span><b class="num">${brl(V.parcFut)}</b><small>${V.parcN ? V.parcN + " parcela(s) do parcelamento" : "nenhuma"}</small></div>
-      <div><span>Canceladas / estornadas</span><b class="num">${V.canc + V.est}</b><small>${V.canc} canc. · ${V.est} estorno(s)</small></div>
+      <button type="button" data-fin-det="v:vendido"><span>Vendido</span><b class="num">${brl(V.bruto)}</b><small>${V.nAp} venda(s) aprovada(s)</small></button>
+      <button type="button" data-fin-det="v:coprod"><span>Legendários Internacional</span><b class="num">${brl(V.coprod)}</b><small>comissão do coprodutor</small></button>
+      <button type="button" data-fin-det="v:liq" class="ok"><span>Fica com a base</span><b class="num">${brl(V.liq)}</b><small>entra no Financeiro</small></button>
+      <button type="button" data-fin-det="v:repassado"><span>Já repassado</span><b class="num">${brl(V.repassado)}</b><small>${brl(V.aReceber)} a liberar</small></button>
+      <button type="button" data-fin-det="v:aberto" class="${V.aberto ? "wait" : ""}"><span>Boletos em aberto</span><b class="num">${V.aberto}</b><small>${V.aberto ? brl(V.abertoV) : "nenhum"}</small></button>
+      <button type="button" data-fin-det="v:parc"><span>Parcelas a vencer</span><b class="num">${brl(V.parcFut)}</b><small>${V.parcN ? V.parcN + " parcela(s) do parcelamento" : "nenhuma"}</small></button>
+      <button type="button" data-fin-det="v:canc"><span>Canceladas / estornadas</span><b class="num">${V.canc + V.est}</b><small>${V.canc} canc. · ${V.est} estorno(s)</small></button>
     </div>
     <div class="vend-grid">
-      <div><h4>Por oferta</h4><div class="list">${V.ofertas.map(o => `<div class="li"><span class="grow"><b>${esc(o.oferta)}</b><br><span class="hint">${TIPO[o.tipo]} · ${o.n} venda(s) · bruto ${brl(o.bruto)}</span></span><b class="num">${brl(o.liq)}</b></div>`).join("")}</div></div>
-      <div><h4>Repasses recebidos</h4><div class="list">${V.reps.map(x => `<div class="li"><span class="grow"><b>${dd(x.data)}</b><br><span class="hint">repasse ${esc(x.id)} · ${x.n} pagamento(s)</span></span><b class="num">${brl(x.liq)}</b></div>`).join("") || `<div class="empty">Nenhum repasse ainda.</div>`}
-        ${V.aReceber ? `<div class="li"><span class="grow"><b>A liberar</b><br><span class="hint">aprovado, ainda sem repasse</span></span><b class="num">${brl(V.aReceber)}</b></div>` : ""}</div></div>
+      <div><h4>Por oferta</h4><div class="list">${V.ofertas.map(o => `<div class="li li-btn" role="button" tabindex="0" data-fin-det="${esc("of:" + o.oferta)}"><span class="grow"><b>${esc(o.oferta)}</b><br><span class="hint">${TIPO[o.tipo]} · ${o.n} venda(s) · bruto ${brl(o.bruto)}</span></span><b class="num">${brl(o.liq)}</b></div>`).join("")}</div></div>
+      <div><h4>Repasses recebidos</h4><div class="list">${V.reps.map(x => `<div class="li li-btn" role="button" tabindex="0" data-fin-det="${esc("rep:" + x.data + "|" + x.id)}"><span class="grow"><b>${dd(x.data)}</b><br><span class="hint">repasse ${esc(x.id)} · ${x.n} pagamento(s)</span></span><b class="num">${brl(x.liq)}</b></div>`).join("") || `<div class="empty">Nenhum repasse ainda.</div>`}
+        ${V.aReceber ? `<div class="li li-btn" role="button" tabindex="0" data-fin-det="v:liberar"><span class="grow"><b>A liberar</b><br><span class="hint">aprovado, ainda sem repasse</span></span><b class="num">${brl(V.aReceber)}</b></div>` : ""}</div></div>
     </div></section>`;
 }
 document.addEventListener("change", async e => {
@@ -2476,16 +2521,16 @@ function feqPainel(ed) {
   const L = feqItens().sort((a, b) => (a.status === "pendente" ? 0 : 1) - (b.status === "pendente" ? 0 : 1) || (b.em || "").localeCompare(a.em || ""));
   const pend = L.filter(i => i.status === "pendente"), aReemb = L.filter(i => i.reemb && i.status === "aprovado");
   const acoes = i => !ed ? "" : `<div class="feq-acoes">${i.status === "pendente" ? `<button class="btn sm primary" type="button" data-feq="${esc(i.doc + "|" + i.id + "|ok")}">${ico("check")} Aprovar</button><button class="btn sm" type="button" data-feq="${esc(i.doc + "|" + i.id + "|no")}">Recusar</button>` : ""}${i.status === "aprovado" && i.reemb ? `<button class="btn sm primary" type="button" data-feq="${esc(i.doc + "|" + i.id + "|reemb")}">Marcar reembolsado</button>` : ""}${i.status !== "pendente" ? `<button class="btn sm ghost" type="button" data-feq="${esc(i.doc + "|" + i.id + "|volta")}">Voltar para análise</button>` : ""}</div>`;
-  return `<section class="panel"><h3>Gastos das equipes <small>${L.length}</small></h3>
+  return `<section class="panel"><h3>Saídas das equipes <small>${L.length}</small></h3>
     <p class="hint" style="margin:0 0 8px">Lançados pelos coordenadores com o comprovante. ${pend.length ? `<b>${pend.length} aguardando aprovação</b>. ` : ""}${aReemb.length ? `${aReemb.length} para reembolsar (${brl(aReemb.reduce((s, i) => s + (+i.valor || 0), 0))}). ` : ""}Só os aprovados entram no total e na prestação de contas.</p>
-    <div class="cel-lista">${L.map(i => feqLinha(i, acoes(i))).join("") || `<div class="empty">Nenhum gasto lançado pelas equipes ainda.</div>`}</div></section>`;
+    <div class="cel-lista">${L.map(i => feqLinha(i, acoes(i))).join("") || `<div class="empty">Nenhuma saída lançada pelas equipes ainda.</div>`}</div></section>`;
 }
 function feqDecidir(doc, id, acao) {
   if (!podeEditar()) { toast("Seu acesso é somente leitura."); return; }
   const muda = (extra) => save(() => { const D = cfgDe(doc) || {}; return api.set("config", doc, { ...D, itens: (D.itens || []).map(i => i.id === id ? { ...i, ...extra, decPor: ME.adm || "", decEm: agoraISO() } : i) }); },
-    { ok: "Gasto aprovado", no: "Gasto recusado", reemb: "Marcado como reembolsado", volta: "Voltou para análise" }[acao]).then(render);
+    { ok: "Saída aprovada", no: "Saída recusada", reemb: "Marcado como reembolsado", volta: "Voltou para análise" }[acao]).then(render);
   if (acao === "no") {
-    modal(`<h3>Recusar gasto</h3><div class="field"><label for="f-fm">Motivo (o coordenador vê)</label><input id="f-fm" name="motivo" required placeholder="ex.: comprovante ilegível, compra não combinada"></div>
+    modal(`<h3>Recusar saída</h3><div class="field"><label for="f-fm">Motivo (o coordenador vê)</label><input id="f-fm" name="motivo" required placeholder="ex.: comprovante ilegível, compra não combinada"></div>
       <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn danger" type="submit">Recusar</button></div></div>`,
       fd => { const motivo = String(fd.get("motivo") || "").trim(); if (!motivo) return; closeModal(); muda({ status: "recusado", motivo }); });
     return;
@@ -2497,21 +2542,21 @@ function vFinCoord() {
   const meu = i => i.doc === gastoDocId(), soma = st => L.filter(i => st.includes(i.status)).reduce((s, i) => s + (+i.valor || 0), 0);
   const pend = L.filter(i => i.status === "pendente"), aReemb = L.filter(i => meu(i) && i.reemb && i.status === "aprovado");
   return `
-  <div class="head"><div><h2>Financeiro da equipe</h2><p>Lance aqui o que você gastou pela equipe ${esc(ME.equipeLgnd || "")}, com a foto do comprovante. Vai direto para a ADM aprovar.</p></div>
-    <div class="actions"><button class="btn primary" type="button" data-gasto="">${ico("plus")} Lançar gasto</button></div></div>
+  <div class="head"><div><h2>Financeiro da equipe</h2><p>Lance aqui as saídas (o que você gastou) pela equipe ${esc(ME.equipeLgnd || "")}, com a foto do comprovante. Vai direto para a ADM aprovar.</p></div>
+    <div class="actions"><button class="btn primary" type="button" data-gasto="">${ico("plus")} Lançar saída</button></div></div>
   <div class="kpis">
-    <div class="kpi"><span class="lbl">Aprovado</span><span class="val num" style="font-size:24px">${brl(soma(["aprovado", "reembolsado"]))}</span><span class="sub">gastos da equipe</span></div>
+    <div class="kpi"><span class="lbl">Aprovado</span><span class="val num" style="font-size:24px">${brl(soma(["aprovado", "reembolsado"]))}</span><span class="sub">saídas da equipe</span></div>
     <div class="kpi ${pend.length ? "alert" : ""}"><span class="lbl">Em análise</span><span class="val num" style="font-size:24px">${brl(soma(["pendente"]))}</span><span class="sub">${pend.length} aguardando a ADM</span></div>
     <div class="kpi"><span class="lbl">A receber</span><span class="val num" style="font-size:24px">${brl(aReemb.reduce((s, i) => s + (+i.valor || 0), 0))}</span><span class="sub">reembolso aprovado para você</span></div>
   </div>
-  <section class="panel"><h3>Gastos da equipe <small>${L.length}</small></h3><div class="cel-lista">${L.map(i => feqLinha(i, meu(i) && i.status !== "aprovado" && i.status !== "reembolsado" ? `<div class="feq-acoes"><button class="btn sm" type="button" data-gasto="${esc(i.id)}">${ico("edit")} ${i.status === "recusado" ? "Corrigir e reenviar" : "Editar"}</button></div>` : "")).join("") || `<div class="empty">Nenhum gasto ainda. Toque em <b>Lançar gasto</b> e tire a foto do comprovante.</div>`}</div></section>
-  <p class="hint">Depois de aprovado, o gasto não pode mais ser alterado. Se precisar corrigir, fale com a ADM.</p>`;
+  <section class="panel"><h3>Saídas da equipe <small>${L.length}</small></h3><div class="cel-lista">${L.map(i => feqLinha(i, meu(i) && i.status !== "aprovado" && i.status !== "reembolsado" ? `<div class="feq-acoes"><button class="btn sm" type="button" data-gasto="${esc(i.id)}">${ico("edit")} ${i.status === "recusado" ? "Corrigir e reenviar" : "Editar"}</button></div>` : "")).join("") || `<div class="empty">Nenhuma saída ainda. Toque em <b>Lançar saída</b> e tire a foto do comprovante.</div>`}</div></section>
+  <p class="hint">Depois de aprovada, a saída não pode mais ser alterada. Se precisar corrigir, fale com a ADM.</p>`;
 }
 function gastoForm(id) {
   const it = ((cfgDe(gastoDocId()) || {}).itens || []).find(x => x.id === id) || { data: hojeISO(), area: "Outros", pag: "Pix", reemb: false };
-  if (it.status === "aprovado" || it.status === "reembolsado") { toast("Gasto já aprovado: fale com a ADM para mudar."); return; }
+  if (it.status === "aprovado" || it.status === "reembolsado") { toast("Saída já aprovada: fale com a ADM para mudar."); return; }
   let foto = celFotoSrc(it) || ""; gastoFotoArq = null;
-  modal(`<h3>${it.id ? "Editar gasto" : "Lançar gasto"}</h3>
+  modal(`<h3>${it.id ? "Editar saída" : "Lançar saída"}</h3>
     ${it.status === "recusado" && it.motivo ? `<p class="hint" style="margin:0 0 8px">A ADM recusou: <b>${esc(it.motivo)}</b>. Corrija e salve para reenviar.</p>` : ""}
     <div class="form">
       <div class="field full"><label for="f-gd">O que foi comprado</label><input id="f-gd" name="desc" value="${esc(it.desc || "")}" placeholder="ex.: 6 pilhas para os rádios, lona" required></div>
@@ -2535,10 +2580,10 @@ function gastoForm(id) {
     const arq = gastoFotoArq; closeModal();
     (async () => { const f = arq ? await fotoGuardar(arq, `gastos/${curTopId()}/${ME.id}/comprovante`) : { foto: it.foto || "", fotoPath: it.fotoPath || "" };
       const novo = { ...it, id: it.id || Date.now().toString(36), desc, valor, data: fd.get("data") || hojeISO(), area: fd.get("area"), pag: fd.get("pag"), reemb, pix: reemb ? pix : "", obs: String(fd.get("obs") || "").trim(), ...f, status: "pendente", motivo: "", por: ME.adm || "", em: it.em || agoraISO() };
-      gastoSalvar(L => [...L.filter(x => x.id !== novo.id), novo], it.id ? "Gasto reenviado para a ADM" : "Gasto enviado para a ADM"); })(); });
+      gastoSalvar(L => [...L.filter(x => x.id !== novo.id), novo], it.id ? "Saída reenviada para a ADM" : "Saída enviada para a ADM"); })(); });
   $("#gFoto").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return; gastoFotoArq = fl; try { foto = await reduzirFoto(fl, 700); $("#gPrev").src = foto; $("#gPrev").hidden = false; } catch { toast("Não consegui abrir a foto."); } });
   $("#f-gr").addEventListener("change", e => { $("#gPix").hidden = !e.target.checked; });
-  const d = $("#gDel"); if (d) d.onclick = () => { if (!confirm("Excluir este gasto?")) return; closeModal(); gastoSalvar(L => L.filter(x => x.id !== it.id), "Gasto excluído"); };
+  const d = $("#gDel"); if (d) d.onclick = () => { if (!confirm("Excluir esta saída?")) return; closeModal(); gastoSalvar(L => L.filter(x => x.id !== it.id), "Saída excluída"); };
 }
 
 /* Período do backup: dia, semana (7 dias), mês (30 dias) ou o TOP todo. Num período, entra o que foi criado ou alterado dentro dele. */
@@ -5112,7 +5157,7 @@ document.addEventListener("click", e => {
   if (nl) { const p = S.P.find(x => x.id === nl.dataset.nfcLink); if (p) linkEnviado(p); return; }
   const cobPag = e.target.closest("a[data-cobrar-pag]");
   if (cobPag) { const p = S.P.find(x => x.id === cobPag.dataset.cobrarPag); if (p) registrarAvisoPag(p); return; }
-  const t = e.target.closest("button, [data-close], [data-hist-ver]");
+  const t = e.target.closest("button, [data-close], [data-hist-ver], [data-fin-det]");
   if (!t) return;
   if (t.matches("[data-close]") && e.target === t) { closeModal(); return; }
   if (t.matches("[data-close-btn]")) { closeModal(); return; }
@@ -5190,6 +5235,7 @@ document.addEventListener("click", e => {
   if (d.finFoto) { const i = (finDoc().itens || []).find(x => x.id === d.finFoto); if (i) modal(`<h3>${esc(i.desc)}</h3><img class="cel-grande" src="${esc(celFotoSrc(i))}" alt="Recibo"><div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal()); return; }
   if (d.act === "fin-orc") { finOrcForm(); return; }
   if (d.act === "fin-pdf") { finPdf(); return; }
+  if (d.finDet) { finDetalhe(d.finDet); return; }
   if (d.gasto != null && t.matches("[data-gasto]")) { gastoForm(d.gasto); return; }
   if (d.feqFoto) { const [doc, id] = d.feqFoto.split("|"), i = ((cfgDe(doc) || {}).itens || []).find(x => x.id === id); if (i) modal(`<h3>${esc(i.desc)}</h3><img class="cel-grande" src="${esc(celFotoSrc(i))}" alt="Comprovante"><div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal()); return; }
   if (d.feq) { const [doc, id, acao] = d.feq.split("|"); feqDecidir(doc, id, acao); return; }

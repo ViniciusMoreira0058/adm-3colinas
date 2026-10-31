@@ -1055,6 +1055,16 @@ body.d2 .empty.e2.busca .e2-ic { background: var(--surface2); color: var(--muted
 .vend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
 .vend-grid h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); }
 .vend-grid .li .num { white-space: nowrap; }
+.kpi-btn, .vend-kpis button, button.fin-a { font: inherit; color: inherit; cursor: pointer; text-align: left; width: 100%; }
+button.fin-a { background: none; border: 0; padding: 4px 0; border-radius: 8px; }
+.vend-kpis button { background: transparent; }
+.kpi-btn:hover, .vend-kpis button:hover, button.fin-a:hover, .li-btn:hover { border-color: var(--accent); }
+.kpi-btn::after, .vend-kpis button::after { content: "ver detalhes ›"; font-size: 11px; color: var(--accent); font-weight: 700; margin-top: 2px; }
+.li-btn { cursor: pointer; }
+.fin-det { max-height: 60vh; overflow: auto; display: grid; gap: 2px; }
+.fin-det .li { align-items: center; }
+.fin-det .fin-v { white-space: nowrap; }
+.fin-det .li .grow, .fin-det .li .grow * { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 /* TOP COMPLETO (demo) */
 .chk-fam{flex:none;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);font-weight:800;font-size:14px}
 .chk-topo{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
