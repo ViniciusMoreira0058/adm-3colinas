@@ -1,6 +1,6 @@
 -- =====================================================================
 -- ADM 3COLINAS · Coordenadores de equipe (chefes e subchefes das equipes LGND)
--- Rodar só quando o acesso dos coordenadores for para o app real.
+-- Rode uma vez (depois do fotos.sql). Liga o acesso dos coordenadores e trava o Financeiro.
 -- Supabase → SQL Editor → New query → cole tudo → Run. Pode rodar de novo.
 --
 -- O que muda:
@@ -148,20 +148,20 @@ begin
   for it in select * from jsonb_array_elements(coalesce(new.data->'itens', '[]'::jsonb)) loop
     ant := null;
     if tg_op = 'UPDATE' then
-      select x into ant from jsonb_array_elements(coalesce(old.data->'itens', '[]'::jsonb)) x where x->>'id' = it->>'id' limit 1;
+      select x.v into ant from jsonb_array_elements(coalesce(old.data->'itens', '[]'::jsonb)) as x(v) where x.v->>'id' = it->>'id' limit 1;
     end if;
     if ant is not null and ant->>'status' in ('aprovado', 'reembolsado') and ant is distinct from it then
-      raise exception 'Gasto já aprovado: só a ADM pode mudar';
+      raise exception 'Saída já aprovada: só a ADM pode mudar';
     end if;
     if it->>'status' is distinct from 'pendente' and (ant is null or ant->>'status' is distinct from it->>'status') then
-      raise exception 'Só a ADM aprova ou recusa gastos';
+      raise exception 'Só a ADM aprova ou recusa saídas';
     end if;
   end loop;
   if tg_op = 'UPDATE' then   -- não pode apagar gasto já aprovado
-    if exists (select 1 from jsonb_array_elements(coalesce(old.data->'itens', '[]'::jsonb)) o
-               where o->>'status' in ('aprovado', 'reembolsado')
-                 and not exists (select 1 from jsonb_array_elements(coalesce(new.data->'itens', '[]'::jsonb)) n where n->>'id' = o->>'id')) then
-      raise exception 'Gasto já aprovado: só a ADM pode excluir';
+    if exists (select 1 from jsonb_array_elements(coalesce(old.data->'itens', '[]'::jsonb)) as o(v)
+               where o.v->>'status' in ('aprovado', 'reembolsado')
+                 and not exists (select 1 from jsonb_array_elements(coalesce(new.data->'itens', '[]'::jsonb)) as n(v) where n.v->>'id' = o.v->>'id')) then
+      raise exception 'Saída já aprovada: só a ADM pode excluir';
     end if;
   end if;
   return new;
@@ -182,3 +182,51 @@ create policy adm_fotos_coord_enviar on storage.objects for insert to authentica
 
 revoke all on function public.adm_coord_gasto_meu(text, text, jsonb), public.adm_coord_gasto_guarda() from public, anon;
 grant execute on function public.adm_coord_gasto_meu(text, text, jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- FINANCEIRO COMPLETO SÓ PARA QUEM PODE
+-- Financeiro do TOP (fin-*), vendas (vendas-*) e saídas das equipes (fingasto-*):
+-- só o dono, quem tem acesso total ou quem tem a página Financeiro marcada em Usuários.
+-- O coordenador continua lendo e gravando só as saídas da equipe dele (regras acima).
+-- ---------------------------------------------------------------------
+create or replace function public.adm_fin_ok()
+returns boolean language sql stable security definer set search_path = ''
+as $$
+  select coalesce((select m.dono or m.nivel = 'total' or (coalesce(m.perfil, 'adm') <> 'coord' and 'financeiro' = any(m.abas))
+                   from public.adm_membros m where m.user_id = auth.uid() and m.ativo limit 1), false)
+$$;
+create or replace function public.adm_doc_fin(p_col text, p_id text)
+returns boolean language sql immutable set search_path = ''
+as $$ select p_col = 'config' and (p_id like 'fin-%' or p_id like 'vendas-%' or p_id like 'fingasto-%') $$;
+
+drop policy if exists adm_docs_ler on public.adm_docs;
+create policy adm_docs_ler on public.adm_docs for select to authenticated
+  using ((public.adm_pode_ler(col, data) and (not public.adm_doc_fin(col, id) or public.adm_fin_ok()))
+         or (col = 'config' and coalesce((public.adm_eu()).perfil, '') = 'coord'
+             and (public.adm_coord_config(id)
+                  or (id like 'fingasto-%' and data->>'equipe' = (public.adm_eu()).equipe_lgnd))));
+drop policy if exists adm_docs_criar on public.adm_docs;
+create policy adm_docs_criar on public.adm_docs for insert to authenticated
+  with check ((public.adm_pode_gravar(col, data) and (not public.adm_doc_fin(col, id) or public.adm_fin_ok()))
+              or public.adm_coord_gasto_meu(col, id, data));
+drop policy if exists adm_docs_alterar on public.adm_docs;
+create policy adm_docs_alterar on public.adm_docs for update to authenticated
+  using ((public.adm_pode_gravar(col, data) and (not public.adm_doc_fin(col, id) or public.adm_fin_ok()))
+         or public.adm_coord_gasto_meu(col, id, data))
+  with check ((public.adm_pode_gravar(col, data) and (not public.adm_doc_fin(col, id) or public.adm_fin_ok()))
+              or public.adm_coord_gasto_meu(col, id, data));
+drop policy if exists adm_docs_apagar on public.adm_docs;
+create policy adm_docs_apagar on public.adm_docs for delete to authenticated
+  using (public.adm_pode_gravar(col, data) and (not public.adm_doc_fin(col, id) or public.adm_fin_ok()));
+
+-- fotos: recibos do financeiro e comprovantes das equipes só para quem vê o financeiro (o coordenador vê os dele)
+drop policy if exists adm_fotos_ler on storage.objects;
+create policy adm_fotos_ler on storage.objects for select to authenticated
+  using (bucket_id = 'adm-fotos' and (public.adm_eu()).id is not null
+         and (case when coalesce((public.adm_eu()).perfil, 'adm') = 'coord'
+                   then name like 'gastos/%/' || (public.adm_eu()).id::text || '/%'
+                   when name like 'financeiro/%' or name like 'gastos/%' then public.adm_fin_ok()
+                   else true end));
+
+revoke all on function public.adm_fin_ok(), public.adm_doc_fin(text, text) from public, anon;
+grant execute on function public.adm_fin_ok(), public.adm_doc_fin(text, text) to authenticated;

@@ -168,7 +168,7 @@ const VIEWS = [
   { id: "remedios", l: "Remédios", c: "Remédios", i: "pill", need: [] , all: true, menu: true },
   { id: "emergencia", l: "Emergência", c: "Emergência", i: "sos", need: [], all: true, menu: true },
   { id: "transporte", l: "Transporte", c: "Transporte", i: "bus", need: [], all: true, menu: true },
-  { id: "financeiro", l: "Financeiro", c: "Financeiro", i: "money", need: [] },
+  { id: "financeiro", l: "Financeiro", c: "Financeiro", i: "money" },   // completo só para o dono, acesso total ou quem tiver a página marcada (coordenador vê só o da equipe)
   { id: "celulares", l: "Celulares", c: "Celulares", i: "phone", need: ["legendarios"] },   // celulares dos legendários no check-in
   { id: "campo", l: "Campo", c: "Campo", i: "group", need: ["participantes"], demo: true },   // chamada, mural, turnos e entregas com o TOP rodando
   { id: "nfc", l: "NFC 3COLINAS", c: "NFC", i: "nfc", need: ["participantes", "legendarios"], nfc: true },   // ficha de saúde + tag NFC
@@ -199,7 +199,7 @@ const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && 
 // "_v2" marca o cadastro salvo já com a escolha página por página; cadastros antigos seguem a regra antiga (página que usa dados de outra aparece junto)
 const ABA_V2 = "_v2";
 /* Coordenadores e subcoordenadores de equipe (demo): perfil "coord" no cadastro, só leitura, vê só a própria equipe */
-const COORD = () => DEMO;
+const COORD = () => true;   // liberado no app real em 31/10/2026 (precisa do supabase/coordenadores.sql)
 const COORD_ABAS = ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista", "financeiro"];   // no Financeiro o coordenador só lança os gastos da equipe
 const COORD_VER = ["painel", ...COORD_ABAS];
 const coordAbasSalvar = () => [...COORD_ABAS, "legendarios", ABA_V2];   // "legendarios" só para o banco liberar a equipe dele (a página Legendários fica escondida)
@@ -2407,7 +2407,7 @@ async function finPdf() {
 /* ---------- Vendas do TOP (demo): relatório de vendas da TicketAndGo vira entrada do Financeiro ----------
    config vendas-<top> {linhas:[{k,tx,st,stat,parc,data,oferta,tipo,pag,bruto,liq,coprod,cupom,nome,lib,repasse,repId}], importadoEm, por, arquivo}
    Nunca guarda CPF, e-mail ou telefone do comprador. Cada linha da planilha é uma transação ou uma parcela. */
-const VENDAS = () => DEMO;
+const VENDAS = () => true;   // liberado no app real em 31/10/2026
 const vendasDoc = () => cfgDe(`vendas-${curTopId()}`) || {};
 const ehVendas = linhas => { const h = (linhas[0] || []).map(x => norm(String(x))); return h.includes("id da transacao") && h.includes("minha comissao"); };
 const VEND_TXT = { aprovado: "Aprovada", pendente: "Boleto em aberto", cancelado: "Cancelada", estornado: "Estornada" };
@@ -4345,7 +4345,7 @@ function admCadForm(e) {
     const nivel = dono ? "total" : ehC ? "leitura" : (fd.get("nivel") || "edita");
     const row = { nome, email, telefone: String(fd.get("telefone") || "").trim(), funcao: fd.get("funcao"), obs: String(fd.get("obs") || "").trim(),
       nivel, abas: ehC ? coordAbasSalvar() : [...(nivel === "total" ? ABAS().map(v => v.id) : fd.getAll("abas")), ABA_V2], ativo: dono ? true : fd.get("ativo") === "on" };
-    if (comPerfil) Object.assign(row, ehC ? { perfil: "coord", equipe_lgnd: String(fd.get("equipe_lgnd")), cargo: String(fd.get("cargo") || "Coordenador"), funcao: "Outros" } : { perfil: "adm", equipe_lgnd: null, cargo: null });
+    if (comPerfil && (ehC || e.perfil)) Object.assign(row, ehC ? { perfil: "coord", equipe_lgnd: String(fd.get("equipe_lgnd")), cargo: String(fd.get("cargo") || "Coordenador"), funcao: "Outros" } : { perfil: "adm", equipe_lgnd: null, cargo: null });
     if (!novo && e.email && e.email !== email && e.user_id && !confirm(`Trocar o e-mail desliga o login atual de ${nome}. A pessoa vai precisar criar a senha de novo com o e-mail novo. Continuar?`)) return;
     closeModal();
     try {
