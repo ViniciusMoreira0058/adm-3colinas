@@ -1880,7 +1880,29 @@ function aprendSalvar(fn, msg) { const D = aprendDoc(); save(() => api.set("conf
 
 /* ---------- Celulares dos legendários (só na demo): guardar no check-in com foto, motivo de quem não entregou, devolução e relatório por equipe ----------
    config cel-<top>-<pessoaId> {status: guardado|nao|devolvido, foto, motivo, obs, em, por, devolvidoEm, devolvidoPor} */
-const CEL = () => DEMO;
+const CEL = () => true;   // liberada no app real em 31/10/2026
+// fotos: no app real vão para o Supabase Storage (bucket adm-fotos, supabase/fotos.sql); sem o bucket (ou sem internet) ficam pequenas dentro do registro
+const fotoUrls = {}; let fotoBuscando = new Set(), fotoRender = 0;
+function celFotoSrc(c) {
+  if (c.foto) return c.foto; if (!c.fotoPath || !sb) return "";
+  if (fotoUrls[c.fotoPath]) return fotoUrls[c.fotoPath];
+  if (!fotoBuscando.has(c.fotoPath)) { fotoBuscando.add(c.fotoPath);
+    sb.storage.from("adm-fotos").createSignedUrl(c.fotoPath, 6 * 3600).then(r => { if (r.data && r.data.signedUrl) { fotoUrls[c.fotoPath] = r.data.signedUrl; clearTimeout(fotoRender); fotoRender = setTimeout(() => { if (!$("#modalRoot").innerHTML) render(); }, 150); } }).catch(() => {}); }
+  return "";
+}
+async function celFotoData(c) {   // para o PDF: a foto como data URL
+  if (c.foto) return c.foto; if (!c.fotoPath || !sb) return "";
+  try { const r = await sb.storage.from("adm-fotos").download(c.fotoPath); if (!r.data) return ""; return await reduzirFoto(r.data, 360); } catch { return ""; }
+}
+async function celGuardarFoto(p, fl) {
+  if (!DEMO && sb && navigator.onLine !== false) {
+    try { const grande = await reduzirFoto(fl, 1000), blob = await (await fetch(grande)).blob(), path = `celulares/${curTopId()}/${p.id}-${Date.now().toString(36)}.jpg`;
+      const r = await sb.storage.from("adm-fotos").upload(path, blob, { contentType: "image/jpeg", upsert: true });
+      if (!r.error) { fotoUrls[path] = grande; return { foto: "", fotoPath: path }; }
+    } catch (e) {}
+  }
+  return { foto: await reduzirFoto(fl, 360), fotoPath: "" };
+}
 const CEL_MOTIVOS = ["Esqueceu no carro", "Liberado pela coordenação", "Precisa por trabalho", "Precisa pela família", "Não veio ao TOP", "Outro"];
 const celId = p => `cel-${curTopId()}-${p.id}`;
 const celDe = p => cfgDe(celId(p)) || {};
@@ -1902,7 +1924,7 @@ function vCelulares() {
   const fb = (v, l, n) => `<button type="button" data-cel-f="${v}" aria-pressed="${f === v}">${l}${n != null ? ` <span class="num" style="opacity:.75">${n}</span>` : ""}</button>`;
   const linha = p => { const c = celDe(p), st = celSt(p);
     return `<div class="cel-li ${st}">
-      ${c.foto ? `<button type="button" class="cel-foto" data-cel-ver="${esc(p.id)}" aria-label="Ver foto"><img src="${esc(c.foto)}" alt=""></button>` : `<span class="cel-foto vazia">${st === "nao" ? "✕" : "📱"}</span>`}
+      ${c.foto || c.fotoPath ? `<button type="button" class="cel-foto" data-cel-ver="${esc(p.id)}" aria-label="Ver foto">${celFotoSrc(c) ? `<img src="${esc(celFotoSrc(c))}" alt="">` : "🖼"}</button>` : `<span class="cel-foto vazia">${st === "nao" ? "✕" : "📱"}</span>`}
       <button type="button" class="cel-info" ${ed ? `data-cel="${esc(p.id)}"` : "disabled"}><b>${esc(p.nome)}</b>
         <small>${p.funcao ? esc(p.funcao) + " · " : ""}<span class="chip ${CEL_CHIP[st]}">${CEL_TXT[st]}</span>${c.em && st !== "falta" ? ` ${hmDe(st === "devolvido" ? c.devolvidoEm : c.em)}` : ""}${st === "nao" && c.motivo ? ` · ${esc(c.motivo)}` : ""}</small></button>
       ${ed ? (st === "falta" ? `<label class="btn sm primary cel-cam">📷 Guardar<input type="file" accept="image/*" capture="environment" data-cel-foto="${esc(p.id)}" hidden></label><button class="btn sm" type="button" data-cel-nao="${esc(p.id)}">Não entregou</button>`
@@ -1933,7 +1955,8 @@ function vCelulares() {
 }
 async function celFotoTirada(inp) {
   const p = S.P.find(x => x.id === inp.dataset.celFoto), fl = inp.files[0]; if (!p || !fl) return;
-  try { const foto = await reduzirFoto(fl, 420); celSalvar(p, { status: "guardado", foto, em: new Date().toISOString(), por: ME.adm || "", motivo: "", obs: "" }, `Celular de ${p.nome.split(" ")[0]} guardado`); }
+  toast("Salvando a foto…");
+  try { const f = await celGuardarFoto(p, fl); celSalvar(p, { status: "guardado", ...f, em: new Date().toISOString(), por: ME.adm || "", motivo: "", obs: "" }, `Celular de ${p.nome.split(" ")[0]} guardado`); }
   catch { toast("Não consegui abrir a foto. Tente de novo."); }
 }
 function celNaoForm(p) {
@@ -1943,7 +1966,7 @@ function celNaoForm(p) {
     <div class="field"><label for="f-co">Detalhe (opcional)</label><input id="f-co" name="obs" value="${esc(c.obs || "")}" placeholder="ex.: entrega amanhã cedo, liberado pelo Pr. João"></div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
     const motivo = fd.get("motivo") || "Outro", obs = String(fd.get("obs") || "").trim(); if (motivo === "Outro" && !obs) { toast("Conte o motivo no detalhe."); return; }
-    closeModal(); celSalvar(p, { status: "nao", motivo, obs, em: new Date().toISOString(), por: ME.adm || "", foto: "" }, "Registrado: não entregou");
+    closeModal(); celSalvar(p, { status: "nao", motivo, obs, em: new Date().toISOString(), por: ME.adm || "", foto: "", fotoPath: "" }, "Registrado: não entregou");
   });
 }
 function celForm(p) {
@@ -1952,26 +1975,29 @@ function celForm(p) {
     <p class="hint" style="margin:-6px 0 10px">${esc(p.equipe || "Sem equipe")}${p.funcao ? " · " + esc(p.funcao) : ""}</p>
     <div class="cel-ficha"><span class="chip ${CEL_CHIP[st]}">${CEL_TXT[st]}</span>
       ${st !== "falta" ? `<p>${st === "nao" ? `Motivo: <b>${esc(c.motivo || "-")}</b>${c.obs ? ` · ${esc(c.obs)}` : ""}<br>` : ""}Registrado às ${hmDe(c.em)} por ${esc(c.por || "ADM")}${st === "devolvido" ? `<br>Devolvido às ${hmDe(c.devolvidoEm)} por ${esc(c.devolvidoPor || "ADM")}` : ""}</p>` : ""}
-      ${c.foto ? `<img class="cel-grande" src="${esc(c.foto)}" alt="Foto do celular guardado">` : ""}</div>
+      ${celFotoSrc(c) ? `<img class="cel-grande" src="${esc(celFotoSrc(c))}" alt="Foto do celular guardado">` : c.fotoPath ? `<p class="hint">Carregando a foto…</p>` : ""}</div>
     <div class="cel-acoes">
-      <label class="btn ${st === "falta" ? "primary" : ""}">📷 ${c.foto ? "Trocar foto" : "Guardar com foto"}<input type="file" accept="image/*" capture="environment" data-cel-foto="${esc(p.id)}" hidden></label>
+      <label class="btn ${st === "falta" ? "primary" : ""}">📷 ${c.foto || c.fotoPath ? "Trocar foto" : "Guardar com foto"}<input type="file" accept="image/*" capture="environment" data-cel-foto="${esc(p.id)}" hidden></label>
       ${st === "falta" ? `<button class="btn" type="button" id="celSemFoto">Guardar sem foto</button>` : ""}
       ${st !== "nao" ? `<button class="btn" type="button" id="celNao">Não entregou</button>` : `<button class="btn" type="button" id="celNao">Mudar motivo</button>`}
       ${st === "guardado" ? `<button class="btn" type="button" id="celDev">Devolvido</button>` : ""}
       ${st !== "falta" ? `<button class="btn ghost" type="button" id="celVolta">Voltar para "falta entregar"</button>` : ""}</div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
   const on = (id, fn) => { const b = $("#" + id); if (b) b.onclick = fn; };
-  on("celSemFoto", () => { closeModal(); celSalvar(p, { status: "guardado", foto: "", em: new Date().toISOString(), por: ME.adm || "" }, "Celular guardado"); });
+  on("celSemFoto", () => { closeModal(); celSalvar(p, { status: "guardado", foto: "", fotoPath: "", em: new Date().toISOString(), por: ME.adm || "" }, "Celular guardado"); });
   on("celNao", () => { closeModal(); celNaoForm(p); });
   on("celDev", () => { closeModal(); celSalvar(p, { status: "devolvido", devolvidoEm: new Date().toISOString(), devolvidoPor: ME.adm || "" }, "Celular devolvido"); });
-  on("celVolta", () => { closeModal(); celSalvar(p, { status: "falta", foto: "", motivo: "", obs: "", em: "", devolvidoEm: "" }, "Voltou para falta entregar"); });
+  on("celVolta", () => { closeModal(); celSalvar(p, { status: "falta", foto: "", fotoPath: "", motivo: "", obs: "", em: "", devolvidoEm: "" }, "Voltou para falta entregar"); });
 }
-function celPdf(eq, wa) {
-  const L = celLgs(), eqs = eq ? [eq] : [...new Set(L.map(p => p.equipe || "Sem equipe"))].sort();
+async function celPdf(eq, wa) {
+  const L = celLgs(), fotos = {};
+  toast("Montando o PDF com as fotos…");
+  await Promise.all(L.filter(p => eq === "" || (p.equipe || "Sem equipe") === eq).map(async p => { fotos[p.id] = await celFotoData(celDe(p)); }));
+  const eqs = eq ? [eq] : [...new Set(L.map(p => p.equipe || "Sem equipe"))].sort();
   const ordem = { nao: 0, falta: 1, guardado: 2, devolvido: 3 };
   const secoes = eqs.map(e => { const cd = celCoord(e);
     return { titulo: `${e}${cd ? " · coord. " + cd.nome : ""}`, linhas: L.filter(p => (p.equipe || "Sem equipe") === e).sort((a, b) => ordem[celSt(a)] - ordem[celSt(b)] || norm(a.nome).localeCompare(norm(b.nome))).map(p => { const c = celDe(p), st = celSt(p);
-      return [c.foto || "", p.nome, p.funcao || "", CEL_TXT[st], st === "falta" ? "" : (c.em ? new Date(c.em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "") + (st === "devolvido" && c.devolvidoEm ? ` · devolvido ${hmDe(c.devolvidoEm)}` : ""),
+      return [fotos[p.id] || "", p.nome, p.funcao || "", CEL_TXT[st], st === "falta" ? "" : (c.em ? new Date(c.em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "") + (st === "devolvido" && c.devolvidoEm ? ` · devolvido ${hmDe(c.devolvidoEm)}` : ""),
         st === "nao" ? [c.motivo, c.obs].filter(Boolean).join(" · ") : c.por ? "Recebido por " + c.por : ""]; }) }; });
   const m = L.filter(p => eqs.includes(p.equipe || "Sem equipe")), cnt = s => m.filter(p => celSt(p) === s).length;
   return gerarListaPdf({ titulo: eq ? `Celulares · ${eq}` : "Celulares dos legendários", arquivo: `Celulares ${eq || "todas as equipes"} ${topName()}`, orient: "portrait",
@@ -5526,6 +5552,7 @@ function notifTexto(n) {
     } else if (/^pin-/.test(n.doc_id)) { if (!M.status) return null; i = "check"; a = "Pins"; c = `Pins: ${n.nome || "alguém"} ${novo("status") === "entregue" ? "recebeu o pin" : "voltou para pendente"}`; }
     else if (/^equipes-/.test(n.doc_id)) { i = "users"; a = "Cronograma"; c = "Mudou as equipes do cronograma"; }
     else if (/^cronoplano-/.test(n.doc_id)) { i = "clock"; a = "Cronograma"; c = "Mudou o plano do cronograma"; }
+    else if (/^cel-/.test(n.doc_id)) { const st = novo("status"); if (!st) return null; i = "phone"; a = "Celulares"; c = `Celulares: ${n.nome || "legendário"} · ${CEL_TXT[st] || st}`; }
     else if (/^mural-/.test(n.doc_id) && n.acao === "mural") { i = "chat"; a = "Comunicação"; c = n.nome || "Novo recado"; }
     else if (n.doc_id === "lembretes" && n.acao === "lembrete") { i = "clock"; a = "Comunicação"; return { i, a, t: "Lembrete para hoje", c: n.nome || "" }; }
     else if (/^mural-|^comvisto-|^lembretes$|^aprend-|^chamada-|^turnos-|^entregas-|^loc-/.test(n.doc_id) && (COM() || CAMPO())) { i = "chat"; a = "Comunicação"; c = /^chamada-/.test(n.doc_id) ? "Fez uma chamada" : /^turnos-/.test(n.doc_id) ? "Mudou a escala de turnos" : /^entregas-/.test(n.doc_id) ? "Marcou entregas no camp" : /^aprend-/.test(n.doc_id) ? "Anotou um aprendizado" : /^lembretes$/.test(n.doc_id) ? "Mexeu nos lembretes" : null; if (!c) return null; }
