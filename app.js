@@ -449,10 +449,13 @@ function graficoEvolucao2() {
   }
   return `<div class="g2-abas seg"><button type="button" data-g-aba="docs" aria-pressed="${aba === "docs"}">Documentos</button><button type="button" data-g-aba="insc" aria-pressed="${aba === "insc"}">Inscrições</button></div>
     <div class="g2" data-g2='${esc(JSON.stringify({ x: dias.map((_, i) => +(x(i) / W * 100).toFixed(2)), dados }))}'>
-      <svg class="grafico g2-svg" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Evolução por dia">${corpo}</svg>
+      <svg class="grafico g2-svg${g2Anim()}" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Evolução por dia">${corpo}</svg>
       <i class="g2-cursor" hidden></i><div class="g2-tip" hidden></div></div>
     <div class="g-leg">${leg}</div>`;
 }
+// anima só na primeira vez em cada aba (re-desenhar a cada atualização do banco deixava o gráfico piscando/apagado)
+const g2Visto = new Set();
+const g2Anim = () => { const k = (S.gAba || "docs") + JSON.stringify(S.gOff || {}); if (g2Visto.has(k)) return ""; g2Visto.add(k); return " anim"; };
 // passar o dedo ou o mouse no gráfico mostra os números do dia
 function g2Mover(e) {
   const box = e.target.closest && e.target.closest(".g2"); if (!box) return;
