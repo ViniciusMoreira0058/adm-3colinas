@@ -1778,3 +1778,17 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     nivel: "leitura", abas: ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista", "legendarios", "_v2"],
     perfil: "coord", equipe_lgnd: "Segurança", cargo: "Coordenador", ativo: true, dono: false, user_id: "u-coord", visto_em: null });
 })();
+// GASTOS DAS EQUIPES: lançados pelos coordenadores (fictícios), um aprovado, um aguardando e um recusado
+(function () {
+  const D = window.ADM_DEMO.docs, h = m => new Date(Date.now() - m * 6e4).toISOString(), dia = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  const nota = (txt, v, cor) => { try { const c = document.createElement("canvas"); c.width = 240; c.height = 340; const g = c.getContext("2d");
+    g.fillStyle = "#f4efe6"; g.fillRect(0, 0, 240, 340); g.fillStyle = cor; g.fillRect(0, 0, 240, 34); g.fillStyle = "#222"; g.font = "bold 15px monospace";
+    g.fillText("CUPOM FISCAL", 60, 22); g.font = "13px monospace"; g.fillText(txt, 16, 80); g.fillText("-".repeat(24), 16, 110); g.font = "bold 18px monospace"; g.fillText("TOTAL R$ " + v, 16, 150);
+    return c.toDataURL("image/jpeg", .6); } catch (e) { return ""; } };
+  D.push({ col: "config", id: "fingasto-top1922-m-coord", data: { top: "top1922", membro: "m-coord", nome: "Fábio Henrique Alves", equipe: "Segurança", cargo: "Coordenador", itens: [
+    { id: "g1", desc: "12 pilhas AA para os rádios", valor: 58.9, data: dia(2), area: "Logística", pag: "Pix", reemb: true, pix: "16991100010", obs: "", foto: nota("PILHAS AA x12", "58,90", "#ff7a1a"), status: "aprovado", decPor: "Vinicius Moreira", decEm: h(600), por: "Fábio Henrique Alves", em: h(900) },
+    { id: "g2", desc: "Lanternas de cabeça (4)", valor: 119.6, data: dia(1), area: "Material e brindes", pag: "Cartão de crédito", reemb: true, pix: "16991100010", obs: "Para a vigília", foto: nota("LANTERNA x4", "119,60", "#2a6fdb"), status: "pendente", por: "Fábio Henrique Alves", em: h(120) },
+    { id: "g3", desc: "Gelo para a garrafa térmica", valor: 25, data: dia(1), area: "Alimentação", pag: "Dinheiro", reemb: false, obs: "", foto: nota("GELO 10KG", "25,00", "#1d8a55"), status: "recusado", motivo: "A Alimentação já leva o gelo", decPor: "Vinicius Moreira", decEm: h(60), por: "Fábio Henrique Alves", em: h(300) }] } });
+  D.push({ col: "config", id: "fingasto-top1922-m-midia", data: { top: "top1922", membro: "m-midia", nome: "Gustavo Ferreira Reis", equipe: "Mídia", cargo: "Coordenador", itens: [
+    { id: "g4", desc: "Cartão de memória 128 GB", valor: 89.9, data: dia(3), area: "Mídia", pag: "Pix", reemb: false, obs: "", foto: nota("SD 128GB", "89,90", "#7a3bd1"), status: "pendente", por: "Gustavo Ferreira Reis", em: h(400) }] } });
+})();

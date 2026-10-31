@@ -106,3 +106,79 @@ delete from public.adm_push s using public.adm_membros m where m.user_id = s.use
 
 revoke all on function public.adm_coord_config(text) from public, anon;
 grant execute on function public.adm_coord_config(text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- GASTOS DAS EQUIPES (aba Financeiro do coordenador)
+-- Cada coordenador grava só o próprio documento config/fingasto-<top>-<id do cadastro>.
+-- Ele lê os gastos da equipe dele. Aprovar, recusar e reembolsar fica com a ADM:
+-- o coordenador não consegue mudar um gasto que já foi decidido.
+-- ---------------------------------------------------------------------
+create or replace function public.adm_coord_gasto_meu(p_col text, p_id text, p_data jsonb)
+returns boolean language plpgsql stable security definer set search_path = ''
+as $$
+declare m public.adm_membros := public.adm_eu();
+begin
+  return m.id is not null and m.perfil = 'coord' and p_col = 'config'
+     and p_id like 'fingasto-%-' || m.id::text and p_data->>'membro' = m.id::text
+     and p_data->>'equipe' = m.equipe_lgnd;
+end $$;
+
+drop policy if exists adm_docs_ler on public.adm_docs;
+create policy adm_docs_ler on public.adm_docs for select to authenticated
+  using (public.adm_pode_ler(col, data)
+         or (col = 'config' and coalesce((public.adm_eu()).perfil, '') = 'coord'
+             and (public.adm_coord_config(id)
+                  or (id like 'fingasto-%' and data->>'equipe' = (public.adm_eu()).equipe_lgnd))));
+
+drop policy if exists adm_docs_criar on public.adm_docs;
+create policy adm_docs_criar on public.adm_docs for insert to authenticated
+  with check (public.adm_pode_gravar(col, data) or public.adm_coord_gasto_meu(col, id, data));
+drop policy if exists adm_docs_alterar on public.adm_docs;
+create policy adm_docs_alterar on public.adm_docs for update to authenticated
+  using (public.adm_pode_gravar(col, data) or public.adm_coord_gasto_meu(col, id, data))
+  with check (public.adm_pode_gravar(col, data) or public.adm_coord_gasto_meu(col, id, data));
+
+-- o coordenador só cria ou altera gasto "pendente"; gasto aprovado/recusado/reembolsado fica como a ADM deixou
+create or replace function public.adm_coord_gasto_guarda()
+returns trigger language plpgsql security definer set search_path = ''
+as $$
+declare m public.adm_membros := public.adm_eu(); it jsonb; ant jsonb;
+begin
+  if new.col <> 'config' or new.id not like 'fingasto-%' or m.id is null or coalesce(m.perfil, 'adm') <> 'coord' then return new; end if;
+  for it in select * from jsonb_array_elements(coalesce(new.data->'itens', '[]'::jsonb)) loop
+    ant := null;
+    if tg_op = 'UPDATE' then
+      select x into ant from jsonb_array_elements(coalesce(old.data->'itens', '[]'::jsonb)) x where x->>'id' = it->>'id' limit 1;
+    end if;
+    if ant is not null and ant->>'status' in ('aprovado', 'reembolsado') and ant is distinct from it then
+      raise exception 'Gasto já aprovado: só a ADM pode mudar';
+    end if;
+    if it->>'status' is distinct from 'pendente' and (ant is null or ant->>'status' is distinct from it->>'status') then
+      raise exception 'Só a ADM aprova ou recusa gastos';
+    end if;
+  end loop;
+  if tg_op = 'UPDATE' then   -- não pode apagar gasto já aprovado
+    if exists (select 1 from jsonb_array_elements(coalesce(old.data->'itens', '[]'::jsonb)) o
+               where o->>'status' in ('aprovado', 'reembolsado')
+                 and not exists (select 1 from jsonb_array_elements(coalesce(new.data->'itens', '[]'::jsonb)) n where n->>'id' = o->>'id')) then
+      raise exception 'Gasto já aprovado: só a ADM pode excluir';
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists adm_coord_gasto_guarda on public.adm_docs;
+create trigger adm_coord_gasto_guarda before insert or update on public.adm_docs
+  for each row execute function public.adm_coord_gasto_guarda();
+
+-- fotos dos comprovantes (bucket adm-fotos do fotos.sql): o coordenador envia e vê só a pasta dele
+drop policy if exists adm_fotos_ler on storage.objects;
+create policy adm_fotos_ler on storage.objects for select to authenticated
+  using (bucket_id = 'adm-fotos' and (public.adm_eu()).id is not null
+         and (coalesce((public.adm_eu()).perfil, 'adm') <> 'coord' or name like 'gastos/%/' || (public.adm_eu()).id::text || '/%'));
+drop policy if exists adm_fotos_coord_enviar on storage.objects;
+create policy adm_fotos_coord_enviar on storage.objects for insert to authenticated
+  with check (bucket_id = 'adm-fotos' and (public.adm_eu()).perfil = 'coord'
+              and name like 'gastos/%/' || (public.adm_eu()).id::text || '/%');
+
+revoke all on function public.adm_coord_gasto_meu(text, text, jsonb), public.adm_coord_gasto_guarda() from public, anon;
+grant execute on function public.adm_coord_gasto_meu(text, text, jsonb) to authenticated;

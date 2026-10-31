@@ -200,7 +200,7 @@ const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && 
 const ABA_V2 = "_v2";
 /* Coordenadores e subcoordenadores de equipe (demo): perfil "coord" no cadastro, só leitura, vê só a própria equipe */
 const COORD = () => DEMO;
-const COORD_ABAS = ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista"];
+const COORD_ABAS = ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista", "financeiro"];   // no Financeiro o coordenador só lança os gastos da equipe
 const COORD_VER = ["painel", ...COORD_ABAS];
 const coordAbasSalvar = () => [...COORD_ABAS, "legendarios", ABA_V2];   // "legendarios" só para o banco liberar a equipe dele (a página Legendários fica escondida)
 const ehCoordEq = () => COORD() && !!ME.coord;
@@ -2293,20 +2293,22 @@ const FIN_AREAS = ["Alimentação", "Logística", "Transporte", "Saúde", "Mater
 const finDoc = () => cfgDe(`fin-${curTopId()}`) || {};
 const finSalvar = (fn, msg) => { const D = finDoc(); return save(() => api.set("config", `fin-${curTopId()}`, { itens: D.itens || [], orc: D.orc || {}, ...fn(D), top: curTopId() }), msg).then(render); };
 function vFinanceiro() {
+  if (ehCoordEq()) return vFinCoord();
   const D = finDoc(), I = (D.itens || []).slice().sort((a, b) => (b.data || "").localeCompare(a.data || "") || (b.em || "").localeCompare(a.em || "")), orc = D.orc || {}, ed = podeEditar();
-  const g = I.filter(i => i.tipo !== "entrada"), e = I.filter(i => i.tipo === "entrada"), sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0), totOrc = Object.values(orc).reduce((a, v) => a + (+v || 0), 0);
+  const g = [...I.filter(i => i.tipo !== "entrada"), ...feqAprovados()], e = I.filter(i => i.tipo === "entrada"), sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0), totOrc = Object.values(orc).reduce((a, v) => a + (+v || 0), 0);
   const porA = a => g.filter(i => i.area === a).reduce((s, i) => s + (+i.valor || 0), 0), areas = [...new Set([...FIN_AREAS.filter(a => porA(a) || orc[a]), ...g.map(i => i.area)])];
   return `
   <div class="head"><div><h2>Financeiro</h2><p>Gastos e entradas do TOP com a foto do recibo. No fim sai a prestação de contas em PDF.</p></div>
     <div class="actions">${ed ? `<button class="btn primary" type="button" data-fin="">${ico("plus")} Lançar</button>` : ""}<button class="btn" type="button" data-act="fin-pdf">${ico("upload")} Prestação de contas</button></div></div>
   <div class="kpis">
-    <div class="kpi"><span class="lbl">Gasto</span><span class="val num" style="font-size:24px">${brl(sg)}</span><span class="sub">${g.length} lançamento(s)</span></div>
+    <div class="kpi"><span class="lbl">Gasto</span><span class="val num" style="font-size:24px">${brl(sg)}</span><span class="sub">${g.length} lançamento(s)${feqAprovados().length ? ` · ${feqAprovados().length} das equipes` : ""}</span></div>
     <div class="kpi"><span class="lbl">Entradas</span><span class="val num" style="font-size:24px">${brl(se)}</span><span class="sub">doações e repasses</span></div>
     <div class="kpi ${se - sg < 0 ? "alert" : ""}"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos gastos</span></div>
     <div class="kpi ${totOrc && sg > totOrc ? "alert" : ""}"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></div>
   </div>
   <section class="panel"><h3>Por área ${S.isOwner ? `<button class="linkbtn" type="button" data-act="fin-orc">orçamento ›</button>` : ""}</h3>
     <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<div class="fin-a"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></div>`; }).join("") || `<div class="empty">Nenhum gasto ainda.</div>`}</div></section>
+  ${COORD() ? feqPainel(ed) : ""}
   <section class="panel"><h3>Lançamentos <small>${I.length}</small></h3><div class="cel-lista">${I.map(i => `<div class="cel-li ${i.tipo === "entrada" ? "guardado" : ""}">
     ${i.foto || i.fotoPath ? `<button type="button" class="cel-foto" data-fin-foto="${esc(i.id)}" aria-label="Ver recibo">${celFotoSrc(i) ? `<img src="${esc(celFotoSrc(i))}" alt="">` : "🧾"}</button>` : `<span class="cel-foto vazia">${i.tipo === "entrada" ? "＋" : "🧾"}</span>`}
     <button type="button" class="cel-info" ${ed ? `data-fin="${esc(i.id)}"` : "disabled"}><b>${esc(i.desc)}</b><small>${esc(i.area || "")} · ${i.data ? new Date(i.data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""} · ${esc(i.por || "")}</small></button>
@@ -2342,8 +2344,9 @@ function finOrcForm() {
 }
 async function finPdf() {
   toast("Montando o PDF com os recibos…");
-  const fotos = {}; await Promise.all((finDoc().itens || []).map(async i => { fotos[i.id] = await celFotoData(i); }));
-  const D = finDoc(), I = (D.itens || []).slice().sort((a, b) => (a.data || "").localeCompare(b.data || "")), g = I.filter(i => i.tipo !== "entrada"), e = I.filter(i => i.tipo === "entrada");
+  const ext = feqAprovados().map(i => ({ ...i, id: "eq-" + i.id, por: `${i.por} (${i.equipe})` }));
+  const fotos = {}; await Promise.all([...(finDoc().itens || []), ...ext].map(async i => { fotos[i.id] = await celFotoData(i); }));
+  const D = finDoc(), I = [...(D.itens || []), ...ext].slice().sort((a, b) => (a.data || "").localeCompare(b.data || "")), g = I.filter(i => i.tipo !== "entrada"), e = I.filter(i => i.tipo === "entrada");
   const sg = g.reduce((a, i) => a + (+i.valor || 0), 0), se = e.reduce((a, i) => a + (+i.valor || 0), 0), dt = d => d ? d.split("-").reverse().slice(0, 2).join("/") : "";
   const areas = [...new Set(g.map(i => i.area || "Outros"))].sort();
   return gerarListaPdf({ titulo: "Prestação de contas", arquivo: "Prestacao de contas " + topName(), orient: "portrait",
@@ -2351,6 +2354,99 @@ async function finPdf() {
     colunas: [{ t: "Recibo", w: 20, foto: true }, { t: "Data", w: 14 }, { t: "Descrição", bold: true }, { t: "Por", w: 26, cinza: true }, { t: "Valor", w: 26, al: "right" }],
     secoes: [...areas.map(a => { const L = g.filter(i => (i.area || "Outros") === a); return { titulo: `${a} · ${brl(L.reduce((s, i) => s + (+i.valor || 0), 0))}`, linhas: L.map(i => [fotos[i.id] || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }; }),
       ...(e.length ? [{ titulo: `Entradas · ${brl(se)}`, linhas: e.map(i => [fotos[i.id] || "", dt(i.data), i.desc, i.por || "", brl(i.valor)]) }] : [])] }, false).catch(er => toast("Não foi possível gerar o PDF. " + er.message));
+}
+
+/* ---------- Gastos das equipes (demo): o coordenador lança, a ADM aprova ----------
+   config fingasto-<top>-<membro> {top, membro, nome, equipe, itens:[{id,desc,valor,data,area,pag,reemb,pix,obs,foto,fotoPath,status,motivo,decPor,decEm,por,em}]}
+   status: pendente | aprovado | recusado | reembolsado. Só aprovado e reembolsado entram no total e no PDF. */
+const FEQ_PAG = ["Pix", "Dinheiro", "Cartão de débito", "Cartão de crédito"];
+const FEQ_TXT = { pendente: "Aguardando aprovação", aprovado: "Aprovado", recusado: "Recusado", reembolsado: "Reembolsado" };
+const FEQ_CHIP = { pendente: "wait", aprovado: "ok", recusado: "bad", reembolsado: "ok" };
+const gastoDocId = (mid = ME.id) => `fingasto-${curTopId()}-${mid || "eu"}`;
+const feqDocs = () => Object.entries(S.cfgDocs || {}).filter(([k, v]) => k.startsWith(`fingasto-${curTopId()}-`) && v && Array.isArray(v.itens));
+const feqItens = () => feqDocs().flatMap(([doc, v]) => v.itens.map(i => ({ ...i, doc, equipe: v.equipe || "", por: i.por || v.nome || "" })));
+const feqAprovados = () => COORD() ? feqItens().filter(i => i.status === "aprovado" || i.status === "reembolsado").map(i => ({ ...i, tipo: "gasto" })) : [];
+let gastoFotoArq = null;
+async function gastoSalvar(fn, msg) {   // o coordenador grava só o documento dele (o banco confere)
+  const id = gastoDocId(), D = cfgDe(id) || {};
+  try { await api.set("config", id, { top: curTopId(), membro: ME.id, nome: ME.adm, equipe: ME.equipeLgnd, cargo: ME.cargo, itens: fn(D.itens || []) }); if (msg) toast(msg); }
+  catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); }
+  render();
+}
+const feqLinha = (i, acoes) => `<div class="cel-li feq ${i.status === "recusado" ? "nao" : i.status === "pendente" ? "" : "guardado"}">
+    ${i.foto || i.fotoPath ? `<button type="button" class="cel-foto" data-feq-foto="${esc(i.doc + "|" + i.id)}" aria-label="Ver comprovante">${celFotoSrc(i) ? `<img src="${esc(celFotoSrc(i))}" alt="">` : "🧾"}</button>` : `<span class="cel-foto vazia">🧾</span>`}
+    <div class="cel-info"><b>${esc(i.desc)}</b><small>${esc([i.equipe && "Equipe " + i.equipe, i.por, i.area, i.data && new Date(i.data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }), i.pag].filter(Boolean).join(" · "))}</small>
+      <span class="feq-st"><span class="chip ${FEQ_CHIP[i.status] || "wait"}">${FEQ_TXT[i.status] || "Aguardando aprovação"}</span>${i.reemb && i.status !== "reembolsado" && i.status !== "recusado" ? ` <span class="chip sent">Reembolsar${i.pix ? " · Pix " + esc(i.pix) : ""}</span>` : ""}</span>
+      ${i.obs ? `<small>${esc(i.obs)}</small>` : ""}${i.motivo && i.status === "recusado" ? `<small class="feq-mot">Motivo: ${esc(i.motivo)}</small>` : ""}
+      ${acoes || ""}</div>
+    <b class="num fin-v">${brl(i.valor)}</b></div>`;
+function feqPainel(ed) {
+  const L = feqItens().sort((a, b) => (a.status === "pendente" ? 0 : 1) - (b.status === "pendente" ? 0 : 1) || (b.em || "").localeCompare(a.em || ""));
+  const pend = L.filter(i => i.status === "pendente"), aReemb = L.filter(i => i.reemb && i.status === "aprovado");
+  const acoes = i => !ed ? "" : `<div class="feq-acoes">${i.status === "pendente" ? `<button class="btn sm primary" type="button" data-feq="${esc(i.doc + "|" + i.id + "|ok")}">${ico("check")} Aprovar</button><button class="btn sm" type="button" data-feq="${esc(i.doc + "|" + i.id + "|no")}">Recusar</button>` : ""}${i.status === "aprovado" && i.reemb ? `<button class="btn sm primary" type="button" data-feq="${esc(i.doc + "|" + i.id + "|reemb")}">Marcar reembolsado</button>` : ""}${i.status !== "pendente" ? `<button class="btn sm ghost" type="button" data-feq="${esc(i.doc + "|" + i.id + "|volta")}">Voltar para análise</button>` : ""}</div>`;
+  return `<section class="panel"><h3>Gastos das equipes <small>${L.length}</small></h3>
+    <p class="hint" style="margin:0 0 8px">Lançados pelos coordenadores com o comprovante. ${pend.length ? `<b>${pend.length} aguardando aprovação</b>. ` : ""}${aReemb.length ? `${aReemb.length} para reembolsar (${brl(aReemb.reduce((s, i) => s + (+i.valor || 0), 0))}). ` : ""}Só os aprovados entram no total e na prestação de contas.</p>
+    <div class="cel-lista">${L.map(i => feqLinha(i, acoes(i))).join("") || `<div class="empty">Nenhum gasto lançado pelas equipes ainda.</div>`}</div></section>`;
+}
+function feqDecidir(doc, id, acao) {
+  if (!podeEditar()) { toast("Seu acesso é somente leitura."); return; }
+  const muda = (extra) => save(() => { const D = cfgDe(doc) || {}; return api.set("config", doc, { ...D, itens: (D.itens || []).map(i => i.id === id ? { ...i, ...extra, decPor: ME.adm || "", decEm: agoraISO() } : i) }); },
+    { ok: "Gasto aprovado", no: "Gasto recusado", reemb: "Marcado como reembolsado", volta: "Voltou para análise" }[acao]).then(render);
+  if (acao === "no") {
+    modal(`<h3>Recusar gasto</h3><div class="field"><label for="f-fm">Motivo (o coordenador vê)</label><input id="f-fm" name="motivo" required placeholder="ex.: comprovante ilegível, compra não combinada"></div>
+      <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn danger" type="submit">Recusar</button></div></div>`,
+      fd => { const motivo = String(fd.get("motivo") || "").trim(); if (!motivo) return; closeModal(); muda({ status: "recusado", motivo }); });
+    return;
+  }
+  muda(acao === "ok" ? { status: "aprovado", motivo: "" } : acao === "reemb" ? { status: "reembolsado", reembEm: agoraISO() } : { status: "pendente", motivo: "" });
+}
+function vFinCoord() {
+  const L = feqItens().filter(i => i.equipe === ME.equipeLgnd).sort((a, b) => (b.data || "").localeCompare(a.data || "") || (b.em || "").localeCompare(a.em || ""));
+  const meu = i => i.doc === gastoDocId(), soma = st => L.filter(i => st.includes(i.status)).reduce((s, i) => s + (+i.valor || 0), 0);
+  const pend = L.filter(i => i.status === "pendente"), aReemb = L.filter(i => meu(i) && i.reemb && i.status === "aprovado");
+  return `
+  <div class="head"><div><h2>Financeiro da equipe</h2><p>Lance aqui o que você gastou pela equipe ${esc(ME.equipeLgnd || "")}, com a foto do comprovante. Vai direto para a ADM aprovar.</p></div>
+    <div class="actions"><button class="btn primary" type="button" data-gasto="">${ico("plus")} Lançar gasto</button></div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="lbl">Aprovado</span><span class="val num" style="font-size:24px">${brl(soma(["aprovado", "reembolsado"]))}</span><span class="sub">gastos da equipe</span></div>
+    <div class="kpi ${pend.length ? "alert" : ""}"><span class="lbl">Em análise</span><span class="val num" style="font-size:24px">${brl(soma(["pendente"]))}</span><span class="sub">${pend.length} aguardando a ADM</span></div>
+    <div class="kpi"><span class="lbl">A receber</span><span class="val num" style="font-size:24px">${brl(aReemb.reduce((s, i) => s + (+i.valor || 0), 0))}</span><span class="sub">reembolso aprovado para você</span></div>
+  </div>
+  <section class="panel"><h3>Gastos da equipe <small>${L.length}</small></h3><div class="cel-lista">${L.map(i => feqLinha(i, meu(i) && i.status !== "aprovado" && i.status !== "reembolsado" ? `<div class="feq-acoes"><button class="btn sm" type="button" data-gasto="${esc(i.id)}">${ico("edit")} ${i.status === "recusado" ? "Corrigir e reenviar" : "Editar"}</button></div>` : "")).join("") || `<div class="empty">Nenhum gasto ainda. Toque em <b>Lançar gasto</b> e tire a foto do comprovante.</div>`}</div></section>
+  <p class="hint">Depois de aprovado, o gasto não pode mais ser alterado. Se precisar corrigir, fale com a ADM.</p>`;
+}
+function gastoForm(id) {
+  const it = ((cfgDe(gastoDocId()) || {}).itens || []).find(x => x.id === id) || { data: hojeISO(), area: "Outros", pag: "Pix", reemb: false };
+  if (it.status === "aprovado" || it.status === "reembolsado") { toast("Gasto já aprovado: fale com a ADM para mudar."); return; }
+  let foto = celFotoSrc(it) || ""; gastoFotoArq = null;
+  modal(`<h3>${it.id ? "Editar gasto" : "Lançar gasto"}</h3>
+    ${it.status === "recusado" && it.motivo ? `<p class="hint" style="margin:0 0 8px">A ADM recusou: <b>${esc(it.motivo)}</b>. Corrija e salve para reenviar.</p>` : ""}
+    <div class="form">
+      <div class="field full"><label for="f-gd">O que foi comprado</label><input id="f-gd" name="desc" value="${esc(it.desc || "")}" placeholder="ex.: 6 pilhas para os rádios, lona" required></div>
+      <div class="field"><label for="f-gv">Valor (R$)</label><input id="f-gv" name="valor" inputmode="decimal" value="${it.valor != null ? String(it.valor).replace(".", ",") : ""}" required></div>
+      <div class="field"><label for="f-gdt">Data</label><input id="f-gdt" name="data" type="date" value="${esc(it.data || "")}"></div>
+      <div class="field"><label for="f-ga">Categoria</label><select id="f-ga" name="area">${FIN_AREAS.map(a => `<option ${it.area === a ? "selected" : ""}>${a}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-gp">Como pagou</label><select id="f-gp" name="pag">${FEQ_PAG.map(a => `<option ${it.pag === a ? "selected" : ""}>${a}</option>`).join("")}</select></div>
+      <div class="field full"><div class="cel-motivos"><label><input type="checkbox" name="reemb" id="f-gr" ${it.reemb ? "checked" : ""}> Paguei do meu bolso, preciso de reembolso</label></div></div>
+      <div class="field full" id="gPix" ${it.reemb ? "" : "hidden"}><label for="f-gx">Chave Pix para o reembolso</label><input id="f-gx" name="pix" value="${esc(it.pix || "")}" autocomplete="off" placeholder="celular, e-mail ou chave aleatória"></div>
+      <div class="field full"><label for="f-go">Observação</label><input id="f-go" name="obs" value="${esc(it.obs || "")}" placeholder="opcional"></div>
+      <div class="field full"><span class="lab">Comprovante (obrigatório)</span><div class="cel-acoes" style="margin:0"><label class="btn">📷 ${foto ? "Trocar foto" : "Tirar foto do comprovante"}<input type="file" accept="image/*" capture="environment" id="gFoto" hidden></label></div>
+        <img id="gPrev" class="cel-grande" src="${esc(foto)}" alt="" ${foto ? "" : "hidden"}></div>
+      <span class="err field full" id="gErr" hidden></span>
+    </div>
+    <div class="modal-foot"><div>${it.id ? `<button class="btn danger" type="button" id="gDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${it.id ? "Salvar e enviar" : "Enviar para a ADM"}</button></div></div>`, fd => {
+    const err = m => { const x = $("#gErr"); x.textContent = m; x.hidden = false; };
+    const desc = String(fd.get("desc") || "").trim(); if (!desc) { err("Diga o que foi comprado."); return; }
+    const valor = Number(String(fd.get("valor") || "").replace(/\./g, "").replace(",", ".")); if (!(valor > 0)) { err("Confira o valor."); return; }
+    if (!foto) { err("Tire a foto do comprovante."); return; }
+    const reemb = fd.get("reemb") === "on", pix = String(fd.get("pix") || "").trim(); if (reemb && !pix) { err("Coloque a chave Pix para o reembolso."); return; }
+    const arq = gastoFotoArq; closeModal();
+    (async () => { const f = arq ? await fotoGuardar(arq, `gastos/${curTopId()}/${ME.id}/comprovante`) : { foto: it.foto || "", fotoPath: it.fotoPath || "" };
+      const novo = { ...it, id: it.id || Date.now().toString(36), desc, valor, data: fd.get("data") || hojeISO(), area: fd.get("area"), pag: fd.get("pag"), reemb, pix: reemb ? pix : "", obs: String(fd.get("obs") || "").trim(), ...f, status: "pendente", motivo: "", por: ME.adm || "", em: it.em || agoraISO() };
+      gastoSalvar(L => [...L.filter(x => x.id !== novo.id), novo], it.id ? "Gasto reenviado para a ADM" : "Gasto enviado para a ADM"); })(); });
+  $("#gFoto").addEventListener("change", async e => { const fl = e.target.files[0]; if (!fl) return; gastoFotoArq = fl; try { foto = await reduzirFoto(fl, 700); $("#gPrev").src = foto; $("#gPrev").hidden = false; } catch { toast("Não consegui abrir a foto."); } });
+  $("#f-gr").addEventListener("change", e => { $("#gPix").hidden = !e.target.checked; });
+  const d = $("#gDel"); if (d) d.onclick = () => { if (!confirm("Excluir este gasto?")) return; closeModal(); gastoSalvar(L => L.filter(x => x.id !== it.id), "Gasto excluído"); };
 }
 
 /* Período do backup: dia, semana (7 dias), mês (30 dias) ou o TOP todo. Num período, entra o que foi criado ou alterado dentro dele. */
@@ -4084,7 +4180,7 @@ function admCadForm(e) {
           <div class="field"><label for="f-aeq">Equipe LGND</label><select id="f-aeq" name="equipe_lgnd"><option value="">Escolher…</option>${equipesUsadas().map(x => `<option ${e.equipe_lgnd === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
           <div class="field"><label for="f-acargo">Cargo</label><select id="f-acargo" name="cargo">${["Coordenador", "Subcoordenador"].map(x => `<option ${e.cargo === x ? "selected" : ""}>${x}</option>`).join("")}</select></div>
         </div>
-        <p class="hint" style="margin:6px 0 0">Somente leitura. Vê o Dashboard da equipe dele, Equipes (só a equipe dele), Famílias, Consagração, Emergência, Cronograma, Ao vivo e Pista. Saúde, telefones, pendências e pagamentos ficam escondidos.</p>
+        <p class="hint" style="margin:6px 0 0">Somente leitura. Vê o Dashboard da equipe dele, Equipes (só a equipe dele), Famílias, Consagração, Emergência, Cronograma, Ao vivo e Pista, e lança os gastos da equipe no Financeiro. Saúde, telefones, pendências e pagamentos ficam escondidos.</p>
       </div>` : ""}
       <div class="field full"><label for="f-anome">Nome</label><input id="f-anome" name="nome" value="${esc(e.nome)}" required placeholder="Como a equipe chama"></div>
       <div class="field"><label for="f-aemail">E-mail (login)</label><input id="f-aemail" name="email" type="email" inputmode="email" value="${esc(e.email)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="nome@email.com"></div>
@@ -4172,7 +4268,7 @@ function coordLiberarForm() {
   const semEmail = C.filter(p => !isEmail(String(p.email || "").trim())).length;
   modal(`
     <h3>${ico("shield")} Coordenadores de equipe</h3>
-    <p class="hint" style="margin:0">Chefes e subchefes de cada equipe, da planilha de equipes LGND. Marque quem tem acesso e escolha se é Coordenador ou Subcoordenador (os dois veem o mesmo, somente leitura): Dashboard, a própria equipe, Famílias, Consagração, Emergência, Cronograma, Ao vivo e Pista. Desmarcar bloqueia.</p>
+    <p class="hint" style="margin:0">Chefes e subchefes de cada equipe, da planilha de equipes LGND. Marque quem tem acesso e escolha se é Coordenador ou Subcoordenador (os dois veem o mesmo, somente leitura): Dashboard, a própria equipe, Famílias, Consagração, Emergência, Cronograma, Ao vivo, Pista e o Financeiro da equipe (onde lança os gastos). Desmarcar bloqueia.</p>
     ${C.length ? `<div class="coord-tools"><button class="btn sm" type="button" id="coordTodos">Marcar todos</button><button class="btn sm ghost" type="button" id="coordNenhum">Desmarcar todos</button>${semEmail ? `<span class="hint">${semEmail} sem e-mail: coloque o e-mail no cadastro do legendário para liberar.</span>` : ""}</div>
     <div class="coord-lista">${eqs.map(eq => `<section><h4>${esc(eq)}</h4>${C.filter(p => p.equipe === eq).map(linha).join("")}</section>`).join("")}</div>`
     : `<div class="empty">Nenhum chefe ou subchefe nas equipes ainda. Importe a planilha de equipes LGND em Legendários.</div>`}
@@ -5002,6 +5098,9 @@ document.addEventListener("click", e => {
   if (d.finFoto) { const i = (finDoc().itens || []).find(x => x.id === d.finFoto); if (i) modal(`<h3>${esc(i.desc)}</h3><img class="cel-grande" src="${esc(celFotoSrc(i))}" alt="Recibo"><div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal()); return; }
   if (d.act === "fin-orc") { finOrcForm(); return; }
   if (d.act === "fin-pdf") { finPdf(); return; }
+  if (d.gasto != null && t.matches("[data-gasto]")) { gastoForm(d.gasto); return; }
+  if (d.feqFoto) { const [doc, id] = d.feqFoto.split("|"), i = ((cfgDe(doc) || {}).itens || []).find(x => x.id === id); if (i) modal(`<h3>${esc(i.desc)}</h3><img class="cel-grande" src="${esc(celFotoSrc(i))}" alt="Comprovante"><div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal()); return; }
+  if (d.feq) { const [doc, id, acao] = d.feq.split("|"); feqDecidir(doc, id, acao); return; }
   if (d.celEq != null && t.matches("[data-cel-eq]")) { S.celEq = S.celEq === d.celEq ? "" : d.celEq; if (S.celEq) S.celF = "todos"; render(); return; }
   if (d.cel) { const p = S.P.find(x => x.id === d.cel); if (p && podeEditar()) celForm(p); return; }
   if (d.celNao) { const p = S.P.find(x => x.id === d.celNao); if (p && podeEditar()) celNaoForm(p); return; }
