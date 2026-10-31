@@ -2295,18 +2295,19 @@ const finSalvar = (fn, msg) => { const D = finDoc(); return save(() => api.set("
 function vFinanceiro() {
   if (ehCoordEq()) return vFinCoord();
   const D = finDoc(), I = (D.itens || []).slice().sort((a, b) => (b.data || "").localeCompare(a.data || "") || (b.em || "").localeCompare(a.em || "")), orc = D.orc || {}, ed = podeEditar();
-  const g = [...I.filter(i => i.tipo !== "entrada"), ...feqAprovados()], e = I.filter(i => i.tipo === "entrada"), sg = g.reduce((a, i) => a + (+i.valor || 0), 0), vl = vendasResumo().liq, se = e.reduce((a, i) => a + (+i.valor || 0), 0) + vl, totOrc = Object.values(orc).reduce((a, v) => a + (+v || 0), 0);
+  const g = [...I.filter(i => i.tipo !== "entrada"), ...feqAprovados()], e = I.filter(i => i.tipo === "entrada"), sg = g.reduce((a, i) => a + (+i.valor || 0), 0), VR = vendasResumo(), vl = VR.liq, se = e.reduce((a, i) => a + (+i.valor || 0), 0) + vl, totOrc = Object.values(orc).reduce((a, v) => a + (+v || 0), 0);
   const porA = a => g.filter(i => i.area === a).reduce((s, i) => s + (+i.valor || 0), 0), areas = [...new Set([...FIN_AREAS.filter(a => porA(a) || orc[a]), ...g.map(i => i.area)])];
   return `
   <div class="head"><div><h2>Financeiro</h2><p>Saídas e entradas do TOP com a foto do recibo. No fim sai a prestação de contas em PDF.</p></div>
     <div class="actions">${ed ? `<button class="btn primary" type="button" data-fin="">${ico("plus")} Lançar</button>` : ""}${VENDAS() && ed ? `<label class="btn">${ico("upload")} Importar vendas<input type="file" accept=".xlsx,.xls,.csv" id="vendasArq" hidden></label>` : ""}<button class="btn" type="button" data-act="fin-pdf">${ico("upload")} Prestação de contas</button></div></div>
-  <div class="kpis">
+  <div class="kpis ${TAXA_GLOBAL() && VR.coprod ? "kpis-5" : ""}">
     <button type="button" class="kpi kpi-btn" data-fin-det="saidas"><span class="lbl">Saídas</span><span class="val num" style="font-size:24px">${brl(sg)}</span><span class="sub">${g.length} lançamento(s)${feqAprovados().length ? ` · ${feqAprovados().length} das equipes` : ""}</span></button>
     <button type="button" class="kpi kpi-btn" data-fin-det="entradas"><span class="lbl">Entradas</span><span class="val num" style="font-size:24px">${brl(se)}</span><span class="sub">${vl ? `vendas ${brl(vl)} + doações` : "doações e repasses"}</span></button>
-    <button type="button" class="kpi kpi-btn ${se - sg < 0 ? "alert" : ""}" data-fin-det="saldo"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos saídas</span></button>
+    ${TAXA_GLOBAL() ? `<button type="button" class="kpi kpi-btn ${se - sg < 0 ? "alert" : "lucro"}" data-fin-det="saldo"><span class="lbl">${se - sg < 0 ? "Faltando no TOP" : "Sobrando no TOP"}</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">${se ? `lucro de ${pct(Math.max(0, se - sg), se)}% das entradas` : "entradas menos saídas"}</span></button>`
+      : `<button type="button" class="kpi kpi-btn ${se - sg < 0 ? "alert" : ""}" data-fin-det="saldo"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos saídas</span></button>`}
+    ${TAXA_GLOBAL() && VR.coprod ? `<button type="button" class="kpi kpi-btn" data-fin-det="v:coprod"><span class="lbl">Taxa Legendários Global</span><span class="val num" style="font-size:24px">${brl(VR.coprod)}</span><span class="sub">${pct(VR.coprod, VR.bruto)}% do vendido</span></button>` : ""}
     <button type="button" class="kpi kpi-btn ${totOrc && sg > totOrc ? "alert" : ""}" data-fin-det="orc"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></button>
   </div>
-  ${TAXA_GLOBAL() ? taxaGlobalCard() : ""}
   <section class="panel"><h3>Por área ${S.isOwner ? `<button class="linkbtn" type="button" data-act="fin-orc">orçamento ›</button>` : ""}</h3>
     <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<button type="button" class="fin-a" data-fin-det="${esc("area:" + a)}"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></button>`; }).join("") || `<div class="empty">Nenhuma saída ainda.</div>`}</div></section>
   ${VENDAS() ? vendasPainel(ed) : ""}
@@ -2330,7 +2331,7 @@ function finDetalhe(key) {
   const [tipo, val] = key.includes(":") ? [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)] : [key, ""];
   if (key === "saidas") { titulo = "Saídas"; L = [...saiM, ...saiE]; }
   else if (key === "entradas") { titulo = "Entradas"; L = [...entM, ...vend(ap)]; nota = ap.length ? "Vendas pelo valor que fica com a base." : ""; }
-  else if (key === "saldo") { titulo = "Saldo: entradas e saídas"; L = [...entM, ...vend(ap), ...saiM, ...saiE]; }
+  else if (key === "saldo") { titulo = TAXA_GLOBAL() ? "Sobrando no TOP: entradas e saídas" : "Saldo: entradas e saídas"; L = [...entM, ...vend(ap), ...saiM, ...saiE]; }
   else if (key === "orc") {
     const areas = [...new Set([...FIN_AREAS, ...[...saiM, ...saiE].map(i => i.area)])].filter(Boolean);
     L = areas.map(a => { const v = [...saiM, ...saiE].filter(i => i.area === a).reduce((s, i) => s + i.v, 0), o = +orc[a] || 0; return { t: a, s: o ? `orçamento ${brl(o)} · ${pct(v, o)}% usado${v > o ? " · estourou " + brl(v - o) : " · sobra " + brl(o - v)}` : "sem orçamento definido", v, sn: -1, area: a }; }).filter(x => x.v || +orc[x.t]);
@@ -2480,16 +2481,6 @@ document.addEventListener("change", async e => {
 });
 /* Taxa da Legendários Global (demo): a comissão do coprodutor que a TicketAndGo separa de cada venda */
 const TAXA_GLOBAL = () => DEMO;
-function taxaGlobalCard() {
-  if (!VENDAS()) return "";
-  const V = vendasResumo(); if (!V.coprod) return "";
-  const ap = (vendasDoc().linhas || []).filter(x => x.stat === "aprovado" && +x.coprod);
-  const of = [...new Set(ap.map(x => x.oferta))].map(o => { const A = ap.filter(x => x.oferta === o); return { o, n: new Set(A.map(x => x.tx)).size, v: A.reduce((s, x) => s + (+x.coprod || 0), 0), b: A.reduce((s, x) => s + (+x.bruto || 0), 0) }; }).sort((a, b) => b.v - a.v);
-  const rep = ap.filter(x => x.repasse).reduce((s, x) => s + (+x.coprod || 0), 0);
-  return `<button type="button" class="panel taxa-gl" data-fin-det="v:coprod">
-    <span class="taxa-top"><span><span class="lbl">Taxa repassada à Legendários Global</span><b class="num">${brl(V.coprod)}</b><small>${pct(V.coprod, V.bruto)}% de ${brl(V.bruto)} vendidos · ${brl(rep)} em vendas já liberadas pela plataforma</small></span><span class="taxa-ver">ver por venda ›</span></span>
-    <span class="taxa-of">${of.map(x => `<span><b>${esc(x.o)}</b><small>${x.n} venda(s) · ${brl(x.v)}${x.b ? ` (${pct(x.v, x.b)}%)` : ""}</small></span>`).join("")}</span></button>`;
-}
 function vendasImportForm(linhas, arquivo) {
   const L = vendasLer(linhas), V = vendasResumo(L), antes = vendasDoc().linhas || [], ja = new Set(antes.map(x => x.k));
   const novas = L.filter(x => !ja.has(x.k)).length, mudou = L.filter(x => { const a = antes.find(y => y.k === x.k); return a && (a.stat !== x.stat || a.repasse !== x.repasse); }).length;
