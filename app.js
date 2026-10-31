@@ -4161,17 +4161,18 @@ const coordCadDe = p => { const em = String(p.email || "").trim().toLowerCase();
 function coordLiberarForm() {
   const C = coordCands();
   const linha = p => {
-    const m = coordCadDe(p), em = String(p.email || "").trim(), cargo = FUNC_ORDEM(p.funcao) === 0 ? "Coordenador" : "Subcoordenador";
+    const m = coordCadDe(p), em = String(p.email || "").trim(), cargo = m && ehCoordCad(m) && m.cargo ? m.cargo : FUNC_ORDEM(p.funcao) === 0 ? "Coordenador" : "Subcoordenador";
     const st = !isEmail(em) ? `<span class="chip bad">Sem e-mail</span>` : !m ? `<span class="chip wait">Novo</span>` : !ehCoordCad(m) ? `<span class="chip sent">Já é ADM</span>` : m.ativo === false ? `<span class="chip bad">Bloqueado</span>` : `<span class="chip ok">Com acesso</span>`;
     const pode = isEmail(em) && (!m || ehCoordCad(m)), on = pode && (!m || m.ativo !== false);
     return `<label class="coord-li ${pode ? "" : "off"}"><input type="checkbox" name="c" value="${esc(p.id)}" ${on ? "checked" : ""} ${pode ? "" : "disabled"}>
-      <span class="grow"><b>${esc(p.nome)}</b><small>${cargo} · ${esc(p.funcao)}${em ? " · " + esc(em) : ""}</small></span>${st}</label>`;
+      <span class="grow"><b>${esc(p.nome)}</b><small>${esc(p.funcao)} na planilha${em ? " · " + esc(em) : ""}</small>
+      ${pode ? `<select class="sel coord-cargo" name="cargo-${esc(p.id)}" aria-label="Cargo de ${esc(p.nome)}">${["Coordenador", "Subcoordenador"].map(x => `<option ${cargo === x ? "selected" : ""}>${x}</option>`).join("")}</select>` : ""}</span>${st}</label>`;
   };
   const eqs = [...new Set(C.map(p => p.equipe))];
   const semEmail = C.filter(p => !isEmail(String(p.email || "").trim())).length;
   modal(`
     <h3>${ico("shield")} Coordenadores de equipe</h3>
-    <p class="hint" style="margin:0">Chefes e subchefes de cada equipe, da planilha de equipes LGND. Marcado = acesso liberado (somente leitura): Dashboard, a própria equipe, Famílias, Consagração, Emergência, Cronograma, Ao vivo e Pista. Desmarcar bloqueia.</p>
+    <p class="hint" style="margin:0">Chefes e subchefes de cada equipe, da planilha de equipes LGND. Marque quem tem acesso e escolha se é Coordenador ou Subcoordenador (os dois veem o mesmo, somente leitura): Dashboard, a própria equipe, Famílias, Consagração, Emergência, Cronograma, Ao vivo e Pista. Desmarcar bloqueia.</p>
     ${C.length ? `<div class="coord-tools"><button class="btn sm" type="button" id="coordTodos">Marcar todos</button><button class="btn sm ghost" type="button" id="coordNenhum">Desmarcar todos</button>${semEmail ? `<span class="hint">${semEmail} sem e-mail: coloque o e-mail no cadastro do legendário para liberar.</span>` : ""}</div>
     <div class="coord-lista">${eqs.map(eq => `<section><h4>${esc(eq)}</h4>${C.filter(p => p.equipe === eq).map(linha).join("")}</section>`).join("")}</div>`
     : `<div class="empty">Nenhum chefe ou subchefe nas equipes ainda. Importe a planilha de equipes LGND em Legendários.</div>`}
@@ -4183,7 +4184,7 @@ function coordLiberarForm() {
     try {
       for (const p of C) {
         const em = String(p.email || "").trim().toLowerCase(); if (!isEmail(em)) continue;
-        const m = coordCadDe(p), quer = marc.has(p.id), cargo = FUNC_ORDEM(p.funcao) === 0 ? "Coordenador" : "Subcoordenador";
+        const m = coordCadDe(p), quer = marc.has(p.id), cargo = fd.get("cargo-" + p.id) || (FUNC_ORDEM(p.funcao) === 0 ? "Coordenador" : "Subcoordenador");
         const base = { perfil: "coord", equipe_lgnd: p.equipe, cargo, nivel: "leitura", abas: coordAbasSalvar() };
         if (!m) { if (!quer) continue; const row = { nome: p.nome, email: em, telefone: p.telefone || "", funcao: "Outros", obs: "", ativo: true, ...base }; await membros.salvar(row, null); novos.push(row); lib++; }
         else if (ehCoordCad(m)) {
