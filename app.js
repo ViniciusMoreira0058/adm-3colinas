@@ -163,6 +163,7 @@ const VIEWS = [
   { id: "legendarios", l: "Legendários", i: "shield" },
   { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
+  { id: "comunicados", l: "Comunicados", c: "Comunicados", i: "wa", need: ["participantes", "legendarios"], demo: true },   // recado para senderistas e legendários pelo WhatsApp (só na demo)
   { id: "comunicacao", l: "Comunicação", c: "Comunicação", i: "chat", all: true, menu: true },   // recados, lembretes e aprendizados
   { id: "checkin", l: "Check-in", c: "Check-in", i: "door", need: ["participantes"] },
   { id: "remedios", l: "Remédios", c: "Remédios", i: "pill", need: [] , all: true, menu: true },
@@ -1020,7 +1021,7 @@ const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca e
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
-const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "nfc", "familias", "consagracao"]],
+const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
   ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
@@ -2405,6 +2406,111 @@ function carLinkForm() {
 }
 document.addEventListener("input", e => { if (e.target && e.target.id === "carQ") { S.carQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $("#carQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } } });
 window.addEventListener("storage", e => { if (e.key === CAR_LS && S.view === "carros" && !$("#modalRoot").innerHTML) render(); });
+
+/* ---------- COMUNICADOS (demo, flag COMUNICADOS): mensagem para senderistas e legendários pelo WhatsApp, uma pessoa por vez ----------
+   O WhatsApp não deixa disparar para todos de uma vez pelo número pessoal: o app abre a conversa de cada um com a mensagem pronta.
+   config comunicados-<top> {envios:[{id, msg, em, por, ids:[pid], feitos:{pid: iso}, pulados:[pid]}]}; rascunho no aparelho (adm3-comunicado). */
+const COMUNICADOS = () => DEMO;
+const cmdId = () => `comunicados-${curTopId()}`;
+const cmdDoc = () => cfgDe(cmdId()) || {};
+const cmdMsg = () => S.cmdMsg != null ? S.cmdMsg : (store.get("adm3-comunicado") || "");
+const cmdTexto = (msg, p) => String(msg || "").replace(/\{nome\}/gi, String(p.nome || "").trim().split(/\s+/)[0] || "").replace(/\{top\}/gi, topName()).replace(/\{adm\}/gi, (ME.adm || "").split(" ")[0]);
+const cmdF = () => S.cmdF || (S.cmdF = { quem: "todos", equipe: "", pend: false, q: "" });
+const cmdExcl = () => S.cmdExcl || (S.cmdExcl = new Set());
+function cmdLista() {
+  const F = cmdF(), q = norm(F.q || "");
+  return S.P.filter(p => !cancelado(p) && (F.quem === "todos" || (F.quem === "legendario" ? p.tipo === "legendario" : p.tipo !== "legendario"))
+    && (!F.equipe || p.tipo === "legendario" && (p.equipe || "") === F.equipe) && (!F.pend || p.tipo !== "legendario" && pendDe(p).length) && (!q || norm(p.nome).includes(q)))
+    .sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+}
+const cmdSel = () => cmdLista().filter(p => !cmdExcl().has(p.id) && waNumber(p.telefone));
+function vComunicados() {
+  const F = cmdF(), L = cmdLista(), ex = cmdExcl(), semTel = L.filter(p => !waNumber(p.telefone)), sel = cmdSel(), ed = podeEditar(), msg = cmdMsg();
+  const eqs = [...new Set(S.P.filter(p => p.tipo === "legendario" && p.equipe).map(p => p.equipe))].sort();
+  const E = (cmdDoc().envios || []).slice().sort((a, b) => (b.em || "").localeCompare(a.em || ""));
+  const ex1 = L.find(p => waNumber(p.telefone)) || { nome: "João" };
+  return `
+  <div class="head"><div><h2>Comunicados</h2><p>Escreva um recado, escolha quem recebe e mande pelo WhatsApp. O app abre a conversa de cada pessoa com a mensagem pronta: você toca em enviar, volta e a próxima já aparece.</p></div></div>
+  <section class="panel"><h3>Mensagem</h3>
+    <p class="hint" style="margin-top:0">Use <b>{nome}</b> para o primeiro nome da pessoa, <b>{top}</b> para o nome do TOP e <b>{adm}</b> para o seu nome.</p>
+    <textarea id="cmdMsg" class="cmd-msg" placeholder="Olá, {nome}! Aqui é a equipe ADM do {top}…" ${ed ? "" : "disabled"}>${esc(msg)}</textarea>
+    <div class="cmd-prev"><span class="lbl">Como chega para ${esc(String(ex1.nome).split(" ")[0])}</span><div id="cmdPrev">${msg.trim() ? esc(cmdTexto(msg, ex1)) : '<span class="hint">Escreva a mensagem acima.</span>'}</div></div></section>
+  <section class="panel"><h3>Para quem</h3>
+    <div class="seg campo-abas"><button type="button" data-cmd-quem="todos" aria-pressed="${F.quem === "todos"}">Todos</button><button type="button" data-cmd-quem="participante" aria-pressed="${F.quem === "participante"}">Senderistas</button><button type="button" data-cmd-quem="legendario" aria-pressed="${F.quem === "legendario"}">Legendários</button></div>
+    <div class="cmd-filtros">
+      ${F.quem !== "participante" ? `<select id="cmdEq" aria-label="Equipe"><option value="">Todas as equipes</option>${eqs.map(e => `<option ${F.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>` : ""}
+      ${F.quem !== "legendario" ? `<label class="selall"><input type="checkbox" id="cmdPend" ${F.pend ? "checked" : ""}> Só senderistas com pendência</label>` : ""}
+      <input id="cmdQ" type="search" placeholder="Buscar pelo nome…" value="${esc(F.q || "")}" aria-label="Buscar">
+    </div>
+    <div class="cmd-conta"><b id="cmdN">${sel.length}</b> selecionado(s) de ${L.length}${semTel.length ? ` · <span class="bad-text">${semTel.length} sem telefone</span>` : ""}
+      <span class="grow"></span><span><button class="linkbtn" type="button" data-cmd-todos="1">Marcar todos</button> · <button class="linkbtn" type="button" data-cmd-todos="0">Desmarcar</button></span></div>
+    <div class="cham-lista cmd-lista">${L.map(p => { const tel = waNumber(p.telefone);
+      return `<label class="cham-p ${tel ? "" : "off"}"><input type="checkbox" data-cmd-p="${esc(p.id)}" ${tel && !ex.has(p.id) ? "checked" : ""} ${tel ? "" : "disabled"}><span class="cham-box">${ico("check")}</span><span class="grow">${esc(p.nome)}${p.tipo === "legendario" ? ` <span class="tag">LGND${p.equipe ? " · " + esc(p.equipe) : ""}</span>` : ""}${tel ? "" : ' <small class="bad-text">sem telefone</small>'}</span></label>`; }).join("") || `<div class="empty">Ninguém com esse filtro.</div>`}</div>
+    ${ed ? `<div class="actions cmd-acoes"><button class="btn" type="button" data-act="cmd-copiar">Copiar números</button><button class="btn primary wa-btn" type="button" data-act="cmd-enviar">${ico("wa")} Enviar pelo WhatsApp · <span id="cmdN2">${sel.length}</span></button></div>` : ""}
+  </section>
+  <section class="panel"><h3>Enviados <small>${E.length}</small></h3><div class="list">${E.map(e => { const ids = e.ids || [], f = Object.keys(e.feitos || {}).filter(id => ids.includes(id)).length, falta = ids.length - f;
+    return `<div class="li cmd-env"><span class="grow"><b>${esc(String(e.msg || "").split("\n")[0].slice(0, 70))}</b><br><small class="hint">${esc(quando(e.em))} · ${esc(e.por || "")} · ${f} de ${ids.length} enviados</small><div class="bar good"><i style="width:${pct(f, ids.length)}%"></i></div></span>
+      <span class="actions"><button class="btn sm" type="button" data-cmd-ver="${esc(e.id)}">Ver</button>${ed && falta ? `<button class="btn sm primary" type="button" data-cmd-cont="${esc(e.id)}">${ico("wa")} Continuar (${falta})</button>` : ""}</span></div>`; }).join("") || `<div class="empty">Nenhum comunicado enviado ainda.</div>`}</div></section>`;
+}
+const cmdSalvarEnvio = (id, fn) => { const D = cmdDoc(), envios = (D.envios || []).map(e => e.id === id ? fn(e) : e); return api.set("config", cmdId(), { ...D, envios, top: curTopId() }).catch(() => {}); };
+function cmdEnviar() {
+  const msg = cmdMsg().trim(), sel = cmdSel();
+  if (!msg) { toast("Escreva a mensagem primeiro."); $("#cmdMsg") && $("#cmdMsg").focus(); return; }
+  if (!sel.length) { toast("Ninguém selecionado com telefone."); return; }
+  modal(`<h3>Enviar comunicado</h3>
+    <p class="hint" style="margin:0">O WhatsApp não deixa disparar para todos de uma vez pelo seu número. O app abre a conversa de uma pessoa por vez com a mensagem pronta: toque em enviar no WhatsApp e volte para o app.</p>
+    <div class="imp-kpis"><div class="ok"><b class="num">${sel.length}</b><span>pessoa(s)</span></div><div><b class="num">~${Math.max(1, Math.round(sel.length * 4 / 60))} min</b><span>tempo estimado</span></div></div>
+    <div class="cmd-prev"><span class="lbl">Mensagem</span><div>${esc(cmdTexto(msg, sel[0]))}</div></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${ico("wa")} Começar</button></div></div>`, () => {
+    const e = { id: "c" + Date.now().toString(36), msg, em: new Date().toISOString(), por: ME.adm || "", ids: sel.map(p => p.id), feitos: {}, pulados: [] };
+    const D = cmdDoc(); save(() => api.set("config", cmdId(), { ...D, envios: [...(D.envios || []), e], top: curTopId() })).then(() => cmdSequencia(e.id));
+  });
+}
+function cmdSequencia(id) {
+  const env = () => (cmdDoc().envios || []).find(e => e.id === id); let e = env(); if (!e) return;
+  const fila = (e.ids || []).filter(pid => !(e.feitos || {})[pid]).map(pid => S.P.find(p => p.id === pid)).filter(p => p && waNumber(p.telefone));
+  let i = 0; const feitos = new Set(), pulados = new Set();
+  const passo = () => {
+    if (i >= fila.length) { closeModal(); render();
+      modal(`<h3>Comunicado enviado</h3><div class="imp-kpis"><div class="ok"><b class="num">${feitos.size}</b><span>enviados agora</span></div><div class="${pulados.size ? "bad" : ""}"><b class="num">${pulados.size}</b><span>pulados</span></div></div>
+        <p class="hint" style="margin:0">${pulados.size ? "Os pulados ficam no histórico: toque em Continuar quando quiser mandar para eles." : "Todo mundo da lista recebeu."}</p>
+        <div class="modal-foot"><span></span><button class="btn primary" type="button" data-close-btn>Fechar</button></div>`, () => {}); return; }
+    const p = fila[i], txt = cmdTexto(e.msg, p);
+    modal(`<h3>Enviar ${i + 1} de ${fila.length}</h3><div class="bar good"><i style="width:${pct(i, fila.length)}%"></i></div>
+      <div><b style="font-size:18px">${esc(p.nome)}</b><br><small class="hint">${esc(p.telefone || "")}${p.tipo === "legendario" ? " · Legendário" + (p.equipe ? " · " + esc(p.equipe) : "") : " · Senderista"}</small></div>
+      <div class="field"><label for="f-txt">Mensagem (pode ajustar só para esta pessoa)</label><textarea id="f-txt" style="min-height:130px">${esc(txt)}</textarea></div>
+      <div class="modal-foot"><div><button class="btn ghost" type="button" data-close-btn>Parar</button></div>
+        <div class="actions"><button class="btn" type="button" id="cmdPular">Pular</button><a class="btn primary" id="cmdWa" href="#" target="_blank" rel="noopener">${ico("wa")} Abrir WhatsApp</a></div></div>`, () => {});
+    const wa = $("#cmdWa"), atual = () => { wa.href = `https://wa.me/${waNumber(p.telefone)}?text=${encodeURIComponent($("#f-txt").value)}`; };
+    atual(); $("#f-txt").addEventListener("input", atual);
+    wa.addEventListener("click", () => { feitos.add(p.id); const em = new Date().toISOString(); cmdSalvarEnvio(id, x => ({ ...x, feitos: { ...(x.feitos || {}), [p.id]: em } })); e = env() || e; i++; setTimeout(passo, 400); });
+    $("#cmdPular").onclick = () => { pulados.add(p.id); cmdSalvarEnvio(id, x => ({ ...x, pulados: [...new Set([...(x.pulados || []), p.id])] })); i++; passo(); };
+  };
+  passo();
+}
+function cmdVer(id) {
+  const e = (cmdDoc().envios || []).find(x => x.id === id); if (!e) return; const F = e.feitos || {};
+  const ps = (e.ids || []).map(pid => S.P.find(p => p.id === pid) || { id: pid, nome: "(removido)" });
+  modal(`<h3>Comunicado</h3><p class="hint" style="margin:0">${esc(quando(e.em))} · ${esc(e.por || "")}</p>
+    <div class="cmd-prev"><div>${esc(e.msg)}</div></div>
+    <details open><summary><b>Recebeu (${ps.filter(p => F[p.id]).length})</b></summary><ul class="imp-list">${ps.filter(p => F[p.id]).map(p => `<li>${esc(p.nome)} <span class="hint">${esc(quando(F[p.id]))}</span></li>`).join("") || "<li class=hint>ninguém ainda</li>"}</ul></details>
+    <details ${ps.some(p => !F[p.id]) ? "open" : ""}><summary><b>Falta (${ps.filter(p => !F[p.id]).length})</b></summary><ul class="imp-list">${ps.filter(p => !F[p.id]).map(p => `<li>${esc(p.nome)}${(e.pulados || []).includes(p.id) ? ' <span class="hint">pulado</span>' : ""}</li>`).join("")}</ul></details>
+    <div class="modal-foot"><div><button class="btn ghost" type="button" id="cmdReusar">Usar este texto de novo</button></div><button class="btn" type="button" data-close-btn>Fechar</button></div>`, () => {});
+  $("#cmdReusar").onclick = () => { S.cmdMsg = e.msg; store.set("adm3-comunicado", e.msg); closeModal(); render(); scrollTo(0, 0); };
+}
+async function cmdCopiar() {
+  const sel = cmdSel(), txt = sel.map(p => `${p.nome}\t${p.telefone}`).join("\n");
+  try { await navigator.clipboard.writeText(txt); toast(`${sel.length} número(s) copiados`); }
+  catch { modal(`<h3>Números</h3><textarea style="min-height:240px;width:100%" readonly>${esc(txt)}</textarea><div class="modal-foot"><span></span><button class="btn" type="button" data-close-btn>Fechar</button></div>`, () => {}); }
+}
+const cmdConta = () => { const n = cmdSel().length; ["cmdN", "cmdN2"].forEach(k => { const el = $("#" + k); if (el) el.textContent = n; }); };
+document.addEventListener("input", e => { const t = e.target; if (!t) return;
+  if (t.id === "cmdMsg") { S.cmdMsg = t.value; store.set("adm3-comunicado", t.value); const pv = $("#cmdPrev"), p = cmdLista().find(x => waNumber(x.telefone)) || { nome: "João" }; if (pv) pv.innerHTML = t.value.trim() ? esc(cmdTexto(t.value, p)) : '<span class="hint">Escreva a mensagem acima.</span>'; }
+  if (t.id === "cmdQ") { cmdF().q = t.value; const pos = t.selectionStart; render(); const n = $("#cmdQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } } });
+document.addEventListener("change", e => { const t = e.target; if (!t) return;
+  if (t.matches && t.matches("input[data-cmd-p]")) { const s = cmdExcl(); t.checked ? s.delete(t.dataset.cmdP) : s.add(t.dataset.cmdP); cmdConta(); }
+  if (t.id === "cmdEq") { cmdF().equipe = t.value; render(); }
+  if (t.id === "cmdPend") { cmdF().pend = t.checked; render(); } });
 
 // ===== 7: FINANCEIRO =====  config fin-<top> {itens:[{id,tipo:gasto|entrada,area,desc,valor,data,por,em,foto}], orc:{area:valor}}
 let finFotoArq = null;
@@ -4752,6 +4858,7 @@ function render() {
     : v === "emergencia" ? vEmergencia()
     : v === "transporte" ? vTransporte()
     : v === "carros" ? vCarros()
+    : v === "comunicados" ? vComunicados()
     : v === "financeiro" ? vFinanceiro()
     : v === "guia" ? vGuia()
     : vPista());
@@ -5485,6 +5592,12 @@ document.addEventListener("click", e => {
   if (d.act === "pt-responder") { posTopForm(); return; }
   if (d.act === "pt-licoes") { licoesForm(); return; }
   if (d.act === "backup") { backupForm(); return; }
+  if (d.act === "cmd-enviar") { if (podeEditar()) cmdEnviar(); return; }
+  if (d.act === "cmd-copiar") { cmdCopiar(); return; }
+  if (d.cmdQuem) { Object.assign(cmdF(), { quem: d.cmdQuem, equipe: d.cmdQuem === "participante" ? "" : cmdF().equipe, pend: d.cmdQuem === "legendario" ? false : cmdF().pend }); render(); return; }
+  if (d.cmdTodos != null && t.matches("[data-cmd-todos]")) { const s = cmdExcl(); cmdLista().forEach(p => d.cmdTodos === "1" ? s.delete(p.id) : s.add(p.id)); render(); return; }
+  if (d.cmdVer) { cmdVer(d.cmdVer); return; }
+  if (d.cmdCont) { if (podeEditar()) cmdSequencia(d.cmdCont); return; }
   if (d.act === "car-link") { if (podeEditar()) carLinkForm(); return; }
   if (d.act === "aovivo-tv") { const on = !modoTv(); try { localStorage.setItem("adm3-avtv", on ? "1" : "0"); } catch (e) {} if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); render(); return; }
   if (d.copiarLink) { const p = S.pessoas.find(x => x.id === d.copiarLink); if (p && p.termoLink) copiarTexto(p.termoLink, "Link do termo copiado"); return; }
