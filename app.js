@@ -546,6 +546,7 @@ function vPainelNovo() {
     ${tarefas.length ? `<div class="hoje-lista">${tarefas.map(([n, l, v, pf, c]) => `<button class="hoje-item ${c}" type="button" data-go="${v}" ${pf ? `data-pf-set="${pf}"` : ""}><b class="num">${n}</b><span>${l}</span><i aria-hidden="true">›</i></button>`).join("")}</div>`
       : `<div class="empty">Nada pendente agora. Bom trabalho!</div>`}
   </section>
+  ${tempoTopCard()}
   <div class="dash-blocos">
     ${bloco("Pessoas", "users", `<div class="dminis">
       ${mini("Senderistas", s.n, `${tendencia("n", s.n)}${s.mais40.length} com +40${s.dup ? ` · ${s.dup} repetido(s)` : ""}`, "participantes")}
@@ -1720,8 +1721,9 @@ function climaDados() {
   }
   return c;
 }
+const CLIMA = () => true;   // clima na pista (Ao vivo) e previsão do TOP no Dashboard: app real desde 01/11/2026
 function climaCard() {
-  if (!CAMPO()) return "";
+  if (!CAMPO() && !CLIMA()) return "";
   const c = climaDados(); if (!c) return `<section class="panel clima"><h3>Clima na pista</h3><div class="hint">Buscando a previsão…</div></section>`;
   const H = c.d.hourly, agora = Date.now(), idx = H.time.findIndex(t => new Date(t) >= agora - 36e5), prox = H.time.slice(Math.max(0, idx), Math.max(0, idx) + 12).map((t, k) => { const i = Math.max(0, idx) + k;
     return { h: t.slice(11, 16), temp: Math.round(H.temperature_2m[i]), chuva: H.precipitation_probability[i] || 0, vento: Math.round(H.wind_speed_10m[i]), cod: H.weather_code[i] }; });
@@ -1735,6 +1737,44 @@ function climaCard() {
     <div class="clima-agora"><span class="clima-ic">${ic}</span><b class="num">${Math.round(cur.temperature_2m ?? prox[0].temp)}°</b><div><b>${desc}</b><small>vento ${Math.round(cur.wind_speed_10m ?? 0)} km/h</small></div></div>
     ${alertas.length ? `<div class="clima-alertas">${alertas.map(([c, t]) => `<span class="chip ${c}">${esc(t)}</span>`).join("")}</div>` : `<div class="clima-alertas"><span class="chip ok">Sem alerta nas próximas 12 h</span></div>`}
     <div class="clima-horas">${prox.map(x => `<div><small>${x.h}</small><span>${CLIMA_COD(x.cod)[0]}</span><b class="num">${x.temp}°</b><i class="${x.chuva >= 60 ? "bad-text" : ""}">${x.chuva}%</i></div>`).join("")}</div></section>`;
+}
+/* Previsão do tempo para os dias do TOP (Dashboard). Open-Meteo prevê até 16 dias; antes disso mostra como foi no ano passado nas mesmas datas.
+   Busca de novo todo dia (localStorage adm3-tempo-top) e guarda a previsão de ontem para mostrar o que mudou. */
+let tempoBusca = 0;
+const tempoLocal = () => { const P = pistaMapa(), p0 = (P && P.pontos || [])[0]; return p0 || { lat: -20.2028, lng: -47.2706 }; };
+function tempoTopDados(td) {
+  let c = null; try { c = JSON.parse(store.get("adm3-tempo-top") || "null"); } catch {}
+  const chave = `${curTopId()}|${td.inicio}|${td.fim || td.inicio}`, hj = hojeISO();
+  if ((!c || c.chave !== chave || c.dia !== hj) && Date.now() - tempoBusca > 60e3 && navigator.onLine !== false) {
+    tempoBusca = Date.now(); const L = tempoLocal(), fim = td.fim || td.inicio, dias = difDias(hj, td.inicio);
+    const ano = d => { const x = new Date(d + "T12:00"); x.setFullYear(x.getFullYear() - 1); return x.toISOString().slice(0, 10); };
+    const base = `latitude=${L.lat}&longitude=${L.lng}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=America%2FSao_Paulo`;
+    const prev = dias <= 15 && difDias(hj, fim) >= 0 ? fetch(`https://api.open-meteo.com/v1/forecast?${base},precipitation_probability_max&start_date=${td.inicio < hj ? hj : td.inicio}&end_date=${fim}`).then(r => r.json()).catch(() => null) : Promise.resolve(null);
+    const hist = fetch(`https://archive-api.open-meteo.com/v1/archive?${base}&start_date=${ano(td.inicio)}&end_date=${ano(fim)}`).then(r => r.json()).catch(() => null);
+    Promise.all([prev, hist]).then(([p, h]) => { if (!(p && p.daily) && !(h && h.daily)) return;
+      const ant = c && c.chave === chave && c.dia !== hj ? c.prev : (c && c.ant) || null;
+      store.set("adm3-tempo-top", JSON.stringify({ chave, dia: hj, t: Date.now(), prev: p && p.daily ? p.daily : null, hist: h && h.daily ? h.daily : null, ant }));
+      if (S.view === "painel") render(); });
+  }
+  return c && c.chave === chave ? c : null;
+}
+function tempoTopCard() {
+  if (!CLIMA()) return ""; const td = topDoc() || {}; if (!td.inicio || td.status === "finalizado" || difDias(hojeISO(), td.fim || td.inicio) < 0) return "";
+  const c = tempoTopDados(td), faltam = difDias(hojeISO(), td.inicio), wd = d => new Date(d + "T12:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
+  const cab = `<h3>Tempo nos dias do TOP <small>${c ? "atualizado " + haQuanto(new Date(c.t).toISOString()) : "buscando…"}</small></h3>`;
+  if (!c) return `<section class="panel tempo-top">${cab}<div class="hint">Buscando a previsão…</div></section>`;
+  const linha = (D, i, prob) => { const [ic, desc] = CLIMA_COD(D.weather_code[i] || 0), ch = prob ? D.precipitation_probability_max[i] : null, mm = D.precipitation_sum[i];
+    return `<div class="tt-dia"><small>${wd(D.time[i])}</small><span class="tt-ic">${ic}</span><b class="num">${Math.round(D.temperature_2m_max[i])}° <i>${Math.round(D.temperature_2m_min[i])}°</i></b><span class="${(ch ?? 0) >= 60 || mm >= 10 ? "bad-text" : "hint"}">${ch != null ? `chuva ${ch}%` : `${(mm || 0).toFixed(0)} mm`}</span><small class="hint">${desc}</small></div>`; };
+  const P = c.prev, H = c.hist, mud = [];
+  if (P && c.ant) P.time.forEach((d, i) => { const j = c.ant.time.indexOf(d); if (j < 0) return; const a = c.ant.precipitation_probability_max[j], b = P.precipitation_probability_max[i], ta = Math.round(c.ant.temperature_2m_max[j]), tb = Math.round(P.temperature_2m_max[i]);
+    if (Math.abs(b - a) >= 20) mud.push(`${wd(d)}: chuva ${a}% → ${b}%`); if (Math.abs(tb - ta) >= 3) mud.push(`${wd(d)}: máxima ${ta}° → ${tb}°`); });
+  const alerta = P ? (() => { const x = []; P.time.forEach((d, i) => { if (P.precipitation_probability_max[i] >= 60) x.push(["bad", `Chuva provável ${wd(d)} (${P.precipitation_probability_max[i]}%)`]); if (P.temperature_2m_max[i] >= 32) x.push(["wait", `Calor de ${Math.round(P.temperature_2m_max[i])}° ${wd(d)}: reforçar água`]); if (P.temperature_2m_min[i] <= 10) x.push(["wait", `Frio de ${Math.round(P.temperature_2m_min[i])}° na madrugada ${wd(d)}: avisar agasalho`]); }); return x; })() : [];
+  return `<section class="panel tempo-top">${cab}
+    ${P ? `<div class="tt-dias">${P.time.map((_, i) => linha(P, i, true)).join("")}</div>
+      <div class="clima-alertas">${alerta.length ? alerta.map(([k, t]) => `<span class="chip ${k}">${esc(t)}</span>`).join("") : `<span class="chip ok">Sem alerta de chuva forte, calor ou frio</span>`}</div>
+      ${mud.length ? `<p class="hint" style="margin:8px 0 0"><b>Mudou desde ontem:</b> ${esc(mud.join(" · "))}</p>` : ""}`
+    : `<p class="hint" style="margin:0 0 8px">Faltam ${faltam} dias. A previsão para os dias do TOP aparece a partir de <b>${fmtDate(somaDias(td.inicio, -15))}</b> e atualiza todo dia.${H ? " Enquanto isso, veja como foi nas mesmas datas no ano passado:" : ""}</p>
+      ${H ? `<div class="tt-dias tt-hist">${H.time.map((_, i) => linha(H, i, false)).join("")}</div>` : ""}`}</section>`;
 }
 // ADMs no mapa: cada um liga "Mostrar minha localização" e o app manda a posição a cada minuto
 const locsEquipe = () => Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`loc-${curTopId()}-`)).map(([id, d]) => ({ id, ...d })).filter(l => Date.now() - new Date(l.em) < 3 * 3600e3);
@@ -2601,7 +2641,7 @@ const FIN_AREAS = ["Alimentação", "Logística", "Transporte", "Saúde", "Mater
 const finDoc = () => cfgDe(`fin-${curTopId()}`) || {};
 const finSalvar = (fn, msg) => { const D = finDoc(); return save(() => api.set("config", `fin-${curTopId()}`, { ...D, itens: D.itens || [], orc: D.orc || {}, ...fn(D), top: curTopId() }), msg).then(render); };
 /* Financeiro 2 (demo, flag FIN2): previsão, custo por senderista, aviso de contas, saídas sem recibo, filtros, gráfico e Excel */
-const FIN2 = () => DEMO;
+const FIN2 = () => true;   // liberado no app real em 01/11/2026
 const finSemRecibo = () => (finDoc().itens || []).filter(i => i.tipo !== "entrada" && !i.foto && !i.fotoPath);
 const finFilt = () => S.finF || (S.finF = { q: "", area: "", mes: "", pag: "", tipo: "", sem: false });
 function avisoContas() {
