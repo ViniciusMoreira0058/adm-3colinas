@@ -1734,7 +1734,7 @@ const hmDe = iso => iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-d
 const haQuanto = iso => { const m = Math.round((Date.now() - new Date(iso)) / 6e4); return m < 1 ? "agora" : m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.round(m / 60)} h` : `há ${Math.round(m / 1440)} d`; };
 const famTxt = f => "Família " + String(f).padStart(2, "0");
 // família na frente do nome (senderistas) e importação das famílias por planilha: só na DEMO até ele mandar jogar no app real
-const FAM_IMP = () => DEMO;
+const FAM_IMP = () => true;   // app real desde 01/11/2026
 const famPre = p => FAM_IMP() && p && p.tipo !== "legendario" && p.familia ? `<span class="fam-pre num" title="${famTxt(p.familia)}">F${String(p.familia).padStart(2, "0")}</span> ` : "";
 const famDe = f => S.P.filter(p => p.tipo !== "legendario" && !cancelado(p) && Number(p.familia) === Number(f)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
 const pontosCampo = () => { const P = pistaMapa(); return (P && P.pontos || []).map(p => p.n).filter(Boolean); };
