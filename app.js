@@ -5409,7 +5409,7 @@ function vMeta() {
   const aba = ["placar", "ind", "eq"].includes(S.metaAba) ? S.metaAba : "placar";
   return cab + metaAbas(aba) + (aba === "eq" ? vMetaFrentes(D) : aba === "ind" ? metaFaq() + pInd : metaSemana(D) + pPlacar);
 }
-document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
+document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.tselId && S.tarSel) { t.checked ? S.tarSel.add(t.dataset.tselId) : S.tarSel.delete(t.dataset.tselId); render(); return; } if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
 document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[data-ind-zap]"); if (!a) return;
   const [doc, id] = a.dataset.indZap.split("|"), x = indTodas().find(y => y.doc === doc && y.id === id); if (x && x.status === "novo") setTimeout(() => indMarcar(doc, id, "contatado"), 300); });
 /* Tarefas das equipes (Estratégia 150): já nascem do PDF; estado em config metatar-<top> {estado:{tid:{feito,n,em,por}}, extras:[], apagadas:[]} */
@@ -5472,6 +5472,7 @@ function tarLi(t) {
   const fmt = d => d ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "", pode = podeTar(t);
   const btn = t.tipo === "auto" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b><small class="hint">conta pela Agenda</small></div>` : t.tipo === "num" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b>${pode && !t.feito ? `<button class="btn sm primary" type="button" data-tar-mais="${t.id}">+1</button>` : ""}${pode && t.n ? `<button class="linkbtn" type="button" data-tar-menos="${t.id}" aria-label="Desfazer 1">−</button>` : ""}</div>`
     : pode ? `<button class="btn sm ${t.feito ? "" : "primary"}" type="button" data-tar-feito="${t.id}">${t.feito ? "Desfazer" : t.tipo === "conteudo" ? "Entregue" : "Feito"}</button>` : t.feito ? `<span class="chip ok">Feito</span>` : "";
+  if (S.tarSel) return `<label class="li tar-li tar-sel ${t.sit}"><input type="checkbox" data-tsel-id="${t.id}" ${S.tarSel.has(t.id) ? "checked" : ""}><div class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)} · semana ${t.semana}${t.feito ? " · feita" : ""}</small></div></label>`;
   return `<div class="li tar-li ${t.sit}"><span class="tar-ck">${t.feito ? ico("check") : ""}</span><div class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)} · semana ${t.semana} (até ${fmt(t.prazo)})${t.feito && t.por ? ` · feito por ${esc(t.por.split(" ")[0])}` : ""}</small>
     ${t.tipo === "num" || (t.tipo === "auto" && t.alvo > 1) ? `<div class="bar good"><i style="width:${pct(t.n, t.alvo)}%"></i></div>` : ""}</div>${btn}${podeEditar() ? `<button class="linkbtn" type="button" data-tar-ed="${t.id}" aria-label="Editar">${ico("edit")}</button>` : ""}</div>`;
 }
@@ -5669,6 +5670,7 @@ function vMetaFrentes(D) {
   const ord = meu ? [...F].sort((a, b) => b.eqs.includes(meu) - a.eqs.includes(meu)) : F;
   const card = f => { const minha = meu && f.eqs.includes(meu), L = minha ? f.L.filter(t => t.equipe === meu) : f.L, pend = L.filter(t => !t.feito), ja = L.filter(t => t.feito);
     const agora = pend.filter(t => t.sit !== "proxima"), depois = pend.filter(t => t.sit === "proxima");
+    if (S.tarSel) return `<section class="panel frente-sel"><div class="actions" style="justify-content:space-between"><b>${esc(f.l)}</b><button class="btn sm" type="button" data-tsel-frente="${f.k}">${f.L.every(t => S.tarSel.has(t.id)) ? "Desmarcar" : "Selecionar"} as ${f.L.length}</button></div><div class="list">${f.L.map(tarLi).join("")}</div></section>`;
     return `<details class="panel frente ${f.atras ? "atras" : ""}" ${minha || (!meu && f.atras) ? "open" : ""}><summary><div class="grow"><b>${esc(f.l)}${minha ? ' <span class="chip acc">sua equipe</span>' : ""}</b><small class="hint">${esc(f.sub || f.eqs.join(", "))}</small><small>${esc(f.m)}</small></div>
       <div class="fr-st"><b class="num">${f.feitas}/${f.total}</b><small>${f.atras ? `<span class="chip bad">${f.atras} atrasada(s)</span>` : "tarefas"}</small></div></summary>
       ${f.ind.length ? `<div class="fr-ind">${f.ind.map(i => `<div><small class="hint">${esc(i.l)}</small><b class="num">${i.n}<small>/${i.alvo}</small></b><div class="bar good"><i style="width:${pct(i.n, i.alvo)}%"></i></div></div>`).join("")}</div>` : ""}
@@ -5676,10 +5678,34 @@ function vMetaFrentes(D) {
       ${agora.length ? `<h4>Agora</h4><div class="list">${agora.map(tarLi).join("")}</div>` : `<p class="hint">${pend.length ? "Nada para esta semana." : "Tudo feito 🙌"}</p>`}
       ${depois.length ? `<h4>Depois <small class="hint">${depois.length}</small></h4><div class="list">${depois.map(tarLi).join("")}</div>` : ""}
       ${ja.length ? `<h4>Feitas <small class="hint">${ja.length}</small></h4><div class="list">${ja.slice(-6).map(tarLi).join("")}</div>` : ""}</details>`; };
-  return `${podeEditar() ? `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Cada frente junta equipes numa missão. Toque para abrir. Ida a igreja, pré-TOP e encontro contam sozinhos quando o evento acontece na Agenda.</p><button class="btn" type="button" data-tar-novo="1">${ico("plus")} Nova tarefa</button></div>` : ""}
+  const sel = S.tarSel, todas = F.flatMap(f => f.L), nS = sel ? sel.size : 0;
+  const barra = !podeEditar() ? "" : sel ? `<div class="tar-barra"><b>${nS} selecionada(s)</b><div class="actions">
+      <button class="btn sm" type="button" data-tsel-todas="1">${nS === todas.length ? "Desmarcar todas" : `Selecionar todas (${todas.length})`}</button>
+      <button class="btn sm" type="button" data-tsel-feito="1" ${nS ? "" : "disabled"}>${ico("check")} Marcar feitas</button>
+      <button class="btn sm danger" type="button" data-tsel-del="1" ${nS ? "" : "disabled"}>${ico("trash")} Excluir</button>
+      <button class="btn sm ghost" type="button" data-tsel-sair="1">Cancelar</button></div></div>`
+    : `<div class="actions"><button class="btn" type="button" data-tsel-on="1">${ico("check")} Selecionar</button>${(tarDoc().apagadas || []).length ? `<button class="btn ghost" type="button" data-tsel-volta="1">Trazer de volta as tarefas do PDF (${(tarDoc().apagadas || []).length})</button>` : ""}</div>`;
+  return `${barra}${podeEditar() && !sel ? `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Cada frente junta equipes numa missão. Toque para abrir. Ida a igreja, pré-TOP e encontro contam sozinhos quando o evento acontece na Agenda.</p><button class="btn" type="button" data-tar-novo="1">${ico("plus")} Nova tarefa</button></div>` : ""}
     ${ord.map(card).join("")}`;
 }
 /* Resumo: o que é desta semana, num lugar só */
+function tarSelecao(d, btn) {
+  if (!podeEditar()) { toast("Seu acesso é somente leitura."); return; }
+  if (d.tselOn) { S.tarSel = new Set(); render(); return; }
+  if (d.tselSair) { S.tarSel = null; render(); return; }
+  const D = metaDados(), F = frentesDados(D), todas = F.flatMap(f => f.L), sel = S.tarSel || new Set();
+  if (d.tselTodas) { S.tarSel = sel.size === todas.length ? new Set() : new Set(todas.map(t => t.id)); render(); return; }
+  if (d.tselFrente) { const f = F.find(x => x.k === d.tselFrente); if (f) { const tudo = f.L.every(t => sel.has(t.id)); f.L.forEach(t => tudo ? sel.delete(t.id) : sel.add(t.id)); } S.tarSel = sel; render(); return; }
+  const T = tarDoc();
+  if (d.tselVolta) { S.tarSel = null; save(() => api.set("config", tarId(), { ...T, apagadas: [] }), "Tarefas do PDF de volta").then(render); return; }
+  if (!sel.size) return;
+  if (d.tselFeito) { const E = { ...(T.estado || {}) }, agora = new Date().toISOString(); let n = 0;
+    todas.filter(t => sel.has(t.id) && t.tipo !== "auto" && !t.feito).forEach(t => { E[t.id] = { ...(E[t.id] || {}), ...(t.tipo === "num" ? { n: t.alvo } : { feito: true }), em: agora, por: ME.adm || "" }; n++; });
+    S.tarSel = null; save(() => api.set("config", tarId(), { ...T, estado: E }), `${n} tarefa(s) marcada(s) como feitas`).then(render); return; }
+  if (d.tselDel) { if (btn.dataset.ok !== "1") { btn.dataset.ok = "1"; btn.textContent = `Confirmar: excluir ${sel.size}`; return; }
+    const ids = [...sel], doPdf = ids.filter(id => /^[pc]\d+$/.test(id));
+    S.tarSel = null; save(() => api.set("config", tarId(), { ...T, apagadas: [...new Set([...(T.apagadas || []), ...doPdf])], extras: (T.extras || []).filter(x => !sel.has(x.id)) }), `${ids.length} tarefa(s) excluída(s)`).then(render); }
+}
 function metaSemana(D) {
   const T = tarLista(D).filter(t => !ehCoordEq() || t.equipe === ME.equipeLgnd), at = T.filter(t => t.sit === "atrasada"), sem = T.filter(t => t.sit === "semana");
   const hoje = hojeISO(), ate = new Date(Date.now() + 7 * 864e5).toLocaleDateString("sv"), ev = acoesTodas().filter(a => a.data >= hoje && a.data <= ate);
@@ -6479,6 +6505,7 @@ document.addEventListener("click", e => {
   if (d.tarNovo) { tarForm(); return; }
   if (d.acaoNovo) { acaoForm(); return; }
   if (d.saidasGerar) { saidasGerar(); return; }
+  if (d.tselOn || d.tselSair || d.tselTodas || d.tselFrente || d.tselFeito || d.tselDel || d.tselVolta) { tarSelecao(d, t); return; }
   if (d.faqEd) { faqForm(+d.faqEd); return; }
   if (d.faqCopiar) { const q = FAQ[+d.faqCopiar], r = faqDoc()["q" + d.faqCopiar]; if (r) copiarTexto(r.txt, "Resposta copiada"); return; }
   if (d.agTop === "previsto") { prevVer(); return; }
