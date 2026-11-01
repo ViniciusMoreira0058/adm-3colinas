@@ -997,7 +997,7 @@ function vAoVivo() {
     <div class="av-top"><div><span class="eyebrow">${esc(topName())} · ${esc(D.nome || "")}</span><b class="av-relogio num">${hora}</b></div>
       <div class="actions"><span class="chip ${atraso > 10 ? "bad" : atraso > 0 ? "wait" : "ok"} av-atraso">${atraso == null ? "Sem marcações ainda" : atraso > 0 ? "Atrasado " + fmtDif(atraso).replace("+", "") : atraso < 0 ? "Adiantado " + fmtDif(atraso).replace("−", "") : "No horário"}</span>
       ${RELATORIO_FINAL() && !ehCoordEq() && ocorrAbertas().length ? `<button class="chip bad av-atraso" type="button" data-go="ocorrencias">${ocorrAbertas().length} ocorrência(s) aberta(s)</button>` : ""}
-      ${AOVIVO2() && podeEditar() ? `<button class="btn primary" type="button" data-act="ocorr-rapida">${ico("plus")} Ocorrência</button>` : ""}${paisagem.matches ? "" : tv ? `<button class="btn" type="button" data-act="aovivo-tv">Sair do modo TV</button>` : `<button class="btn" type="button" data-act="aovivo-tv">Modo TV</button><button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button>`}</div></div>
+      ${OC_RAPIDA() && podeEditar() ? `<button class="btn primary" type="button" data-act="ocorr-rapida">${ico("plus")} Ocorrência</button>` : ""}${paisagem.matches ? "" : tv ? `<button class="btn" type="button" data-act="aovivo-tv">Sair do modo TV</button>` : `<button class="btn" type="button" data-act="aovivo-tv">Modo TV</button><button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button>`}</div></div>
     <section class="av-agora"><span class="lbl">Agora</span><h2>${agora ? esc(agora.atv) : prox ? "Aguardando início" : "Dia encerrado"}</h2>
       ${agora ? `<p>${[agora.local, agora.resp].filter(Boolean).map(esc).join(" · ")}${M[agora.id].ini ? ` · desde ${esc(M[agora.id].ini)}${agora.hora ? ` (previsto ${esc(agora.hora)})` : ""}` : ""}</p>` : ""}${avBtn(agora, "fim")}</section>
     <section class="av-prox"><span class="lbl">Próximo</span><h3>${prox ? esc(prox.atv) : "—"}</h3>
@@ -1010,6 +1010,8 @@ function vAoVivo() {
 setInterval(() => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) render(); }, 30000);
 /* Ao vivo 2 (01/11/2026, só DEMO): marcar daqui, contagem na pista, ocorrência rápida, pôr do sol, aviso 10 min antes e últimas marcações */
 const AOVIVO2 = () => DEMO;
+const OC_RAPIDA = () => true;    // + Ocorrência rápida no Ao vivo: app real desde 01/11/2026
+const POR_DO_SOL = () => true;   // pôr do sol no Ao vivo: app real desde 01/11/2026
 const avAvisoLigado = () => store.get("adm3-av-aviso") === "1";
 function avBtn(i, tipo) {
   if (!AOVIVO2() || !i || !podeMarcar(eu())) return "";
@@ -1047,7 +1049,7 @@ function avPista() {
     <button class="chip ${c.atend ? "wait" : ""}" type="button" data-go="ocorrencias">${c.atend} em atendimento</button></div></section>`;
 }
 function avSol() {
-  if (!AOVIVO2()) return "";
+  if (!POR_DO_SOL()) return "";
   const c = climaDados(), d = c && c.d && c.d.daily; if (!d || !d.sunset) return "";
   const hoje = hojeISO(), i = Math.max(0, d.time.indexOf(hoje)), hm = x => String(x || "").slice(11, 16);
   const agora = minDe(agoraHM()), por = minDe(hm(d.sunset[i])), nasce = minDe(hm(d.sunrise[i])), nasceAm = hm(d.sunrise[i + 1] || d.sunrise[i]);
