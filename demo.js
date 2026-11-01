@@ -1611,6 +1611,7 @@ window.ADM_DEMO.notifs = [
   const t = window.ADM_DEMO.docs.find(d => d.col === "tops" && d.id === "top1922"); if (!t) return;
   const dia = n => new Date(Date.now() + n * 864e5).toLocaleDateString("sv");
   if (!t.data.inicio) { t.data.inicio = dia(9); t.data.fim = dia(12); }
+  if (!t.data.linkInsc) t.data.linkInsc = "https://exemplo.com/inscricao-top-demo";
 })();
 // importação do dia (2 de 4 feitas hoje) e último backup há 8 dias, para mostrar o lembrete
 (function () {

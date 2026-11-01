@@ -184,6 +184,7 @@ const VIEWS = [
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
   { id: "meta", l: "Meta do TOP", c: "Meta", i: "chart", all: true, menu: true },   // meta de inscrições até o TOP e indicações das equipes (Estratégia 150)
+  { id: "agenda", l: "Agenda", i: "clock", all: true, menu: true },   // todos os eventos de divulgação e o TOP, com quem vai e o link de presença
   { id: "importacao", l: "Importação do dia", c: "Importação", i: "upload", need: ["participantes", "legendarios"], org: true },   // as 4 planilhas do dia com ✓
   { id: "tops", l: "Tops", i: "flag" },
   { id: "usuarios", l: "Usuários", i: "key", owner: true },
@@ -201,13 +202,13 @@ const NIVEIS = [
 const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && (!v.demo || DEMO) && liberada(v));
 // a página já foi lançada no app real? (o que ainda está só na demo não aparece no menu nem em Usuários)
 const liberada = v => !(v.org && !ORG()) && !(v.extra && !EXTRA()) && !(v.nfc && !NFC()) && !(v.id === "campo" && !CAMPO()) && !(v.id === "celulares" && !CEL())
-  && !(TOP2_VIEWS.includes(v.id) && !TOP2() && !(v.id === "transporte" && TRANSP())) && !(v.id === "carros" && TRANSP()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM()) && !(v.id === "meta" && !META());
+  && !(TOP2_VIEWS.includes(v.id) && !TOP2() && !(v.id === "transporte" && TRANSP())) && !(v.id === "carros" && TRANSP()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM()) && !(v.id === "meta" && !META()) && !(v.id === "agenda" && !META());
 // "_v2" marca o cadastro salvo já com a escolha página por página; cadastros antigos seguem a regra antiga (página que usa dados de outra aparece junto)
 const ABA_V2 = "_v2";
 /* Coordenadores e subcoordenadores de equipe (demo): perfil "coord" no cadastro, só leitura, vê só a própria equipe */
 const COORD = () => true;   // liberado no app real em 31/10/2026 (precisa do supabase/coordenadores.sql)
 const COORD_ABAS = ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista", "financeiro"];   // no Financeiro o coordenador só lança os gastos da equipe
-const COORD_VER = ["painel", ...COORD_ABAS, "meta"];
+const COORD_VER = ["painel", ...COORD_ABAS, "meta", "agenda"];
 const coordAbasSalvar = () => [...COORD_ABAS, "legendarios", ABA_V2];   // "legendarios" só para o banco liberar a equipe dele (a página Legendários fica escondida)
 const ehCoordEq = () => COORD() && !!ME.coord;
 const ehCoordCad = e => COORD() && e && e.perfil === "coord";
@@ -225,7 +226,7 @@ const canSee = v => {
   if (v.id === "carros" && TRANSP()) return false;   // os Carros ficam dentro do Transporte
   if ((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
-  if (v.id === "meta" && !META()) return false;
+  if ((v.id === "meta" || v.id === "agenda") && !META()) return false;
   if (!ME.acesso) return v.id === "painel";
   if (ehCoordEq()) return COORD_VER.includes(v.id);   // coordenador de equipe: só as páginas dele, sem saúde, telefones e pagamentos
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
@@ -1193,7 +1194,7 @@ const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca e
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
-const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["meta", "participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
+const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["meta", "agenda", "participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
   ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
@@ -1340,6 +1341,7 @@ function licoesForm() {
 
 /* ---------- Guia "Como usar": o que fazer em cada página, só das páginas que a pessoa vê ---------- */
 const GUIA = {
+  agenda: ["Agenda", ["Todos os eventos de divulgação do Legendários e o TOP, por mês.", "Toque num evento para ver quantos vão, quem vai e mandar o link para mais pessoas confirmarem.", "Qualquer coordenador pode criar um evento em \"Novo evento\"."]],
   painel: ["Visão geral do TOP", ["Mostra quantos dias faltam, quantos estão prontos e o que fazer hoje.", "Toque em qualquer item de \"O que fazer hoje\" para ir direto à tela certa."]],
   participantes: ["Lista dos senderistas", ["Toque no status de atestado ou termo para avançar.", "O lápis abre a ficha completa. Quem mexe por último vira o ADM responsável."]],
   legendarios: ["Lista dos legendários", ["Mesma ideia dos senderistas: atestado, termo e equipe de cada um."]],
@@ -5348,7 +5350,7 @@ function metaPlacar() {
     ``, `*Nomes indicados por equipe*`, ...E.filter(e => e.nomes).sort((a, b) => b.nomes / b.metaNomes - a.nomes / a.metaNomes).map(e => `• ${e.e}: ${e.nomes} de ${e.metaNomes}${e.nomes >= e.metaNomes ? " 🏆" : ""}${e.insc ? ` · ${e.insc} inscrito(s)` : ""}`),
     ...(() => { const at = tarLista(D).filter(t => t.sit === "atrasada"), por = {}; at.forEach(t => { por[t.equipe] = (por[t.equipe] || 0) + 1; });
       return at.length ? [``, `*Tarefas atrasadas*`, ...Object.entries(por).map(([e, n]) => `• ${e}: ${n}`)] : [``, `Tarefas em dia ✅`]; })(),
-    ...(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 4); return A.length ? [``, `*Próximas ações*`, ...A.map(a => `• ${a.titulo} · ${acaoQuando(a)}`)] : []; })(),
+    ...(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 4); return A.length ? [``, `*Próximos eventos*`, ...A.map(a => `• ${a.titulo} · ${acaoQuando(a)}`)] : []; })(),
     ``, `Bora juntos! 💪`].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
 }
 function metaCoordCard() {
@@ -5357,9 +5359,9 @@ function metaCoordCard() {
     ${e ? `<div class="meta-mini"><div><span class="lbl">Nomes indicados</span><b class="num">${e.nomes}<small> de ${e.metaNomes}</small></b><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div></div>
       <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : `<p class="hint">Sua equipe ainda não tem servidores contados para a meta.</p>`}
     <p class="hint" style="margin:0">Placar geral: <b class="num">${D.inscritos}</b> inscritos de ${D.meta} · meta para hoje ${D.metaHoje}</p>
-    <div class="actions"><button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button><button class="btn" type="button" data-acao-novo="1">${ico("plus")} Nova ação</button>${mine.length ? `<span class="hint">${mine.length} indicação(ões) da equipe</span>` : ""}</div></section>
+    <div class="actions"><button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button><button class="btn" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>${mine.length ? `<span class="hint">${mine.length} indicação(ões) da equipe</span>` : ""}</div></section>
   ${(() => { const T = tarLista(D).filter(t => t.equipe === ME.equipeLgnd && (t.sit === "atrasada" || t.sit === "semana")); return T.length ? `<section class="panel"><h3>Tarefas da equipe nesta semana <small>${T.length}</small><button class="linkbtn" type="button" data-meta-aba="tar">ver todas ›</button></h3><div class="list">${T.map(tarLi).join("")}</div></section>` : ""; })()}
-  ${(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 3); return A.length ? `<section class="panel"><h3>Próximas ações <button class="linkbtn" type="button" data-meta-aba="acoes">ver ›</button></h3><div class="acao-lista">${A.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.equipe)} · ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div></section>` : ""; })()}`;
+  ${(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 3); return A.length ? `<section class="panel"><h3>Próximos eventos <button class="linkbtn" type="button" data-go="agenda">agenda ›</button></h3><div class="acao-lista">${A.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.equipe)} · ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div></section>` : ""; })()}`;
 }
 function vMeta() {
   const D = metaDados(), E = metaEquipes(D), I = indTodas(), ed = podeEditar(), fmt = d => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
@@ -5481,9 +5483,9 @@ function vMetaTarefas(D) {
       <div class="kpi"><span class="lbl">Feitas</span><span class="val num">${L.filter(t => t.feito).length}<small style="font-size:.5em;color:var(--muted)"> / ${L.length}</small></span></div></div>
     ${grp.map(([k, l]) => { const g = L.filter(t => t.sit === k); return g.length ? `<section class="panel"><h3>${l} <small>${g.length}</small></h3><div class="list">${(k === "feito" ? g.slice(-8) : g).map(tarLi).join("")}</div></section>` : ""; }).join("")}`;
 }
-/* Ações de captação (ida à igreja, panfletagem, pré-TOP…): config acao-<top>-<membroId> {lista:[{id,tipo,titulo,data,hora,local,endereco,equipe,obs,token,por,em,resultado}]}.
+/* Eventos de divulgação (ida à igreja, panfletagem, pré-TOP…; na tela se chamam "Eventos"): config acao-<top>-<membroId> {lista:[{id,tipo,titulo,data,hora,local,endereco,equipe,obs,token,por,em,resultado}]}.
    Link de presença acao.html (na demo, localStorage "adm3-acao-link"; no real, RPC adm_acao_confirmar). Convite em PDF para os legendários. */
-const ACAO_TIPOS = ["Apresentação em igreja", "Panfletagem", "Pré-TOP", "Encontro de apresentação", "Outro"];
+const ACAO_TIPOS = ["Apresentação em igreja", "Panfletagem", "Pré-TOP", "Encontro de apresentação", "Encontro de legendários", "Culto ou célula", "Outro"];
 const ACAO_LS = "adm3-acao-link";
 const acaoDocMeu = () => "acao-" + curTopId() + "-" + (ME.id || "eu");
 function acoesTodas() { const pre = "acao-" + curTopId() + "-"; return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k }))).sort((a, b) => String(a.data + a.hora).localeCompare(String(b.data + b.hora))); }
@@ -5502,7 +5504,7 @@ function acaoSalvar(doc, item, msg, apagar) {
 function acaoForm(a) {
   if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }
   const novo = !a; a = a || { tipo: ACAO_TIPOS[0], equipe: ehCoordEq() ? ME.equipeLgnd : "", data: "", hora: "19:00" };
-  modal(`<h3>${novo ? "Nova ação de captação" : "Editar ação"}</h3><div class="form">
+  modal(`<h3>${novo ? "Novo evento" : "Editar evento"}</h3><div class="form">
     <div class="field full"><label for="ac-tp">Tipo</label><select id="ac-tp" name="tipo" class="sel">${ACAO_TIPOS.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</select></div>
     <div class="field full"><label for="ac-ti">Título</label><input id="ac-ti" name="titulo" value="${esc(a.titulo || "")}" placeholder="ex.: Apresentação na Igreja Batista Central" required></div>
     <div class="field"><label for="ac-d">Dia</label><input id="ac-d" name="data" type="date" value="${esc(a.data || "")}" required></div>
@@ -5518,8 +5520,8 @@ function acaoForm(a) {
     const item = { ...a, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: fd.get("tipo"), titulo, data,
       hora: String(fd.get("hora") || ""), local: String(fd.get("local") || "").trim(), endereco: String(fd.get("endereco") || "").trim(), equipe: String(fd.get("equipe") || ""), vagas: +fd.get("vagas") || 0,
       obs: String(fd.get("obs") || "").trim(), por: a.por || ME.adm || "", em: a.em || new Date().toISOString() };
-    closeModal(); acaoSalvar(a.doc || acaoDocMeu(), item, novo ? "Ação criada: agora mande o link e o convite" : "Ação salva"); });
-  const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); acaoSalvar(a.doc, null, "Ação excluída", a.id); };
+    closeModal(); acaoSalvar(a.doc || acaoDocMeu(), item, novo ? "Evento criado: agora mande o link e o convite" : "Evento salvo"); });
+  const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); acaoSalvar(a.doc, null, "Evento excluído", a.id); };
 }
 async function acaoPdf(a) {
   const jsPDF = await carregarPdf(), C = PDF_COR, [logo, fundo] = await Promise.all([imagemDataUrl("assets/logo.png"), imagemDataUrl("assets/bg.jpg")]);
@@ -5560,20 +5562,58 @@ function acaoVer(a) {
   const ed = $("#acEd"); if (ed) ed.onclick = () => { closeModal(); acaoForm(a); };
 }
 function vMetaAcoes(D) {
-  const A = acoesTodas(), hoje = hojeISO();   // todos veem todas as ações (legendário de outra equipe também pode ir)
+  const A = acoesTodas(), hoje = hojeISO();   // todos veem todos os eventos (legendário de outra equipe também pode ir)
   const prox = A.filter(a => a.data >= hoje), pass = A.filter(a => a.data < hoje).reverse();
   const card = a => { const c = acaoConfirmados(a).length, d = new Date(a.data + "T12:00:00");
     return `<button class="acao-c ${a.equipe === ME.equipeLgnd ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="acao-d"><b class="num">${String(d.getDate()).padStart(2, "0")}</b><small>${d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</small></span>
       <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.tipo)} · ${esc(a.equipe)}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
       <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
-  return `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Idas a igrejas, panfletagens e o pré-TOP. Cada ação tem um link para os legendários confirmarem presença e um convite em PDF.</p>
-      ${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Nova ação</button>` : ""}</div>
-    <section class="panel"><h3>Próximas <small>${prox.length}</small></h3>${prox.length ? `<div class="acao-lista">${prox.map(card).join("")}</div>` : `<div class="empty">Nenhuma ação marcada. Que tal a primeira ida a uma igreja?</div>`}</section>
+  return `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Idas a igrejas, panfletagens, pré-TOP e encontros. Cada evento tem um link para os legendários confirmarem presença e um convite em PDF. Tudo aparece também na Agenda.</p>
+      ${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}</div>
+    <section class="panel"><h3>Próximas <small>${prox.length}</small></h3>${prox.length ? `<div class="acao-lista">${prox.map(card).join("")}</div>` : `<div class="empty">Nenhum evento marcado. Que tal a primeira ida a uma igreja?</div>`}</section>
     ${pass.length ? `<section class="panel"><h3>Já aconteceram <small>${pass.length}</small></h3><div class="acao-lista">${pass.map(card).join("")}</div></section>` : ""}`;
+}
+/* Agenda: eventos de divulgação + os TOPs, por mês. Toque no evento: quantos vão, quem vai e o link de presença. */
+function agTops() { return (S.tops.length ? S.tops : [topDoc()].filter(Boolean)).filter(t => t.inicio); }
+function vAgenda() {
+  const hoje = hojeISO(), M = [];
+  acoesTodas().forEach(a => M.push({ k: "ev", data: a.data, fim: a.data, a }));
+  agTops().forEach(t => M.push({ k: "top", data: t.inicio, fim: t.fim || t.inicio, t }));
+  M.sort((x, y) => String(x.data + (x.a ? x.a.hora : "")).localeCompare(String(y.data + (y.a ? y.a.hora : ""))));
+  const prox = M.filter(x => x.fim >= hoje), pass = M.filter(x => x.fim < hoje).reverse(), L = S.agPass ? pass : prox;
+  const mes = d => { const t = new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }); return t[0].toUpperCase() + t.slice(1); };
+  const dia = d => { const x = new Date(d + "T12:00:00"); return `<span class="acao-d"><b class="num">${String(x.getDate()).padStart(2, "0")}</b><small>${x.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</small></span>`; };
+  const card = x => {
+    if (x.k === "top") { const t = x.t, atual = t.id === curTopId(), n = atual ? S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).length : null;
+      return `<button class="acao-c ag-top" type="button" data-ag-top="${esc(t.id)}">${dia(t.inicio)}<span class="grow"><b>${esc(t.nome)} <span class="chip acc">TOP</span></b><small class="hint">${esc(fmtPeriodo(t))}${t.local ? " · " + esc(t.local) : ""}</small></span>${n != null ? `<span class="chip ok">${n} inscritos</span>` : ""}</button>`; }
+    const a = x.a, c = acaoConfirmados(a).length;
+    return `<button class="acao-c ${a.equipe === ME.equipeLgnd ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
+      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.tipo)} · ${esc(a.equipe)}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
+      <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
+  const grupos = []; L.forEach(x => { const m = mes(x.data), g = grupos[grupos.length - 1]; if (g && g.m === m) g.l.push(x); else grupos.push({ m, l: [x] }); });
+  const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
+  return `<div class="head"><div><h2>Agenda</h2><p>Eventos para levar o Legendários a mais homens, e o TOP. Toque num evento para ver quem vai e mandar o link.</p></div>
+      <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}</div></div>
+    <div class="kpis ag-kpis"><div class="kpi"><span class="lbl">Próximos eventos</span><span class="val num">${nEv}</span></div><div class="kpi"><span class="lbl">Legendários confirmados</span><span class="val num">${nVao}</span><span class="sub">nos próximos eventos</span></div></div>
+    <div class="seg" role="tablist"><button type="button" ${S.agPass ? 'data-ag-pass="1"' : ""} aria-pressed="${!S.agPass}">Próximos <small>${prox.length}</small></button><button type="button" ${S.agPass ? "" : 'data-ag-pass="1"'} aria-pressed="${!!S.agPass}">Já aconteceram <small>${pass.length}</small></button></div>
+    ${grupos.length ? grupos.map(g => `<section class="panel"><h3>${esc(g.m)} <small>${g.l.length}</small></h3><div class="acao-lista">${g.l.map(card).join("")}</div></section>`).join("")
+      : `<section class="panel"><div class="empty">${S.agPass ? "Nenhum evento passado ainda." : "Nada marcado. Toque em Novo evento para colocar a primeira ida a uma igreja."}</div></section>`}`;
+}
+function fmtPeriodo(t) { const f = d => new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", ""); return t.fim && t.fim !== t.inicio ? `${f(t.inicio)} a ${f(t.fim)}` : f(t.inicio); }
+function agTopVer(t) {
+  const atual = t.id === curTopId(), P = atual ? S.P.filter(p => !cancelado(p)) : [], sen = P.filter(p => p.tipo !== "legendario").length, leg = P.filter(p => p.tipo === "legendario").length;
+  const D = atual && META() ? metaDados() : null, l = t.linkInsc || "", msg = `*${t.nome}*\n${fmtPeriodo(t)}${t.local ? " · " + t.local : ""}\n\nVem viver o TOP do Legendários! Inscrição: ${l}`;
+  modal(`<h3>${esc(t.nome)}</h3><p class="hint" style="margin:0">${esc(fmtPeriodo(t))}${t.local ? " · " + esc(t.local) : ""}</p>
+    ${atual ? `<div class="kpis ag-kpis"><div class="kpi"><span class="lbl">Senderistas inscritos</span><span class="val num">${sen}</span>${D ? `<span class="sub">meta: ${D.meta}</span>` : ""}</div><div class="kpi"><span class="lbl">Legendários servindo</span><span class="val num">${leg}</span></div></div>` : `<p class="hint">Os números aparecem quando este TOP estiver aberto no app.</p>`}
+    ${l ? `<div class="actions" style="flex-wrap:wrap"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Mandar link de inscrição</a><button class="btn" type="button" id="agCopiar">Copiar link</button></div>`
+      : `<p class="hint">${podeTops() ? "Coloque o link de inscrição em Editar TOP para mandar daqui." : "O link de inscrição ainda não foi colocado no app."}</p>`}
+    <div class="modal-foot"><span></span><div class="actions">${podeTops() && S.tops.length ? `<button class="btn ghost" type="button" id="agEd">${ico("edit")} Editar TOP</button>` : ""}${atual && canSee(VIEWS.find(v => v.id === "participantes")) ? `<button class="btn ghost" type="button" data-go="participantes">Ver inscritos</button>` : ""}<button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
+  const c = $("#agCopiar"); if (c) c.onclick = () => copiarTexto(l, "Link copiado");
+  const e = $("#agEd"); if (e) e.onclick = () => { closeModal(); topForm(t); };
 }
 function metaAbas(aba) {
   const at = tarLista(metaDados()).filter(t => t.sit === "atrasada" && (!ehCoordEq() || t.equipe === ME.equipeLgnd)).length;
-  return `<div class="seg meta-abas" role="tablist">${[["placar", "Placar"], ["ind", "Indicações"], ["tar", "Tarefas" + (at ? ` <span class="badge num">${at}</span>` : "")], ["acoes", "Ações"]].map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
+  return `<div class="seg meta-abas" role="tablist">${[["placar", "Placar"], ["ind", "Indicações"], ["tar", "Tarefas" + (at ? ` <span class="badge num">${at}</span>` : "")], ["acoes", "Eventos"]].map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
 }
 function metaAjustarForm() {
   const D = metaDados();
@@ -5656,6 +5696,7 @@ function render() {
     : v === "notificacoes" ? vNotificacoes()
     : v === "estoque" ? vEstoque()
     : v === "meta" ? vMeta()
+    : v === "agenda" ? vAgenda()
     : v === "importacao" ? vImportacao()
     : v === "postop" ? vPosTop()
     : v === "nfc" ? vNfc()
@@ -5939,6 +5980,7 @@ function topForm(t) {
       <div class="field full"><label for="f-tlocal">Local</label><input id="f-tlocal" name="local" value="${esc(t.local)}"></div>
       <div class="field"><label for="f-tinicio">Início</label><input id="f-tinicio" name="inicio" type="date" value="${esc(t.inicio)}"></div>
       <div class="field"><label for="f-tfim">Fim</label><input id="f-tfim" name="fim" type="date" value="${esc(t.fim)}"></div>
+      ${META() ? `<div class="field full"><label for="f-tlink">Link de inscrição (aparece na Agenda)</label><input id="f-tlink" name="linkInsc" type="url" value="${esc(t.linkInsc || "")}" placeholder="https://…"></div>` : ""}
       ${novo ? `<div class="field full"><div class="checks"><label><input type="checkbox" id="f-tcopy" name="copiar" checked> Copiar as tarefas do checklist do ${esc(topName(atualId()))}, zeradas</label></div></div>`
         : `<div class="field"><label for="f-tstatus">Situação</label>${sel("status", [{ v: "ativo", l: "Em andamento" }, { v: "finalizado", l: "Finalizado" }], t.status)}</div>`}
     </div>
@@ -5947,6 +5989,7 @@ function topForm(t) {
   async (fd) => {
     const nome = String(fd.get("nome") || "").trim(); if (!nome) { $("#f-tnome").focus(); return; }
     const data = { nome, local: String(fd.get("local") || "").trim(), inicio: String(fd.get("inicio") || ""), fim: String(fd.get("fim") || "") };
+    if (fd.has("linkInsc")) data.linkInsc = String(fd.get("linkInsc") || "").trim();
     closeModal();
     if (!novo) { data.status = fd.get("status"); await save(() => api.update("tops", t.id, data), "TOP atualizado"); return; }
     const id = "top-" + norm(nome).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) + "-" + Date.now().toString(36);
@@ -6318,6 +6361,8 @@ document.addEventListener("click", e => {
   if (d.tarEd) { const t = tarLista(metaDados()).find(x => x.id === d.tarEd); if (t) tarForm(t); return; }
   if (d.tarNovo) { tarForm(); return; }
   if (d.acaoNovo) { acaoForm(); return; }
+  if (d.agTop) { const t = S.tops.find(x => x.id === d.agTop) || topDoc(); if (t) agTopVer(t); return; }
+  if (d.agPass) { S.agPass = !S.agPass; render(); return; }
   if (d.acaoVer) { const [doc, id] = d.acaoVer.split("|"), a = acoesTodas().find(x => x.doc === doc && x.id === id); if (a) acaoVer(a); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
