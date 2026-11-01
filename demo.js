@@ -1856,3 +1856,19 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     { id: "mp5", tipo: "ambulancia", nome: "Ambulância", obs: "Fica no portão da base o TOP todo.", lat: -20.203521, lng: -47.27185, por: "Vinicius Moreira", em: h(500) },
   ] } });
 })();
+// META DO TOP (demo): meta pequena para a demo (10 vagas) e algumas indicações das equipes
+(function () {
+  const h = horas => new Date(Date.now() - horas * 3600e3).toISOString(), D = window.ADM_DEMO.docs;
+  D.push({ col: "config", id: "meta-top1922", data: { vagas: 10, desist: 10 } });
+  D.push({ col: "config", id: "indic-top1922-m-coord", data: { lista: [
+    { id: "in1", nome: "Rafael Nogueira Lima", tel: "", quem: "Marcelo Duarte Lima", equipe: "Segurança", canal: "Indicação pessoal", status: "contatado", em: h(400), por: "Fábio Henrique Alves" },
+    { id: "in2", nome: "Juliano Batista Rocha", tel: "16 99200-0001", quem: "Paulo Roberto Nunes", equipe: "Segurança", canal: "Indicação pessoal", status: "novo", em: h(70), por: "Fábio Henrique Alves" },
+    { id: "in3", nome: "Diego Martins Alves", tel: "16 99200-0002", quem: "Fábio Henrique Alves", equipe: "Segurança", canal: "Igreja", status: "interessado", em: h(120), por: "Fábio Henrique Alves" },
+  ] } });
+  D.push({ col: "config", id: "indic-top1922-m-dono", data: { lista: [
+    { id: "in4", nome: "Pedro Henrique Alves", tel: "", quem: "Gustavo Ferreira Reis", equipe: "Mídia", canal: "Redes sociais", status: "contatado", em: h(300), por: "Vinicius Moreira" },
+    { id: "in5", nome: "Caio Fernandes Souza", tel: "16 99200-0003", quem: "Anderson Silva Rocha", equipe: "Logística", canal: "Indicação pessoal", status: "novo", em: h(10), por: "Vinicius Moreira" },
+    { id: "in6", nome: "Bruno Lopes Andrade", tel: "16 99200-0004", quem: "Eduardo Teixeira Luz", equipe: "Intercessão", canal: "Igreja", status: "nao", em: h(200), por: "Vinicius Moreira", obs: "Vai no próximo, está viajando" },
+    { id: "in7", nome: "Márcio Vieira Dias", tel: "16 99200-0005", quem: "Leonardo Prado Souza", equipe: "Mídia", canal: "Panfletagem", status: "novo", em: h(90), por: "Vinicius Moreira" },
+  ] } });
+})();

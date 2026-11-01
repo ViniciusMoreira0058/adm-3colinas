@@ -183,6 +183,7 @@ const VIEWS = [
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
+  { id: "meta", l: "Meta do TOP", c: "Meta", i: "chart", all: true, menu: true },   // meta de inscrições até o TOP e indicações das equipes (Estratégia 150)
   { id: "importacao", l: "Importação do dia", c: "Importação", i: "upload", need: ["participantes", "legendarios"], org: true },   // as 4 planilhas do dia com ✓
   { id: "tops", l: "Tops", i: "flag" },
   { id: "usuarios", l: "Usuários", i: "key", owner: true },
@@ -200,13 +201,13 @@ const NIVEIS = [
 const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && (!v.demo || DEMO) && liberada(v));
 // a página já foi lançada no app real? (o que ainda está só na demo não aparece no menu nem em Usuários)
 const liberada = v => !(v.org && !ORG()) && !(v.extra && !EXTRA()) && !(v.nfc && !NFC()) && !(v.id === "campo" && !CAMPO()) && !(v.id === "celulares" && !CEL())
-  && !(TOP2_VIEWS.includes(v.id) && !TOP2() && !(v.id === "transporte" && TRANSP())) && !(v.id === "carros" && TRANSP()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM());
+  && !(TOP2_VIEWS.includes(v.id) && !TOP2() && !(v.id === "transporte" && TRANSP())) && !(v.id === "carros" && TRANSP()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM()) && !(v.id === "meta" && !META());
 // "_v2" marca o cadastro salvo já com a escolha página por página; cadastros antigos seguem a regra antiga (página que usa dados de outra aparece junto)
 const ABA_V2 = "_v2";
 /* Coordenadores e subcoordenadores de equipe (demo): perfil "coord" no cadastro, só leitura, vê só a própria equipe */
 const COORD = () => true;   // liberado no app real em 31/10/2026 (precisa do supabase/coordenadores.sql)
 const COORD_ABAS = ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista", "financeiro"];   // no Financeiro o coordenador só lança os gastos da equipe
-const COORD_VER = ["painel", ...COORD_ABAS];
+const COORD_VER = ["painel", ...COORD_ABAS, "meta"];
 const coordAbasSalvar = () => [...COORD_ABAS, "legendarios", ABA_V2];   // "legendarios" só para o banco liberar a equipe dele (a página Legendários fica escondida)
 const ehCoordEq = () => COORD() && !!ME.coord;
 const ehCoordCad = e => COORD() && e && e.perfil === "coord";
@@ -224,6 +225,7 @@ const canSee = v => {
   if (v.id === "carros" && TRANSP()) return false;   // os Carros ficam dentro do Transporte
   if ((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
+  if (v.id === "meta" && !META()) return false;
   if (!ME.acesso) return v.id === "painel";
   if (ehCoordEq()) return COORD_VER.includes(v.id);   // coordenador de equipe: só as páginas dele, sem saúde, telefones e pagamentos
   if ((VIEWS.find(x => x.id === v.id) || v).demo && !DEMO) return false;
@@ -1191,7 +1193,7 @@ const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca e
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
-const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
+const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["meta", "participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
   ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
@@ -5225,9 +5227,160 @@ function vPainelCoord() {
   <div class="coord-tiles">${tiles.map(v => `<button class="coord-tile" type="button" data-go="${v.id}">${ico(v.id === "equipes" ? "shield" : v.i)}<b>${v.id === "equipes" ? "Minha equipe" : esc(v.l)}</b>${v.id === "equipes" ? `<small class="num">${m.length} legendários</small>` : ""}</button>`).join("")}</div>
   <section class="panel"><h3>Equipe ${esc(ME.equipeLgnd || "")} <small>${m.length}</small><button class="linkbtn" type="button" data-go="equipes">ver ›</button></h3>
     ${m.length ? `<div class="list">${m.slice(0, 6).map(p => `<div class="li"><span class="grow">${esc(p.nome)}</span>${p.funcao ? `<span class="chip ${FUNC_ORDEM(p.funcao) < 2 ? "ok" : ""}">${esc(p.funcao)}</span>` : ""}</div>`).join("")}</div>${m.length > 6 ? `<p class="hint">e mais ${m.length - 6}.</p>` : ""}` : `<div class="empty">Ninguém na sua equipe ainda.</div>`}</section>
+  ${META() ? metaCoordCard() : ""}
   <p class="hint">Seu acesso é somente leitura. Dados de saúde, telefones, pendências e pagamentos ficam só com a ADM.</p>`;
 }
 
+/* ---------- Meta do TOP (Estratégia 150), só na DEMO ----------
+   A meta nasce sozinha de cada TOP: vagas (padrão 150) + 10% de desistência, espalhada pelas semanas até o TOP na curva do PDF.
+   Equipes: nomes e inscritos por indicação divididos pelo nº de servidores (legendários da equipe; sem legendários ainda, usa o TOP anterior).
+   Indicações: config indic-<top>-<membroId> {lista:[{id,nome,tel,quem,equipe,canal,status,em,contatoEm,contatoPor,obs}]} (cada um grava o seu; coordenador também).
+   Ajustes do dono: config meta-<top> {vagas, desist}. Inscrito = senderista do TOP com o mesmo telefone ou nome. */
+const META = () => DEMO;
+const META_CURVA = [0, 0, 5, 15, 28, 42, 58, 75, 92, 108, 125, 142, 158, 165];   // acumulado no fim das semanas -13 … 0 (PDF)
+const META_CHECK = [[10, 10], [7, 45], [4, 90], [2, 125]];   // semana antes do TOP, mínimo (para 165)
+const IND_CANAIS = ["Indicação pessoal", "Igreja", "Redes sociais", "Panfletagem"];
+const IND_ST = [{ v: "novo", l: "Sem contato", c: "wait" }, { v: "contatado", l: "Contatado", c: "" }, { v: "interessado", l: "Interessado", c: "ok" }, { v: "nao", l: "Não vai agora", c: "" }];
+const metaCfg = () => cfgDe("meta-" + curTopId()) || {};
+const diaISO = d => d.toISOString().slice(0, 10);
+function topAnterior() { const td = topDoc(); if (!td) return null; const L = [...S.tops].filter(t => t.id !== td.id && (t.inicio || "") < (td.inicio || "9")).sort((a, b) => String(b.inicio || "").localeCompare(String(a.inicio || ""))); return L[0] || null; }
+function metaDados() {
+  const td = topDoc() || {}, c = metaCfg(), vagas = +c.vagas || +td.vagas || 150, desist = c.desist != null ? +c.desist : 10;
+  const meta = Math.round(vagas * (1 + desist / 100));
+  const fimD = td.inicio ? new Date(td.inicio + "T00:00:00") : null;
+  const iniD = fimD ? new Date(fimD - 91 * 864e5) : null;   // ciclo de 13 semanas antes do TOP
+  const hoje = new Date(), esc165 = x => Math.round(x * meta / 165);
+  // meta acumulada em um dia, pelas semanas que faltam para o TOP (igual ao PDF: semana -13 = 0, semana 0 = meta)
+  const metaEm = d => { const w = (fimD - d) / (7 * 864e5); if (w >= 13) return 0; if (w <= 0) return meta; const x = 13 - w, i = Math.floor(x), a = META_CURVA[i], b = META_CURVA[Math.min(i + 1, 13)]; return esc165(a + (b - a) * (x - i)); };
+  const metaHoje = fimD ? metaEm(hoje) : 0;
+  const dias = fimD ? Math.ceil((fimD - hoje) / 864e5) : null, semana = dias == null ? null : -Math.max(0, Math.ceil(dias / 7));
+  const sen = S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)), inscritos = sen.length;
+  const checks = META_CHECK.map(([w, m]) => { const d = fimD ? new Date(fimD - w * 7 * 864e5) : null; return { w, min: esc165(m), d, passou: d && d <= hoje }; });
+  // semanas para o gráfico: meta x real (pelo dia em que a pessoa entrou no app)
+  const semanas = []; if (fimD && iniD) { for (let d = new Date(iniD); d < fimD; d = new Date(+d + 7 * 864e5)) { const fimS = new Date(Math.min(+d + 7 * 864e5, +fimD));
+    semanas.push({ d, meta: metaEm(fimS), real: fimS <= hoje ? sen.filter(p => !p.criadoEm || new Date(p.criadoEm) < fimS).length : null }); } }
+  return { td, vagas, desist, meta, metaHoje, dias, semana, inscritos, checks, semanas, iniD, fimD };
+}
+function indTodas() { const pre = "indic-" + curTopId() + "-"; return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k }))); }
+const indDocMeu = () => "indic-" + curTopId() + "-" + (ME.id || "eu");
+function indInscrito(x) { const t = telLimpo(x.tel).slice(-10), n = norm(x.nome || "").trim();
+  return S.P.find(p => p.tipo !== "legendario" && !cancelado(p) && ((t.length >= 10 && telLimpo(p.telefone).slice(-10) === t) || (n && norm(p.nome).trim() === n))) || null; }
+const indAtrasada = x => x.status === "novo" && !indInscrito(x) && Date.now() - Date.parse(x.em) > 48 * 3600e3;
+function metaEquipes(D) {
+  let lgs = S.P.filter(p => p.tipo === "legendario" && !cancelado(p) && p.equipe);
+  if (!lgs.length) { const a = topAnterior(); if (a) lgs = S.pessoas.filter(p => topOf(p) === a.id && p.tipo === "legendario" && p.equipe); }
+  const tot = lgs.length || 1, nomesTot = Math.round(D.meta * 300 / 165), inscTot = Math.round(D.meta * 99 / 165), I = indTodas();
+  return equipesUsadas().map(e => { const n = lgs.filter(p => p.equipe === e).length; if (!n) return null;
+    const ind = I.filter(x => x.equipe === e), ok = ind.filter(indInscrito).length;
+    return { e, n, nomes: ind.length, metaNomes: Math.max(1, Math.round(nomesTot * n / tot)), insc: ok, metaInsc: Math.max(1, Math.round(inscTot * n / tot)) }; }).filter(Boolean);
+}
+const podeIndicar = () => podeEditar() || ehCoordEq();
+function indForm(x) {
+  if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }
+  const novo = !x, eq = ehCoordEq() ? ME.equipeLgnd : (x && x.equipe) || "";
+  x = x || { canal: "Indicação pessoal", status: "novo", quem: ME.adm || "", equipe: eq };
+  modal(`<h3>${novo ? "Indicar nome" : "Editar indicação"}</h3>
+    <p class="hint" style="margin:0">Quem você convidou para o próximo TOP. A ADM faz o contato em até 48 h, e quando a pessoa se inscrever ela conta sozinha para a sua equipe.</p>
+    <div class="form">
+      <div class="field full"><label for="ix-n">Nome</label><input id="ix-n" name="nome" value="${esc(x.nome || "")}" required autocomplete="off"></div>
+      <div class="field"><label for="ix-t">Telefone (WhatsApp)</label><input id="ix-t" name="tel" type="tel" value="${esc(x.tel || "")}" placeholder="(16) 99999-9999"></div>
+      <div class="field"><label for="ix-q">Quem indicou</label><input id="ix-q" name="quem" value="${esc(x.quem || "")}" placeholder="nome do servidor"></div>
+      <div class="field"><label for="ix-e">Equipe</label>${ehCoordEq() ? `<input id="ix-e" name="equipe" value="${esc(eq)}" readonly>` : `<select id="ix-e" name="equipe" class="sel"><option value="">Sem equipe</option>${equipesUsadas().map(e => `<option ${x.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>`}</div>
+      <div class="field"><label for="ix-c">Canal</label><select id="ix-c" name="canal" class="sel">${IND_CANAIS.map(c => `<option ${x.canal === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
+      <div class="field full"><label for="ix-o">Observação (opcional)</label><input id="ix-o" name="obs" value="${esc(x.obs || "")}" placeholder="ex.: amigo do trabalho, igreja Batista Central"></div>
+    </div>
+    <div class="modal-foot"><div>${novo ? "" : `<button class="btn danger" type="button" id="delBtn">Excluir</button>`}</div>
+      <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">${novo ? "Indicar" : "Salvar"}</button></div></div>`,
+  fd => {
+    const nome = String(fd.get("nome") || "").trim(); if (!nome) return;
+    const item = { ...x, id: x.id || "in" + Date.now().toString(36), nome, tel: String(fd.get("tel") || "").trim(), quem: String(fd.get("quem") || "").trim(), equipe: String(fd.get("equipe") || ""),
+      canal: fd.get("canal"), obs: String(fd.get("obs") || "").trim(), em: x.em || new Date().toISOString(), por: x.por || ME.adm || "" };
+    delete item.doc; closeModal(); indSalvar(x.doc || indDocMeu(), item, novo ? `${nome.split(" ")[0]} indicado` : "Indicação atualizada");
+  });
+  const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); indSalvar(x.doc, null, "Indicação excluída", x.id); };
+}
+function indSalvar(doc, item, msg, apagar) {
+  const L = ((S.cfgDocs || {})[doc] || {}).lista || [], id = apagar || item.id;
+  const nova = L.filter(y => y.id !== id); if (item) nova.push(item);
+  if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }   // o coordenador grava só o documento dele (indic-<top>-<id>)
+  (async () => { try { await api.set("config", doc, { lista: nova }); if (msg) toast(msg); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
+}
+function indMarcar(doc, id, st) {
+  const L = ((S.cfgDocs || {})[doc] || {}).lista || [], x = L.find(y => y.id === id); if (!x) return;
+  indSalvar(doc, { ...x, status: st, contatoEm: st !== "novo" ? (x.contatoEm || new Date().toISOString()) : null, contatoPor: st !== "novo" ? (x.contatoPor || ME.adm || "") : null }, IND_ST.find(o => o.v === st).l);
+}
+function metaPlacar() {
+  const D = metaDados(), E = metaEquipes(D), I = indTodas(), fmt = d => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const canais = IND_CANAIS.map(c => { const l = I.filter(x => x.canal === c); return l.length ? `• ${c}: ${l.length} contato(s), ${l.filter(indInscrito).length} inscrito(s) (${Math.round(l.filter(indInscrito).length / l.length * 100)}%)` : ""; }).filter(Boolean);
+  const cp = D.checks.find(c => !c.passou);
+  return [`*Placar ${topName()}* · ${fmt(new Date())}`, ``,
+    `Inscritos: *${D.inscritos}* de ${D.meta} (meta para hoje: ${D.metaHoje})`,
+    `Vagas restantes: ${Math.max(0, D.vagas - D.inscritos)} · faltam ${D.dias ?? "?"} dias para o TOP`,
+    cp ? `Próximo checkpoint: semana ${-cp.w} (${fmt(cp.d)}), mínimo de ${cp.min} inscritos` : "",
+    ``, `*Por canal*`, ...(canais.length ? canais : ["• ainda sem indicações"]),
+    ``, `*Nomes indicados por equipe*`, ...E.filter(e => e.nomes).sort((a, b) => b.nomes / b.metaNomes - a.nomes / a.metaNomes).map(e => `• ${e.e}: ${e.nomes} de ${e.metaNomes}${e.nomes >= e.metaNomes ? " 🏆" : ""}${e.insc ? ` · ${e.insc} inscrito(s)` : ""}`),
+    ``, `Bora juntos! 💪`].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
+}
+function metaCoordCard() {
+  const D = metaDados(), e = metaEquipes(D).find(x => x.e === ME.equipeLgnd), mine = indTodas().filter(x => x.equipe === ME.equipeLgnd);
+  return `<section class="panel meta-coord"><h3>Meta da minha equipe <button class="linkbtn" type="button" data-go="meta">ver ›</button></h3>
+    ${e ? `<div class="meta-mini"><div><span class="lbl">Nomes indicados</span><b class="num">${e.nomes}<small> de ${e.metaNomes}</small></b><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div></div>
+      <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : `<p class="hint">Sua equipe ainda não tem servidores contados para a meta.</p>`}
+    <p class="hint" style="margin:0">Placar geral: <b class="num">${D.inscritos}</b> inscritos de ${D.meta} · meta para hoje ${D.metaHoje}</p>
+    <div class="actions"><button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>${mine.length ? `<span class="hint">${mine.length} indicação(ões) da equipe</span>` : ""}</div></section>`;
+}
+function vMeta() {
+  const D = metaDados(), E = metaEquipes(D), I = indTodas(), ed = podeEditar(), fmt = d => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  if (!D.fimD) return `<div class="head"><div><h2>Meta do TOP</h2></div></div><section class="panel"><div class="empty">Coloque a data de início do ${esc(topName())} em Tops para o app montar a meta.</div></section>`;
+  const ok = D.inscritos >= D.metaHoje, f = S.indF || (ehCoordEq() ? "equipe" : "todas");
+  const meusI = ehCoordEq() ? I.filter(x => x.equipe === ME.equipeLgnd) : I;
+  const filt = { todas: meusI, equipe: meusI, atras: meusI.filter(indAtrasada), int: meusI.filter(x => x.status === "interessado" && !indInscrito(x)), insc: meusI.filter(indInscrito) }[f] || meusI;
+  const max = Math.max(D.meta, ...D.semanas.map(s => s.real || 0));
+  const st = x => { const p = indInscrito(x); if (p) return `<span class="chip ok">Inscrito ✓</span>`; const o = IND_ST.find(y => y.v === x.status) || IND_ST[0]; return `<span class="chip ${indAtrasada(x) ? "bad" : o.c}">${indAtrasada(x) ? "Sem contato há +48 h" : o.l}</span>`; };
+  const tel = x => waNumber(x.tel);
+  return `
+  <div class="head"><div><h2>Meta do TOP</h2><p>${esc(topName())}: ${D.vagas} vagas + ${D.desist}% de desistência = <b>${D.meta} inscritos</b> até ${fmt(D.fimD)}. A meta é montada sozinha para cada TOP novo.</p></div>
+    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${ehCoordEq() ? "" : `<button class="btn" type="button" data-act="meta-placar">${ico("wa")} Copiar placar</button>`}${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
+  <div class="kpis">
+    <div class="kpi ${ok ? "" : "alert"}"><span class="lbl">Inscritos</span><span class="val num">${D.inscritos}<small style="font-size:.5em;color:var(--muted)"> / ${D.meta}</small></span><span class="sub">meta para hoje: ${D.metaHoje} ${ok ? "· no ritmo ✓" : `· faltam ${D.metaHoje - D.inscritos}`}</span></div>
+    <div class="kpi"><span class="lbl">Semana</span><span class="val num">${D.semana ?? "—"}</span><span class="sub">${D.dias > 0 ? `faltam ${D.dias} dias` : "semana do TOP"}</span></div>
+    <div class="kpi"><span class="lbl">Indicações</span><span class="val num">${I.length}</span><span class="sub">${I.filter(indInscrito).length} viraram inscritos</span></div>
+    ${ehCoordEq() ? "" : `<button class="kpi ${I.filter(indAtrasada).length ? "alert" : ""}" type="button" data-ind-f="atras"><span class="lbl">Sem contato +48 h</span><span class="val num">${I.filter(indAtrasada).length}</span><span class="sub">fazer o contato</span></button>`}
+  </div>
+  <section class="panel"><h3>Ritmo até o TOP <small>barra = inscritos · linha = meta</small></h3>
+    <div class="meta-graf">${D.semanas.map((s, i) => { const w = -(D.semanas.length - i); return `<div class="mg-col ${s.real == null ? "fut" : s.real >= s.meta ? "ok" : "baixo"}" title="Semana ${w}: meta ${s.meta}${s.real != null ? `, inscritos ${s.real}` : ""}">
+      <div class="mg-area"><i class="mg-meta" style="bottom:${pct(s.meta, max)}%"></i>${s.real != null ? `<i class="mg-real" style="height:${pct(s.real, max)}%"></i>` : ""}</div><small class="num">${w}</small></div>`; }).join("")}</div>
+    <div class="meta-checks">${D.checks.map(c => { const cls = !c.passou ? "" : D.inscritos >= c.min ? "ok" : "bad";
+      return `<div class="mc ${cls}"><span class="lbl">Semana -${c.w} · ${fmt(c.d)}</span><b class="num">mín. ${c.min}</b><small>${!c.passou ? "ainda vem" : cls === "ok" ? "batido ✓" : "abaixo: plano B"}</small></div>`; }).join("")}</div>
+  </section>
+  <section class="panel"><h3>Equipes <small>nomes indicados e inscritos por indicação</small></h3>
+    ${E.length ? `<div class="meta-eqs">${[...E].sort((a, b) => b.nomes / b.metaNomes - a.nomes / a.metaNomes).map(e => `<div class="me-row ${ehCoordEq() && e.e === ME.equipeLgnd ? "minha" : ""}">
+      <div class="me-nome"><b>${esc(e.e)}</b>${e.nomes >= e.metaNomes ? ' <span title="Bateu a meta de nomes">🏆</span>' : ""}<small class="hint">${e.n} servidores</small></div>
+      <div class="me-bar"><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div><small class="num">${e.nomes}/${e.metaNomes} nomes</small></div>
+      <div class="me-bar"><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div><small class="num">${e.insc}/${e.metaInsc} inscritos</small></div></div>`).join("")}</div>` : `<div class="empty">Importe a planilha de equipes LGND para dividir a meta entre as equipes.</div>`}
+  </section>
+  <section class="panel"><h3>${ehCoordEq() ? `Indicações da ${esc(ME.equipeLgnd || "equipe")}` : "Indicações"} <small>${filt.length}</small></h3>
+    ${ehCoordEq() ? "" : `<div class="seg" role="group" aria-label="Filtro">${[["todas", "Todas"], ["atras", "Sem contato +48 h"], ["int", "Interessados"], ["insc", "Inscritos"]].map(([k, l]) => `<button type="button" data-ind-f="${k}" aria-pressed="${f === k || (k === "todas" && f === "equipe")}">${l}</button>`).join("")}</div>`}
+    ${filt.length ? `<div class="list">${[...filt].sort((a, b) => (indAtrasada(b) - indAtrasada(a)) || String(b.em).localeCompare(String(a.em))).map(x => `<div class="li ind-li">
+      <div class="grow"><b>${esc(x.nome)}</b> ${st(x)}<br><small class="hint">${[x.equipe, x.canal, x.quem && "indicado por " + x.quem, haQuanto(x.em)].filter(Boolean).map(esc).join(" · ")}${x.obs ? " · " + esc(x.obs) : ""}</small></div>
+      ${!ehCoordEq() && ed && !indInscrito(x) ? `<div class="actions">${tel(x) ? `<a class="btn sm" href="https://wa.me/${tel(x)}?text=${encodeURIComponent(`Olá ${x.nome.split(" ")[0]}, tudo bem? Aqui é da equipe ADM dos Legendários 3 Colinas. ${x.quem ? x.quem.split(" ")[0] + " indicou você para o próximo TOP" : "Você foi indicado para o próximo TOP"}. Posso te contar como funciona?`)}" target="_blank" rel="noopener" data-ind-zap="${esc(x.doc)}|${esc(x.id)}">${ico("wa")} Chamar</a>` : ""}
+        <select class="sel sm" data-ind-st="${esc(x.doc)}|${esc(x.id)}" aria-label="Situação">${IND_ST.map(o => `<option value="${o.v}" ${x.status === o.v ? "selected" : ""}>${o.l}</option>`).join("")}</select>
+        <button class="linkbtn" type="button" data-ind-ed="${esc(x.doc)}|${esc(x.id)}" aria-label="Editar">${ico("edit")}</button></div>` : ""}</div>`).join("")}</div>`
+    : `<div class="empty">${I.length ? "Nada neste filtro." : "Nenhum nome indicado ainda. Cada servidor indica 5 nomes."}</div>`}
+  </section>`;
+}
+document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
+document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[data-ind-zap]"); if (!a) return;
+  const [doc, id] = a.dataset.indZap.split("|"), x = (((S.cfgDocs || {})[doc] || {}).lista || []).find(y => y.id === id); if (x && x.status === "novo") setTimeout(() => indMarcar(doc, id, "contatado"), 300); });
+function metaAjustarForm() {
+  const D = metaDados();
+  modal(`<h3>Ajustar meta</h3>
+    <div class="form"><div class="field"><label for="mt-v">Vagas (homens no TOP)</label><input id="mt-v" name="vagas" type="number" min="1" value="${D.vagas}"></div>
+      <div class="field"><label for="mt-d">Desistência esperada (%)</label><input id="mt-d" name="desist" type="number" min="0" max="50" value="${D.desist}"></div></div>
+    <p class="hint">A meta de inscritos fica vagas + desistência. Recalibre na semana -9 com os primeiros inscritos, como diz a Estratégia 150.</p>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { closeModal(); save(() => api.set("config", "meta-" + curTopId(), { vagas: +fd.get("vagas") || 150, desist: +fd.get("desist") || 0 }), "Meta ajustada"); });
+}
 function topStats(id) {
   const ps = S.pessoas.filter(p => topOf(p) === id);
   const parts = ps.filter(p => p.tipo !== "legendario");
@@ -5299,6 +5452,7 @@ function render() {
     : v === "pins" ? vPins()
     : v === "notificacoes" ? vNotificacoes()
     : v === "estoque" ? vEstoque()
+    : v === "meta" ? vMeta()
     : v === "importacao" ? vImportacao()
     : v === "postop" ? vPosTop()
     : v === "nfc" ? vNfc()
@@ -5953,6 +6107,7 @@ document.addEventListener("click", e => {
   if (d.csgPes) { csgPessoaForm(d.csgPes); return; }
   if (d.act === "csg-rep") { csgRepForm(); return; }
   if (t.id === "notifBtn") { pedirNotificacao(); return; }
+  if (d.indNovo) { indForm(); return; }   // coordenador também indica nomes
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
   if (d.act === "novo") { personForm(null, S.view === "legendarios" ? "legendario" : "participante"); return; }
@@ -6066,6 +6221,10 @@ document.addEventListener("click", e => {
   if (d.act === "nova-ocorr") { ocorrForm(); return; }
   if (d.act === "ocorr-rapida") { ocorrRapida(); return; }
   if (d.act === "fam-importar") { famImportarForm(); return; }
+  if (d.act === "meta-ajustar") { metaAjustarForm(); return; }
+  if (d.act === "meta-placar") { copiarTexto(metaPlacar(), "Placar copiado: cole no grupo da Direção e dos Coordenadores"); return; }
+  if (d.indF) { S.indF = d.indF; render(); return; }
+  if (d.indEd) { const [doc, id] = d.indEd.split("|"); const x = indTodas().find(y => y.doc === doc && y.id === id); if (x) indForm(x); return; }
   if (d.act === "mp-novo") { S.mpPick = true; render(); return; }
   if (d.act === "mp-cancelar") { S.mpPick = false; render(); return; }
   if (d.act === "mp-gps") { S.mpPick = false; render(); mpPegarGps(q => pontoForm(null, q)); return; }
