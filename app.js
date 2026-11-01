@@ -3329,7 +3329,7 @@ function vMapaVivo() {
   return `<section class="panel av-pista"><div class="av-pista-head"><h3>Onde está a corrente</h3>
       <div class="actions"><div class="seg" role="group" aria-label="Dia da pista">${dias.map(d => `<button type="button" data-av-dia="${esc(d.id)}" aria-pressed="${d.id === dia.id}">${esc(d.dia)}</button>`).join("")}</div>
       ${E.lin && MAPA_CHEIO() ? `<button class="btn" type="button" data-act="mapa-cheio">${S.mapaCheio ? "Fechar mapa" : "⤢ Mapa em tela cheia"}</button>` : ""}
-      ${ed && MAPA_PONTOS() && E.lin ? `<button class="btn primary" type="button" data-act="mp-novo">${ico("plus")} Ponto no mapa</button>` : ""}
+      ${podePontos() && MAPA_PONTOS() && E.lin ? `<button class="btn primary" type="button" data-act="mp-novo">${ico("plus")} Ponto no mapa</button>` : ""}
       ${ed ? `<button class="btn" type="button" data-act="kmz">${ico("upload")} Importar KMZ</button>` : ""}</div></div>
     ${MAPA_PONTOS() && S.mpPick ? `<div class="mp-faixa">${ico("route")} <b>Toque no mapa</b> onde fica o ponto <span class="grow"></span><button class="btn sm" type="button" data-act="mp-gps">Estou aqui (GPS)</button><button class="btn sm ghost" type="button" data-act="mp-cancelar">Cancelar</button></div>` : ""}
     ${mom ? `<div class="av-momento"><span class="lbl">${mom.andando ? "Acontecendo agora" : "Último momento"}</span><b>${esc(mom.atv)}</b><small class="hint">${mom.andando ? "começou " : "terminou "}${esc(mom.andando ? mom.ini : mom.fim || mom.ini)}${E.ponto ? ` · no mapa: ${esc(E.ponto.n)}` : ""}</small></div>` : ""}
@@ -3384,7 +3384,9 @@ async function montarMapaVivo() {
 }
 /* Pontos no mapa (01/11/2026, só DEMO): hidratação, almoço, carro de apoio etc. Quem edita adiciona pelo app (tocar no mapa ou GPS) e todos veem.
    config mapa-pontos-<top> {lista:[{id,tipo,nome,obs,lat,lng,por,em}]}. Pontos do KMZ com o tipo no nome ("Hidratação 1", "Almoço D2") ganham o mesmo ícone. */
-const MAPA_PONTOS = () => DEMO;
+const MAPA_PONTOS = () => true;   // app real desde 01/11/2026
+const MP_PERM = "mapa-pontos";   // marcado em Usuários: pode colocar pontos no mapa (além do dono)
+const podePontos = () => S.isOwner || (!!ME.permMapa && podeEditar());
 const MP_TIPOS = [
   { k: "agua", l: "Hidratação", e: "💧", c: "#3ba3ff", re: /hidrat|\bagua\b|abastec/ },
   { k: "almoco-s", l: "Almoço senderistas", e: "🍽️", c: "#ff7a1a", re: /almoco.*send|refeic.*send|almoco(?!.*leg)/ },
@@ -3401,7 +3403,7 @@ const mpId = () => "mapa-pontos-" + curTopId();
 const mpLista = () => ((S.cfgDocs || {})[mpId()] || {}).lista || [];
 const mpOcultos = () => { try { return new Set(JSON.parse(store.get("adm3-mp-off") || "[]")); } catch (e) { return new Set(); } };
 function mpMarcador(L, map, p, on) {
-  const t = mpTipo(p.tipo), ed = !p.kmz && podeEditar();
+  const t = mpTipo(p.tipo), ed = !p.kmz && podePontos();
   L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "mp-pin" + (on ? " on" : ""), html: `<i style="--c:${t.c}">${t.e}</i>`, iconSize: [30, 30], iconAnchor: [15, 15] }), zIndexOffset: on ? 950 : 800 })
     .addTo(map).bindTooltip(esc(p.nome || t.l), { direction: "top", offset: [0, -12] })
     .bindPopup(`<div class="mp-pop"><small>${t.e} ${esc(t.l)}</small><b>${esc(p.nome || t.l)}</b>${p.obs ? `<p>${esc(p.obs)}</p>` : ""}
@@ -3417,7 +3419,7 @@ function mpFiltro() {
     return `<button type="button" class="mp-f" data-mp-f="${k}" aria-pressed="${!off.has(k)}" style="--c:${t.c}"><span>${t.e}</span>${esc(t.l)} <small class="num">${cont[k]}</small></button>`; }).join("")}</div>`;
 }
 function pontoForm(p, pos) {
-  if (!podeEditar()) { toast("Seu acesso é somente leitura."); return; }
+  if (!podePontos()) { toast("Só o dono e quem ele liberar em Usuários podem colocar pontos no mapa."); return; }
   const novo = !p; p = p || { tipo: "agua", nome: "", obs: "" }; let onde = pos || { lat: p.lat, lng: p.lng };
   modal(`<h3>${novo ? "Novo ponto no mapa" : "Editar ponto"}</h3>
     <div class="form">
@@ -5007,6 +5009,7 @@ function admCadForm(e) {
       <div class="field full adm-only" ${coord ? "hidden" : ""}><span class="lab">O que pode acessar</span><div class="nivel-opts">${NIVEIS.map(n => `<label><input type="radio" name="nivel" value="${n.v}" ${e.nivel === n.v ? "checked" : ""}><span>${n.l}<small>${n.d}</small></span></label>`).join("")}</div></div>
       <div class="field full adm-only" ${coord ? "hidden" : ""}><span class="lab">Páginas que pode ver (o Dashboard sempre aparece)</span><div class="abas ${e.nivel === "total" ? "off" : ""}" id="abasBox">${MENU_GRUPOS.map(([g, ids]) => { const vs = ABAS().filter(v => ids.includes(v.id)); return vs.length ? `<div class="abas-grp">${g}</div>` + vs.map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("") : ""; }).join("")}${ABAS().filter(v => !MENU_GRUPOS.some(([, ids]) => ids.includes(v.id))).map(v => `<label><input type="checkbox" name="abas" value="${v.id}" ${e.nivel === "total" || temAba(e.abas, v) ? "checked" : ""}> ${v.l}</label>`).join("")}</div>
         <p class="hint" style="margin:6px 0 0">Equipes LGND, Pendências, Ao vivo, Ocorrências e Importação do dia usam os dados de Senderistas, Legendários ou Cronograma: marque também a página de onde vêm os dados. Marcar <b>Importação do dia</b> libera a pessoa para importar as planilhas. Usuários e Histórico são só seus.</p></div>`}
+      ${dono ? "" : `<div class="field full adm-only" ${coord ? "hidden" : ""}><div class="checks"><label><input type="checkbox" name="permMapa" ${(e.abas || []).includes(MP_PERM) ? "checked" : ""}> Pode colocar pontos no mapa da pista (hidratação, almoço, apoio…)</label></div></div>`}
       <div class="field full"><label for="f-aobs">Observações</label><input id="f-aobs" name="obs" value="${esc(e.obs)}"></div>
       ${dono ? "" : `<div class="field full"><div class="checks"><label><input type="checkbox" id="f-aativo" name="ativo" ${e.ativo !== false ? "checked" : ""}> Acesso liberado (desmarque para bloquear a entrada)</label></div></div>`}
       ${!novo && e.email && !e.user_id ? `<p class="hint field full" style="margin:0">${esc(e.nome.split(" ")[0])} ainda não criou a senha. <button class="link" type="button" id="reenviar" style="color:var(--accent);background:none;border:0;padding:0;font-weight:700">Enviar o convite de novo</button></p>` : ""}
@@ -5024,7 +5027,7 @@ function admCadForm(e) {
     if (ehC && !fd.get("equipe_lgnd")) { err("Escolha a equipe do coordenador."); $("#f-aeq").focus(); return; }
     const nivel = dono ? "total" : ehC ? "leitura" : (fd.get("nivel") || "edita");
     const row = { nome, email, telefone: String(fd.get("telefone") || "").trim(), funcao: fd.get("funcao"), obs: String(fd.get("obs") || "").trim(),
-      nivel, abas: ehC ? coordAbasSalvar() : [...(nivel === "total" ? ABAS().map(v => v.id) : fd.getAll("abas")), ABA_V2], ativo: dono ? true : fd.get("ativo") === "on" };
+      nivel, abas: ehC ? coordAbasSalvar() : [...(nivel === "total" ? ABAS().map(v => v.id) : fd.getAll("abas")), ABA_V2, ...(fd.get("permMapa") === "on" ? [MP_PERM] : [])], ativo: dono ? true : fd.get("ativo") === "on" };
     if (comPerfil && (ehC || e.perfil)) Object.assign(row, ehC ? { perfil: "coord", equipe_lgnd: String(fd.get("equipe_lgnd")), cargo: String(fd.get("cargo") || "Coordenador"), funcao: "Outros" } : { perfil: "adm", equipe_lgnd: null, cargo: null });
     if (!novo && e.email && e.email !== email && e.user_id && !confirm(`Trocar o e-mail desliga o login atual de ${nome}. A pessoa vai precisar criar a senha de novo com o e-mail novo. Continuar?`)) return;
     closeModal();
@@ -5647,6 +5650,7 @@ function loginForm(aviso, erro) {
 function aplicarPerfil(p) {
   ME.id = p.id; ME.adm = p.nome; ME.dono = !!p.dono; S.isOwner = ME.dono;
   ME.acesso = { nivel: p.dono ? "total" : (p.nivel || "leitura"), abas: p.dono || p.nivel === "total" ? [...ABAS().map(v => v.id), ABA_V2] : (p.abas || []) };
+  ME.permMapa = !!p.dono || (p.abas || []).includes(MP_PERM);
   ME.coord = !p.dono && p.perfil === "coord"; ME.equipeLgnd = ME.coord ? (p.equipe_lgnd || "") : ""; ME.cargo = p.cargo || "";
   if (ME.coord) ME.acesso = { nivel: "leitura", abas: coordAbasSalvar() };
   document.body.classList.toggle("ro", ME.acesso.nivel === "leitura" && !ME.dono);
