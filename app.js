@@ -501,7 +501,7 @@ function painelMeu() {
   return `<section class="panel dash-meu"><h3>${ico("users")} Suas pessoas, ${esc(primeiro)} <small>${meus.length} com você · ${pend.length} com pendência</small></h3>
     ${!meus.length ? `<div class="empty">Ninguém está com você ainda. Quem você atualizar na lista passa a ficar com você.</div>`
       : !pend.length ? `<div class="empty">Todas as suas pessoas estão em dia. 👏</div>`
-      : `<div class="list">${pend.slice(0, 6).map(p => `<div class="li"><span class="grow"><b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.cobradoEm ? " · cobrado " + esc(quando(p.cobradoEm)) : " · ainda não cobrado"}</span><br>${pendDe(p).map(k => `<span class="chip wait">${{ pagamento: "Pagamento", atestado: "Atestado", termo: "Termo", grupo: "Grupo" }[k] || k}</span>`).join(" ")}</span>
+      : `<div class="list">${pend.slice(0, 6).map(p => `<div class="li"><span class="grow"><b>${famPre(p)}${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.cobradoEm ? " · cobrado " + esc(quando(p.cobradoEm)) : " · ainda não cobrado"}</span><br>${pendDe(p).map(k => `<span class="chip wait">${{ pagamento: "Pagamento", atestado: "Atestado", termo: "Termo", grupo: "Grupo" }[k] || k}</span>`).join(" ")}</span>
         ${waNumber(p.telefone) ? `<a class="wa" href="${waCobrar(p)}" target="_blank" rel="noopener" data-cobrar="${p.id}">${ico("wa")} Cobrar</a>` : ""}</div>`).join("")}</div>
         ${pend.length > 6 ? `<button class="btn" type="button" data-go="pendencias" data-pf-set="aba:doc;oque:qualquer;quem:todos;adm:${esc(eu)}" style="margin-top:8px">Ver as ${pend.length} em Pendências</button>` : ""}`}
   </section>`;
@@ -583,7 +583,7 @@ function painelPronto() {
   const ok = a => a.filter(prontoTop).length, falta = P.filter(p => !prontoTop(p)).sort((a, b) => faltaTop(b).length - faltaTop(a).length || norm(a.nome).localeCompare(norm(b.nome)));
   const porItem = k => P.filter(p => faltaTop(p).includes(k)).length;
   const linha = p => { const url = waCobrar(p);
-    return `<div class="li"><span class="grow"><b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}</span><br>${faltaTop(p).map(k => `<span class="chip ${k === "apto" && atOk(p) ? "wait" : "bad"}">${k === "apto" ? (atOk(p) ? "Atestado: aguardando equipe médica" : "Falta atestado") : "Falta " + FALTA[k].toLowerCase()}</span>`).join(" ")}</span>
+    return `<div class="li"><span class="grow"><b>${famPre(p)}${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}</span><br>${faltaTop(p).map(k => `<span class="chip ${k === "apto" && atOk(p) ? "wait" : "bad"}">${k === "apto" ? (atOk(p) ? "Atestado: aguardando equipe médica" : "Falta atestado") : "Falta " + FALTA[k].toLowerCase()}</span>`).join(" ")}</span>
       ${url && pendDe(p).length ? `<a class="wa" href="${url}" target="_blank" rel="noopener" data-cobrar="${p.id}" title="Uma mensagem só com tudo que falta">${ico("wa")} Cobrar tudo</a>` : ""}</div>`; };
   return `<section class="panel pronto-top"><h3>Pronto para o TOP <small>pago, termo assinado e atestado Apto</small></h3>
     <div class="pronto-kpis">
@@ -797,7 +797,7 @@ function vPessoas(tipo) {
     <thead><tr>${sel ? `<th style="width:36px"><input type="checkbox" class="selbox" data-selall="1" ${todos ? "checked" : ""} aria-label="Selecionar todos"></th>` : ""}<th>Nome</th><th>WhatsApp</th>${lg ? "<th>Equipe</th>" : ""}<th>Atestado</th><th>Termo</th>${lg ? "" : "<th>Grupo · NFC</th><th>Família</th>"}<th>Responsável</th><th></th></tr></thead>
     <tbody>${rows.map(p => `<tr class="${S.sel.ids.has(p.id) ? "picked" : ""}">
       ${sel ? `<td>${caixa(p)}</td>` : ""}
-      <td><div class="pname">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}${tagRep(p)}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div>${obsLinha(p)}</td>
+      <td><div class="pname">${famPre(p)}${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}${tagRep(p)}<small>${esc([p.cidade, p.email].filter(Boolean).join(" · ") || "—")}</small></div>${obsLinha(p)}</td>
       <td class="num" style="white-space:nowrap"><div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">${waBtn(p)}<span class="hint" style="font-size:12px">${esc(p.telefone || "sem telefone")}</span></div></td>
       ${lg ? `<td>${p.equipe ? `${esc(p.equipe)}${p.funcao ? `<div class="hint" style="font-size:12px">${esc(p.funcao)}</div>` : ""}` : "—"}</td>` : ""}
       <td>${atest(p)}</td>
@@ -807,7 +807,7 @@ function vPessoas(tipo) {
       <td style="white-space:nowrap">${obsBtn(p)}<button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></td>
     </tr>`).join("")}</tbody></table></div>
   <div class="cards">${rows.map(p => `<article class="pcard ${S.sel.ids.has(p.id) ? "picked" : ""}">
-      <div class="top">${caixa(p)}<div class="pname" style="flex:1">${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}${tagRep(p)}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(equipeTxt(p)) : ""}</small></div>
+      <div class="top">${caixa(p)}<div class="pname" style="flex:1">${famPre(p)}${esc(p.nome)} ${p.exemplo ? '<span class="tag acc">exemplo</span>' : ""} ${!lg && is40(p) ? '<span class="tag">+40</span>' : ""}${tagsInscricao(p)}${tagRep(p)}<small class="num">${esc(p.telefone || "")}${lg && p.equipe ? " · " + esc(equipeTxt(p)) : ""}</small></div>
         <div style="display:flex;gap:2px">${obsBtn(p)}<button class="linkbtn" type="button" data-edit="${p.id}" aria-label="Editar ${esc(p.nome)}">${ico("edit")}</button></div></div>
       ${obsLinha(p)}
       <div class="row"><span class="lbl">Atestado</span>${cyc(ATESTADO, "atestado", p)}<span class="lbl">Termo</span>${cyc(TERMO, "termo", p)}</div>
@@ -822,7 +822,8 @@ function vFamilias() {
   const sem = parts.filter(p => !p.familia);
   const fams = Array.from({ length: 12 }, (_, i) => i + 1);
   return `
-  <div class="head"><div><h2>Famílias</h2><p>Distribuição dos senderistas nas 12 famílias. Defina a família no cadastro de cada um.</p></div></div>
+  <div class="head"><div><h2>Famílias</h2><p>Distribuição dos senderistas nas 12 famílias. Defina a família no cadastro de cada um${FAM_IMP() ? " ou importe a planilha do outro sistema" : ""}.</p></div>
+    ${FAM_IMP() && podeEditar() ? `<div class="actions"><button class="btn primary" type="button" data-act="fam-importar">${ico("upload")} Importar planilha</button></div>` : ""}</div>
   <div class="kpis">
     <div class="kpi"><span class="lbl">Distribuídos</span><span class="val num">${parts.length - sem.length}</span><span class="sub">de ${parts.length} senderistas</span></div>
     <div class="kpi ${sem.length ? "alert" : ""}"><span class="lbl">Sem família</span><span class="val num">${sem.length}</span><span class="sub">média ideal ${parts.length ? (parts.length / 12).toFixed(1).replace(".", ",") : 0} por família</span></div>
@@ -833,6 +834,76 @@ function vFamilias() {
     ${m.length ? `<ul>${m.map(p => `<li><span>${esc(p.nome)}</span>${ehCoordEq() ? "" : atOk(p) && p.termo === "assinado" ? '<span class="chip ok">OK</span>' : '<span class="chip wait">Pend.</span>'}</li>`).join("")}</ul>` : `<div class="empty">Ninguém ainda.</div>`}</section>`; }).join("")}</div>`;
 }
 
+/* Importar famílias: planilha (.xlsx/.csv) do outro sistema. Aceita coluna de família ("Família", "Fam", "Grupo") ao lado do nome,
+   ou a lista em blocos ("Família 01" numa linha e os nomes embaixo). Casa pelo nome (igual, depois primeiro + último nome), telefone ou e-mail. */
+const famNum = v => { const m = /(\d{1,2})/.exec(String(v || "")); const n = m ? +m[1] : 0; return n >= 1 && n <= 12 ? n : 0; };
+function famLerPlanilha(linhas) {
+  const H = c => norm(String(c || "")).trim();
+  let hi = linhas.findIndex(r => r.some(c => /^nome|nome completo|participante|senderista/.test(H(c))));
+  const out = [];
+  if (hi >= 0) {
+    const h = linhas[hi].map(H), col = re => h.findIndex(x => re.test(x));
+    const cN = col(/^nome|nome completo|participante|senderista/), cF = col(/famil|^fam\b|^grupo/), cT = col(/telefone|celular|whats|fone/), cE = col(/e-?mail/);
+    let blocoF = 0;
+    linhas.slice(hi + 1).forEach(r => {
+      const nome = String(r[cN] || "").trim(), cel = r.map(x => String(x || "").trim()).filter(Boolean);
+      if (cel.length === 1 && /famil/i.test(norm(cel[0])) && famNum(cel[0])) { blocoF = famNum(cel[0]); return; }
+      if (!nome) return;
+      const f = cF >= 0 ? famNum(r[cF]) : blocoF; if (!f) return;
+      out.push({ nome, f, tel: cT >= 0 ? telLimpo(r[cT]).slice(-10) : "", email: cE >= 0 ? norm(String(r[cE] || "")).trim() : "" });
+    });
+  } else {   // sem cabeçalho: blocos "Família 01" e nomes embaixo
+    let blocoF = 0;
+    linhas.forEach(r => { const cel = r.map(x => String(x || "").trim()).filter(Boolean); if (!cel.length) return;
+      if (/famil/i.test(norm(cel[0])) && famNum(cel[0])) { blocoF = famNum(cel[0]); if (cel.length > 1 && blocoF) out.push({ nome: cel[1], f: blocoF }); return; }
+      if (blocoF) out.push({ nome: cel[0].replace(/^\d+[\s.)-]+/, ""), f: blocoF }); });
+  }
+  if (!out.length) throw new Error("Não achei nomes com família nessa planilha. Ela precisa ter uma coluna de nome e outra de família (ou blocos \"Família 01\" com os nomes embaixo).");
+  return out;
+}
+function famCasar(R) {
+  const sen = S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)), N = x => norm(x).replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+  const pl = x => { const w = N(x).split(" ").filter(y => y.length > 1); return w.length ? w[0] + " " + w[w.length - 1] : ""; };
+  const usados = new Set(), muda = [], igual = [], nao = [];
+  R.forEach(r => {
+    let p = sen.find(x => !usados.has(x.id) && N(x.nome) === N(r.nome))
+      || (r.tel && sen.find(x => !usados.has(x.id) && telLimpo(x.telefone).slice(-10) === r.tel))
+      || (r.email && sen.find(x => !usados.has(x.id) && norm(x.email || "").trim() === r.email));
+    if (!p) { const c = sen.filter(x => !usados.has(x.id) && pl(x.nome) === pl(r.nome)); if (c.length === 1) p = c[0]; }
+    if (!p) { nao.push(r); return; }
+    usados.add(p.id);
+    (Number(p.familia) === r.f ? igual : muda).push({ p, r });
+  });
+  const fora = sen.filter(p => !usados.has(p.id));
+  return { muda, igual, nao, fora };
+}
+function famImportarForm() {
+  if (!podeEditar()) { toast("Seu acesso é somente leitura."); return; }
+  let A = null;
+  modal(`<h3>Importar famílias</h3>
+    <p class="hint" style="margin:0">Escolha a planilha (.xlsx ou .csv) tirada do outro sistema. Ela precisa ter o <b>nome</b> e a <b>família</b> de cada senderista (pode ser em colunas ou em blocos "Família 01" com os nomes embaixo). Você confere antes de aplicar.</p>
+    <div class="field"><label for="f-famx">Arquivo</label><input type="file" id="f-famx" accept=".xlsx,.xls,.csv,text/csv"></div>
+    <div id="famPrev" class="hint">Nenhum arquivo escolhido.</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit" id="famImpBtn" disabled>Aplicar</button></div></div>`,
+  () => {
+    if (!A || !A.muda.length) { closeModal(); toast("Nada para mudar: todo mundo já está na família certa."); return; }
+    const ops = A.muda.map(({ p, r }) => () => api.update("pessoas", p.id, { familia: r.f }));
+    closeModal();
+    save(async () => { for (const op of ops) await op(); }, `Famílias atualizadas: ${A.muda.length} senderista(s)`);
+  });
+  $("#f-famx").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      A = famCasar(famLerPlanilha(await lerPlanilha(f)));
+      const li = (x, t) => `<li><b>${esc(x.p ? x.p.nome : x.nome)}</b> <span class="hint">${t}</span></li>`;
+      $("#famPrev").innerHTML = `<p style="margin:6px 0"><b>${A.muda.length}</b> vão mudar de família · <b>${A.igual.length}</b> já estão certos${A.nao.length ? ` · <b class="warn-text">${A.nao.length}</b> não achados no app` : ""}</p>
+        ${A.muda.length ? `<details ${A.muda.length <= 15 ? "open" : ""}><summary>Vão mudar (${A.muda.length})</summary><ul class="imp-list">${A.muda.map(x => li(x, `${x.p.familia ? famTxt(x.p.familia) : "sem família"} → <b>${famTxt(x.r.f)}</b>`)).join("")}</ul></details>` : ""}
+        ${A.nao.length ? `<details open><summary>Não achei no app (${A.nao.length})</summary><ul class="imp-list">${A.nao.map(x => li(x, "na planilha: " + famTxt(x.f))).join("")}</ul><p class="hint">Confira se o nome está igual ao da inscrição. Esses ficam de fora.</p></details>` : ""}
+        ${A.fora.length ? `<details><summary>Senderistas do app que não estão na planilha (${A.fora.length})</summary><ul class="imp-list">${A.fora.map(p => li({ p }, p.familia ? "continua na " + famTxt(p.familia) : "continua sem família")).join("")}</ul></details>` : ""}`;
+      $("#famImpBtn").disabled = false; $("#famImpBtn").textContent = A.muda.length ? `Aplicar (${A.muda.length})` : "Fechar";
+    } catch (err) { A = null; $("#famPrev").innerHTML = `<span class="warn-text">${esc(err.message || err)}</span>`; $("#famImpBtn").disabled = true; }
+  });
+}
 /* ---------- Equipes LGND: em qual área cada legendário vai servir (campos equipe e funcao do legendário) ---------- */
 function vEquipes() {
   if (ehCoordEq()) return vEquipeCoord();
@@ -1173,7 +1244,7 @@ function buscaGeral() {
     const bate = (...xs) => xs.some(x => x && norm(String(x)).includes(k)) || (kd.length >= 4 && xs.some(x => dig(x).includes(kd)));
     const grp = [];
     const pes = S.P.filter(p => canSee({ id: p.tipo === "legendario" ? "legendarios" : "participantes" }) && bate(p.nome, p.telefone, p.email, p.cidade, p.equipe)).slice(0, 8);
-    if (pes.length) grp.push(["Pessoas", pes.map(p => `<button type="button" class="bg-li" data-edit="${p.id}"><span><b>${esc(p.nome)}</b><small>${tipoNome(p)}${cancelado(p) ? " · cancelada" : ""}${p.telefone ? " · " + esc(p.telefone) : ""}${p.equipe ? " · " + esc(equipeTxt(p)) : ""}</small></span>${ico("users")}</button>`)]);
+    if (pes.length) grp.push(["Pessoas", pes.map(p => `<button type="button" class="bg-li" data-edit="${p.id}"><span><b>${famPre(p)}${esc(p.nome)}</b><small>${tipoNome(p)}${cancelado(p) ? " · cancelada" : ""}${p.telefone ? " · " + esc(p.telefone) : ""}${p.equipe ? " · " + esc(equipeTxt(p)) : ""}</small></span>${ico("users")}</button>`)]);
     if (canSee({ id: "estoque" })) { const it = S.estoque.filter(e => bate(e.item, e.local)).slice(0, 6);
       if (it.length) grp.push(["Estoque", it.map(e => `<button type="button" class="bg-li" data-edit-item="${e.id}"><span><b>${esc(e.item)}</b><small>${e.qtd ?? 0} un.${e.local ? " · " + esc(e.local) : ""}</small></span>${ico("box")}</button>`)]); }
     if (canSee({ id: "ocorrencias" })) { const oc = ocorrencias().filter(o => bate(o.nome, o.tipo, o.local, o.desc, o.texto, o.obs, o.oque)).slice(0, 6);
@@ -1662,6 +1733,9 @@ const campoId = k => `${k}-${curTopId()}`;
 const hmDe = iso => iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
 const haQuanto = iso => { const m = Math.round((Date.now() - new Date(iso)) / 6e4); return m < 1 ? "agora" : m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.round(m / 60)} h` : `há ${Math.round(m / 1440)} d`; };
 const famTxt = f => "Família " + String(f).padStart(2, "0");
+// família na frente do nome (senderistas) e importação das famílias por planilha: só na DEMO até ele mandar jogar no app real
+const FAM_IMP = () => DEMO;
+const famPre = p => FAM_IMP() && p && p.tipo !== "legendario" && p.familia ? `<span class="fam-pre num" title="${famTxt(p.familia)}">F${String(p.familia).padStart(2, "0")}</span> ` : "";
 const famDe = f => S.P.filter(p => p.tipo !== "legendario" && !cancelado(p) && Number(p.familia) === Number(f)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
 const pontosCampo = () => { const P = pistaMapa(); return (P && P.pontos || []).map(p => p.n).filter(Boolean); };
 // chamadas
@@ -2086,7 +2160,7 @@ function vCelulares() {
   const linha = p => { const c = celDe(p), st = celSt(p);
     return `<div class="cel-li ${st}">
       ${c.foto || c.fotoPath ? `<button type="button" class="cel-foto" data-cel-ver="${esc(p.id)}" aria-label="Ver foto">${celFotoSrc(c) ? `<img src="${esc(celFotoSrc(c))}" alt="">` : "🖼"}</button>` : `<span class="cel-foto vazia">${st === "nao" ? "✕" : "📱"}</span>`}
-      <button type="button" class="cel-info" ${ed ? `data-cel="${esc(p.id)}"` : "disabled"}><b>${esc(p.nome)}</b>
+      <button type="button" class="cel-info" ${ed ? `data-cel="${esc(p.id)}"` : "disabled"}><b>${famPre(p)}${esc(p.nome)}</b>
         <small>${p.funcao ? esc(p.funcao) + " · " : ""}<span class="chip ${CEL_CHIP[st]}">${CEL_TXT[st]}</span>${c.em && st !== "falta" ? ` ${hmDe(st === "devolvido" ? c.devolvidoEm : c.em)}` : ""}${st === "nao" && c.motivo ? ` · ${esc(c.motivo)}` : ""}${c.qtd > 1 ? ` · ${c.qtd} aparelhos` : ""}${c.obs && st !== "nao" ? ` · ${esc(c.obs)}` : ""}</small></button>
       ${ed ? (st === "falta" ? `<label class="btn sm primary cel-cam">📷 Guardar<input type="file" accept="image/*" capture="environment" data-cel-foto="${esc(p.id)}" hidden></label><button class="btn sm" type="button" data-cel-nao="${esc(p.id)}">Não entregou</button>`
         : st === "guardado" ? `<button class="btn sm" type="button" data-cel-dev="${esc(p.id)}">Devolver</button>` : "") : ""}
@@ -2283,7 +2357,7 @@ function vMochila(cheg) {
     <div class="moch-res">${itens.map(it => { const L = falta(it), ab = L.filter(p => !(chkDe(p).prov || {})[it]).length;
       return `<div class="moch-li ${ab ? "bad" : L.length ? "ok" : ""}"><b>${esc(it)}</b><span class="num">${ab ? `${ab} sem` : L.length ? "resolvido" : "—"}</span></div>`; }).join("")}</div></section>
   ${itens.filter(it => falta(it).length).map(it => `<section class="panel"><h3>${esc(it)} <small>${falta(it).length} pessoa(s)</small></h3><div class="list">${falta(it).map(p => { const pr = (chkDe(p).prov || {})[it];
-    return `<div class="li"><span class="grow"><b>${esc(p.nome)}</b> <span class="hint">${p.familia ? "· " + famTxt(p.familia) : ""}</span>${pr ? `<br><span class="hint">providenciado por ${esc(pr.por)} às ${hmDe(pr.em)}</span>` : ""}</span>
+    return `<div class="li"><span class="grow"><b>${famPre(p)}${esc(p.nome)}</b>${pr ? `<br><span class="hint">providenciado por ${esc(pr.por)} às ${hmDe(pr.em)}</span>` : ""}</span>
       ${pr ? '<span class="chip ok">Providenciado</span>' : ed ? `<button class="btn sm primary" type="button" data-moch-prov="${esc(p.id + "|" + it)}">Providenciado</button>` : '<span class="chip bad">Falta</span>'}</div>`; }).join("")}</div></section>`).join("")
     || `<section class="panel"><div class="empty">Nenhum item faltando por enquanto.</div></section>`}`;
 }
@@ -2655,7 +2729,7 @@ function vComunicados() {
     <div class="cmd-conta"><b id="cmdN">${sel.length}</b> selecionado(s) de ${L.length}${semTel.length ? ` · <span class="bad-text">${semTel.length} sem telefone</span>` : ""}
       <span class="grow"></span><span><button class="linkbtn" type="button" data-cmd-todos="1">Marcar todos</button> · <button class="linkbtn" type="button" data-cmd-todos="0">Desmarcar</button></span></div>
     <div class="cham-lista cmd-lista">${L.map(p => { const tel = waNumber(p.telefone);
-      return `<label class="cham-p ${tel ? "" : "off"}"><input type="checkbox" data-cmd-p="${esc(p.id)}" ${tel && !ex.has(p.id) ? "checked" : ""} ${tel ? "" : "disabled"}><span class="cham-box">${ico("check")}</span><span class="grow">${esc(p.nome)}${p.tipo === "legendario" ? ` <span class="tag">LGND${p.equipe ? " · " + esc(p.equipe) : ""}</span>` : ""}${tel ? "" : ' <small class="bad-text">sem telefone</small>'}</span></label>`; }).join("") || `<div class="empty">Ninguém com esse filtro.</div>`}</div>
+      return `<label class="cham-p ${tel ? "" : "off"}"><input type="checkbox" data-cmd-p="${esc(p.id)}" ${tel && !ex.has(p.id) ? "checked" : ""} ${tel ? "" : "disabled"}><span class="cham-box">${ico("check")}</span><span class="grow">${famPre(p)}${esc(p.nome)}${p.tipo === "legendario" ? ` <span class="tag">LGND${p.equipe ? " · " + esc(p.equipe) : ""}</span>` : ""}${tel ? "" : ' <small class="bad-text">sem telefone</small>'}</span></label>`; }).join("") || `<div class="empty">Ninguém com esse filtro.</div>`}</div>
     ${ed ? `<div class="actions cmd-acoes"><button class="btn" type="button" data-act="cmd-copiar">Copiar números</button><button class="btn" type="button" data-act="cmd-xlsx">${ico("upload")} Exportar planilha</button><button class="btn primary wa-btn" type="button" data-act="cmd-enviar">${ico("wa")} Enviar pelo WhatsApp · <span id="cmdN2">${sel.length}</span></button></div>` : ""}
   </section>
   <section class="panel"><h3>Enviados <small>${E.length}</small></h3><div class="list">${E.map(e => { const ids = e.ids || [], f = Object.keys(e.feitos || {}).filter(id => ids.includes(id)).length, falta = ids.length - f;
@@ -2687,7 +2761,7 @@ function cmdSequencia(id) {
         <div class="modal-foot"><span></span><button class="btn primary" type="button" data-close-btn>Fechar</button></div>`, () => {}); return; }
     const p = fila[i], txt = cmdTexto(e.msg, p);
     modal(`<h3>Enviar ${i + 1} de ${fila.length}</h3><div class="bar good"><i style="width:${pct(i, fila.length)}%"></i></div>
-      <div><b style="font-size:18px">${esc(p.nome)}</b><br><small class="hint">${esc(p.telefone || "")}${p.tipo === "legendario" ? " · Legendário" + (p.equipe ? " · " + esc(p.equipe) : "") : " · Senderista"}</small></div>
+      <div><b style="font-size:18px">${famPre(p)}${esc(p.nome)}</b><br><small class="hint">${esc(p.telefone || "")}${p.tipo === "legendario" ? " · Legendário" + (p.equipe ? " · " + esc(p.equipe) : "") : " · Senderista"}</small></div>
       <div class="field"><label for="f-txt">Mensagem (pode ajustar só para esta pessoa)</label><textarea id="f-txt" style="min-height:130px">${esc(txt)}</textarea></div>
       <div class="modal-foot"><div><button class="btn ghost" type="button" data-close-btn>Parar</button></div>
         <div class="actions"><button class="btn" type="button" id="cmdPular">Pular</button><a class="btn primary" id="cmdWa" href="#" target="_blank" rel="noopener">${ico("wa")} Abrir WhatsApp</a></div></div>`, () => {});
@@ -5991,6 +6065,7 @@ document.addEventListener("click", e => {
   if (d.copiarLink) { const p = S.pessoas.find(x => x.id === d.copiarLink); if (p && p.termoLink) copiarTexto(p.termoLink, "Link do termo copiado"); return; }
   if (d.act === "nova-ocorr") { ocorrForm(); return; }
   if (d.act === "ocorr-rapida") { ocorrRapida(); return; }
+  if (d.act === "fam-importar") { famImportarForm(); return; }
   if (d.act === "mp-novo") { S.mpPick = true; render(); return; }
   if (d.act === "mp-cancelar") { S.mpPick = false; render(); return; }
   if (d.act === "mp-gps") { S.mpPick = false; render(); mpPegarGps(q => pontoForm(null, q)); return; }
@@ -6217,7 +6292,7 @@ function vPagamentos(abas) {
     <select class="sel" id="pfAdm" aria-label="ADM responsável"><option value="">Todos os ADMs</option>${admOptions().map(a => `<option ${S.pf.adm === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>
   </div>
   ${rows.length ? `<section class="panel"><div class="list pend">${rows.map(p => `<div class="li pendrow">
-      <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
+      <div class="grow"><b>${famPre(p)}${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
         <div class="pendtags"><span class="chip wait">Boleto pendente</span></div>
         <small class="hint">${esc(p.telefone || "sem telefone")} · ${esc(p.adm || "Sem ADM")}${p.cobradoPagEm ? ` · avisado ${esc(quando(p.cobradoPagEm))}` : " · ainda não avisado"}</small></div>
       <div class="actions">${ed ? `<button class="btn sm" type="button" data-pag-ok="${p.id}">${ico("check")} Pago</button>` : ""}
@@ -6261,7 +6336,7 @@ function vPendencias() {
   </div>
   <div class="seg" role="group" aria-label="Pendência">${seg("oque", "qualquer", "Qualquer pendência")}${seg("oque", "atestado", "Atestado")}${seg("oque", "termo", "Termo")}${seg("oque", "grupo", "Grupo")}</div>
   ${rows.length ? `<section class="panel"><div class="list pend">${rows.map(p => `<div class="li pendrow">
-      <div class="grow"><b>${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
+      <div class="grow"><b>${famPre(p)}${esc(p.nome)}</b> ${p.tipo === "legendario" ? '<span class="tag">LGND</span>' : ""}
         <div class="pendtags">${tags(p)}${linkTermo(p) ? `<button class="chip ok chip-btn" type="button" data-copiar-link="${esc(p.id)}" title="Copiar só o link do termo">${ico("paste")} link do termo</button>` : ""}${p.dataAtestado && !atOk(p) ? `<span class="hint">previsão: ${esc(p.dataAtestado)}</span>` : ""}</div>
         ${obsLinha(p)}<small class="hint">${esc(p.adm || "Sem ADM")}${p.cobradoEm ? ` · cobrado ${esc(quando(p.cobradoEm))}` : " · ainda não cobrado"}</small></div>
       ${waNumber(p.telefone) ? `<a class="wa" href="${waCobrar(p)}" target="_blank" rel="noopener" data-cobrar="${p.id}">${ico("wa")} Cobrar</a>` : `<span class="wa off">${ico("wa")} Sem telefone</span>`}
@@ -6324,7 +6399,7 @@ function cobrarSequencia(soEstes) {
     modal(`
       <h3>${pag ? "Avisar" : "Cobrar"} ${i + 1} de ${fila.length}</h3>
       <div class="bar"><i style="width:${pct(i, fila.length)}%"></i></div>
-      <div><b style="font-size:18px">${esc(p.nome)}</b><div class="pendtags">${pag ? '<span class="chip wait">Boleto pendente</span>' : pendDe(p).map(k => `<span class="chip wait">${PEND[k]}</span>`).join("")}</div>
+      <div><b style="font-size:18px">${famPre(p)}${esc(p.nome)}</b><div class="pendtags">${pag ? '<span class="chip wait">Boleto pendente</span>' : pendDe(p).map(k => `<span class="chip wait">${PEND[k]}</span>`).join("")}</div>
         <small class="hint">${esc(p.telefone || "")} · ${esc(p.adm || "Sem ADM")}${(pag ? p.cobradoPagEm : p.cobradoEm) ? (pag ? " · avisado " : " · cobrado ") + esc(quando(pag ? p.cobradoPagEm : p.cobradoEm)) : ""}</small></div>
       <div class="field"><label for="f-txt">Mensagem (pode ajustar antes de enviar)</label><textarea id="f-txt" style="min-height:130px">${esc(texto(p))}</textarea></div>
       <div class="modal-foot"><div><button class="btn ghost" type="button" data-close-btn>Parar</button>${EXTRA() && i ? `<button class="btn ghost" type="button" id="seqVoltar">Voltar</button>` : ""}</div>
@@ -7194,7 +7269,7 @@ function fichaHtml(p) {
 function saudeBusca() {
   const pess = S.P.filter(p => !cancelado(p)).sort((a, b) => (saudeAlerta(b) - saudeAlerta(a)) || norm(a.nome).localeCompare(norm(b.nome)));
   const lista = q => { const k = norm(q); const r = pess.filter(p => !k || norm(p.nome).includes(k));
-    return r.length ? r.slice(0, 60).map(p => `<button type="button" class="saude-li" data-saude="${p.id}"><span><b>${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.idade ? " · " + p.idade + " anos" : ""}</span></span>${saudeAlerta(p) ? '<span class="tag saude">Saúde</span>' : ""}</button>`).join("") : `<div class="empty">Ninguém com esse nome.</div>`; };
+    return r.length ? r.slice(0, 60).map(p => `<button type="button" class="saude-li" data-saude="${p.id}"><span><b>${famPre(p)}${esc(p.nome)}</b> <span class="hint">${tipoNome(p)}${p.idade ? " · " + p.idade + " anos" : ""}</span></span>${saudeAlerta(p) ? '<span class="tag saude">Saúde</span>' : ""}</button>`).join("") : `<div class="empty">Ninguém com esse nome.</div>`; };
   modal(`
     <h3>Ficha de saúde</h3>
     <p class="hint" style="margin:0">${pess.filter(saudeAlerta).length} pessoa(s) com condição médica, remédio ou restrição alimentar aparecem primeiro. Funciona sem internet.</p>
