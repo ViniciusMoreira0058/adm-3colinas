@@ -1,7 +1,7 @@
 /* Service worker do ADM 3Colinas: deixa o app instalável e faz ele abrir sem internet.
    Os arquivos do app vêm da rede quando dá (sempre a versão mais nova) e da cópia guardada quando não dá.
    Os dados não passam por aqui: ficam guardados pelo próprio app (dados.js) e vão para o Supabase quando a internet volta. */
-const CACHE = "adm3-v139";
+const CACHE = "adm3-v140";
 const TILES = "adm3-mapa";   // pedaços do mapa (satélite/ruas) já vistos: ficam para usar sem internet
 const ARQUIVOS = ["./", "index.html", "app.js", "dados.js", "cronograma.js", "demo.js", "nfc.js", "e.html", "manifest.webmanifest",
   "assets/bg.jpg", "assets/logo.png", "icons/v2/icon-192.png", "icons/v2/icon-512.png"];

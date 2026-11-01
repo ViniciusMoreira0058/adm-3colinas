@@ -5585,7 +5585,7 @@ function vAgenda() {
   const grupos = []; L.forEach(x => { const m = mes(x.data), g = grupos[grupos.length - 1]; if (g && g.m === m) g.l.push(x); else grupos.push({ m, l: [x] }); });
   const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
   return `<div class="head"><div><h2>Agenda</h2><p>Eventos para levar o Legendários a mais homens, e o TOP. Toque num evento para ver quem vai e mandar o link.</p></div>
-      <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}${podeTops() && !topPrev() ? `<button class="btn" type="button" data-prev-ed="1">${ico("clock")} Planejar próximo TOP</button>` : ""}</div></div>
+      <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}<button class="btn" type="button" data-pdf-ag="1">${ico("upload")} Agenda em PDF</button>${podeTops() && !topPrev() ? `<button class="btn" type="button" data-prev-ed="1">${ico("clock")} Planejar próximo TOP</button>` : ""}</div></div>
     <div class="kpis ag-kpis"><div class="kpi"><span class="lbl">Próximos eventos</span><span class="val num">${nEv}</span></div><div class="kpi"><span class="lbl">Legendários confirmados</span><span class="val num">${nVao}</span><span class="sub">nos próximos eventos</span></div></div>
     <div class="seg" role="tablist"><button type="button" ${S.agPass ? 'data-ag-pass="1"' : ""} aria-pressed="${!S.agPass}">Próximos <small>${prox.length}</small></button><button type="button" ${S.agPass ? "" : 'data-ag-pass="1"'} aria-pressed="${!!S.agPass}">Já aconteceram <small>${pass.length}</small></button></div>
     ${grupos.length ? grupos.map(g => `<section class="panel"><h3>${esc(g.m)} <small>${g.l.length}</small></h3><div class="acao-lista">${g.l.map(card).join("")}</div></section>`).join("")
@@ -5684,7 +5684,7 @@ function vMetaFrentes(D) {
       <button class="btn sm" type="button" data-tsel-feito="1" ${nS ? "" : "disabled"}>${ico("check")} Marcar feitas</button>
       <button class="btn sm danger" type="button" data-tsel-del="1" ${nS ? "" : "disabled"}>${ico("trash")} Excluir</button>
       <button class="btn sm ghost" type="button" data-tsel-sair="1">Cancelar</button></div></div>`
-    : `<div class="actions"><button class="btn" type="button" data-tsel-on="1">${ico("check")} Selecionar</button>${(tarDoc().apagadas || []).length ? `<button class="btn ghost" type="button" data-tsel-volta="1">Trazer de volta as tarefas do PDF (${(tarDoc().apagadas || []).length})</button>` : ""}</div>`;
+    : `<div class="actions"><button class="btn" type="button" data-tsel-on="1">${ico("check")} Selecionar</button><button class="btn" type="button" data-pdf-tar="1">${ico("upload")} PDF das tarefas</button>${(tarDoc().apagadas || []).length ? `<button class="btn ghost" type="button" data-tsel-volta="1">Trazer de volta as tarefas do PDF (${(tarDoc().apagadas || []).length})</button>` : ""}</div>`;
   return `${barra}${podeEditar() && !sel ? `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Cada frente junta equipes numa missão. Toque para abrir. Ida a igreja, pré-TOP e encontro contam sozinhos quando o evento acontece na Agenda.</p><button class="btn" type="button" data-tar-novo="1">${ico("plus")} Nova tarefa</button></div>` : ""}
     ${ord.map(card).join("")}`;
 }
@@ -5705,6 +5705,91 @@ function tarSelecao(d, btn) {
   if (d.tselDel) { if (btn.dataset.ok !== "1") { btn.dataset.ok = "1"; btn.textContent = `Confirmar: excluir ${sel.size}`; return; }
     const ids = [...sel], doPdf = ids.filter(id => /^[pc]\d+$/.test(id));
     S.tarSel = null; save(() => api.set("config", tarId(), { ...T, apagadas: [...new Set([...(T.apagadas || []), ...doPdf])], extras: (T.extras || []).filter(x => !sel.has(x.id)) }), `${ids.length} tarefa(s) excluída(s)`).then(render); }
+}
+/* PDFs da Meta: fundo azul-marinho com a montanha, faixa laranja e rodapé em todas as páginas */
+async function pdfBase(titulo, sub) {
+  const jsPDF = await carregarPdf(), C = PDF_COR, [logo, fundo] = await Promise.all([imagemDataUrl("assets/logo.png"), imagemDataUrl("assets/bg.jpg")]);
+  const doc = new jsPDF({ unit: "mm", format: "a4" }), W = 210, H = 297;
+  const fundoPag = primeira => {
+    doc.setFillColor(...C.NAVY); doc.rect(0, 0, W, H, "F");
+    if (fundo) try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: primeira ? 0.42 : 0.16 })); doc.addImage(fundo, "JPEG", -40, primeira ? 0 : -60, 290, 150, "fundo", "FAST"); doc.restoreGraphicsState(); } catch (e) {}
+    doc.setFillColor(...C.LARANJA); doc.rect(0, 0, W, 2.2, "F");
+    doc.setDrawColor(255, 122, 26); doc.setLineWidth(0.25); doc.line(14, H - 16, W - 14, H - 16);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 140, 130);
+    doc.text(`Legendários Base 3 Colinas · ${topName()}`, 14, H - 10); doc.text(`Página ${doc.getNumberOfPages()}`, W - 14, H - 10, { align: "right" }); };
+  fundoPag(true);
+  if (logo) try { doc.addImage(logo, "PNG", 14, 14, 22, 27.8, "logo"); } catch (e) {}
+  doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.text("LEGENDÁRIOS BASE 3 COLINAS", 42, 22, { charSpace: 0.8 });
+  doc.setTextColor(255, 255, 255); doc.setFontSize(24); doc.text(titulo, 42, 32);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(225, 214, 202); doc.text(doc.splitTextToSize(sub, W - 56), 42, 39);
+  const ctx = { doc, C, W, H, y: 56 };
+  ctx.cabe = h => { if (ctx.y + h > H - 22) { doc.addPage(); fundoPag(false); ctx.y = 16; return false; } return true; };
+  return ctx;
+}
+async function tarefasPdf() {
+  const D = metaDados(), F = frentesDados(D), fmt = d => d ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
+  const tot = F.reduce((a, f) => a + f.total, 0), feitas = F.reduce((a, f) => a + f.feitas, 0), atras = F.reduce((a, f) => a + f.atras, 0);
+  const X = await pdfBase("Tarefas das equipes", `${topName()} · meta de ${D.meta} inscritos · ${feitas} de ${tot} tarefas feitas${atras ? ` · ${atras} atrasada(s)` : ""} · ${new Date().toLocaleDateString("pt-BR")}`), { doc, C, W } = X;
+  const ST = { feito: ["FEITA", C.VERDE], atrasada: ["ATRASADA", C.VERMELHO], semana: ["ESTA SEMANA", [214, 150, 20]], proxima: ["PRÓXIMA", [120, 130, 145]] };
+  F.forEach(f => {
+    X.cabe(34);
+    doc.setFillColor(...C.LARANJA); doc.roundedRect(14, X.y, W - 28, 13, 2.5, 2.5, "F");
+    doc.setTextColor(26, 12, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text(f.l.toUpperCase(), 19, X.y + 8.6, { charSpace: 0.5 });
+    doc.setFontSize(10); doc.text(`${f.feitas}/${f.total} feitas`, W - 19, X.y + 8.6, { align: "right" }); X.y += 18;
+    doc.setTextColor(255, 210, 170); doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.text(f.sub || f.eqs.join(" · "), 16, X.y);
+    doc.setTextColor(215, 205, 195); doc.setFont("helvetica", "italic"); const ml = doc.splitTextToSize(f.m, W - 32); doc.text(ml, 16, X.y + 5); X.y += 5 + ml.length * 4.4;
+    if (f.ind.length) { const w = (W - 28 - (f.ind.length - 1) * 4) / f.ind.length; X.cabe(16);
+      f.ind.forEach((i, k) => { const x = 14 + k * (w + 4); doc.setFillColor(26, 34, 45); doc.roundedRect(x, X.y, w, 13, 2, 2, "F");
+        doc.setTextColor(170, 160, 150); doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.text(i.l.toUpperCase(), x + 3, X.y + 4.5);
+        doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text(`${i.n} / ${i.alvo}`, x + 3, X.y + 10.5);
+        doc.setFillColor(60, 70, 85); doc.rect(x + w - 26, X.y + 8.5, 22, 1.6, "F"); doc.setFillColor(...C.LARANJA); doc.rect(x + w - 26, X.y + 8.5, 22 * Math.min(1, i.n / (i.alvo || 1)), 1.6, "F"); });
+      X.y += 17; }
+    f.eqs.forEach(eq => { const L = f.L.filter(t => t.equipe === eq); if (!L.length) return;
+      X.cabe(14); doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.text(eq.toUpperCase(), 16, X.y + 4, { charSpace: 0.4 });
+      doc.setDrawColor(70, 60, 55); doc.setLineWidth(0.2); doc.line(16 + doc.getTextWidth(eq.toUpperCase()) + 4, X.y + 3, W - 14, X.y + 3); X.y += 8;
+      L.forEach(t => { doc.setFont("helvetica", "normal"); doc.setFontSize(10); const tl = doc.splitTextToSize(t.titulo, W - 86), h = 4 + tl.length * 4.4 + 4;
+        X.cabe(h); const [lab, cor] = ST[t.sit] || ST.proxima;
+        doc.setDrawColor(...(t.feito ? C.VERDE : [150, 140, 130])); doc.setLineWidth(0.4); doc.roundedRect(17, X.y + 1, 4, 4, 0.8, 0.8, t.feito ? "FD" : "S");
+        if (t.feito) { doc.setFillColor(...C.VERDE); doc.roundedRect(17, X.y + 1, 4, 4, 0.8, 0.8, "F"); doc.setDrawColor(255, 255, 255); doc.setLineWidth(0.5); doc.line(17.8, X.y + 3.1, 18.8, X.y + 4.1); doc.line(18.8, X.y + 4.1, 20.4, X.y + 2); }
+        doc.setTextColor(...(t.feito ? [170, 165, 160] : [255, 255, 255])); doc.text(tl, 25, X.y + 4.2);
+        doc.setFontSize(8.2); doc.setTextColor(165, 155, 145); doc.text(`Semana ${t.semana} · até ${fmt(t.prazo)}${t.tipo === "num" || t.tipo === "auto" ? ` · ${t.n} de ${t.alvo}` : ""}${t.tipo === "auto" ? " (pela Agenda)" : ""}${t.feito && t.por ? ` · ${t.por.split(" ")[0]}` : ""}`, 25, X.y + 4.2 + tl.length * 4.4);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); const lw = doc.getTextWidth(lab) + 6; doc.setFillColor(...cor); doc.roundedRect(W - 16 - lw, X.y + 0.6, lw, 5.4, 2.7, 2.7, "F"); doc.setTextColor(255, 255, 255); doc.text(lab, W - 16 - lw / 2, X.y + 4.3, { align: "center" });
+        X.y += h; doc.setDrawColor(40, 48, 60); doc.setLineWidth(0.15); doc.line(25, X.y - 1.5, W - 16, X.y - 1.5); });
+      X.y += 3; });
+    X.y += 6; });
+  await entregarPdf(doc.output("blob"), `Tarefas das equipes - ${topName()}.pdf`, `Tarefas das equipes · ${topName()}`, true);
+}
+async function agendaPdf() {
+  const hoje = hojeISO(), M = [];
+  acoesTodas().filter(a => a.data >= hoje).forEach(a => M.push({ data: a.data, a }));
+  agTops().filter(t => (t.fim || t.inicio) >= hoje).forEach(t => M.push({ data: t.inicio, t }));
+  M.sort((x, y) => String(x.data + (x.a ? x.a.hora : "")).localeCompare(String(y.data + (y.a ? y.a.hora : ""))));
+  const X = await pdfBase("Agenda", `Próximos eventos para levar o Legendários a mais homens · ${M.length} na agenda · atualizada em ${new Date().toLocaleDateString("pt-BR")}`), { doc, C, W } = X;
+  if (!M.length) { doc.setTextColor(220, 210, 200); doc.setFontSize(12); doc.text("Nenhum evento marcado ainda.", W / 2, X.y + 20, { align: "center" }); }
+  let mesAt = "";
+  M.forEach(x => {
+    const d = new Date(x.data + "T12:00:00"), mes = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }).toUpperCase();
+    if (mes !== mesAt) { X.cabe(40); mesAt = mes; doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(mes, 14, X.y + 5, { charSpace: 1 });
+      doc.setDrawColor(...C.LARANJA); doc.setLineWidth(0.3); doc.line(14 + doc.getTextWidth(mes) + 1 + mes.length * 1 + 4, X.y + 3.6, W - 14, X.y + 3.6); X.y += 11; }
+    const top = !!x.t, a = x.a || {}, titulo = top ? x.t.nome + (x.t.id === "previsto" ? (x.t.confirmado ? " · data confirmada" : " · data prevista") : "") : a.titulo;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12.5); const tl = doc.splitTextToSize(titulo, W - 70);
+    const linhas = top ? [`${fmtPeriodo(x.t)}${x.t.local ? " · " + x.t.local : ""}`, x.t.linkInsc ? "Inscrições abertas: toque para se inscrever" : ""] :
+      [`${a.tipo} · Equipe ${a.equipe}`, `${a.hora ? a.hora + " · " : ""}${[a.local, a.endereco].filter(Boolean).join(" · ") || "local a definir"}`, a.obs || ""];
+    const L = linhas.filter(Boolean), h = Math.max(26, 8 + tl.length * 5.4 + L.length * 4.6 + (top ? 2 : 8));
+    X.cabe(h + 4);
+    if (top) { doc.setFillColor(...C.LARANJA); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); } else { doc.setFillColor(24, 32, 43); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(14, X.y + 4, 1.4, h - 8, "F"); }
+    const tx = top ? [26, 12, 0] : [255, 255, 255], sb = top ? [70, 35, 10] : [190, 180, 170];
+    doc.setTextColor(...tx); doc.setFont("helvetica", "bold"); doc.setFontSize(22); doc.text(String(d.getDate()).padStart(2, "0"), 30, X.y + 12, { align: "center" });
+    doc.setFontSize(8); doc.text(d.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "").toUpperCase(), 30, X.y + 17, { align: "center" });
+    doc.setDrawColor(...(top ? [200, 90, 10] : [60, 70, 85])); doc.setLineWidth(0.3); doc.line(42, X.y + 5, 42, X.y + h - 5);
+    let yy = X.y + 8; doc.setFontSize(12.5); doc.setTextColor(...tx); doc.text(tl, 47, yy); yy += tl.length * 5.4;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...sb); L.forEach(l => { doc.text(doc.splitTextToSize(l, W - 66)[0], 47, yy); yy += 4.6; });
+    if (top && x.t.linkInsc) doc.link(14, X.y, W - 28, h, { url: x.t.linkInsc });
+    if (!top && a.token) { const c = acaoConfirmados(a).length; doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); const lab = "CONFIRMAR PRESENÇA", lw = doc.getTextWidth(lab) + 8;
+      doc.setFillColor(...C.LARANJA); doc.roundedRect(47, yy - 1.6, lw, 6, 3, 3, "F"); doc.setTextColor(26, 12, 0); doc.text(lab, 47 + lw / 2, yy + 2.6, { align: "center" }); doc.link(47, yy - 1.6, lw, 6, { url: acaoLink(a) });
+      doc.setTextColor(...sb); doc.setFont("helvetica", "normal"); doc.text(`${c}${a.vagas ? " de " + a.vagas : ""} legendário(s) confirmado(s)`, 47 + lw + 4, yy + 2.6); }
+    X.y += h + 4; });
+  await entregarPdf(doc.output("blob"), `Agenda Legendarios 3 Colinas.pdf`, "Agenda · Legendários 3 Colinas", true);
 }
 function metaSemana(D) {
   const T = tarLista(D).filter(t => !ehCoordEq() || t.equipe === ME.equipeLgnd), at = T.filter(t => t.sit === "atrasada"), sem = T.filter(t => t.sit === "semana");
@@ -6505,6 +6590,7 @@ document.addEventListener("click", e => {
   if (d.tarNovo) { tarForm(); return; }
   if (d.acaoNovo) { acaoForm(); return; }
   if (d.saidasGerar) { saidasGerar(); return; }
+  if (d.pdfTar || d.pdfAg) { const b = t; b.disabled = true; (d.pdfTar ? tarefasPdf() : agendaPdf()).catch(e => toast("Não consegui gerar o PDF. " + (e.message || ""))).finally(() => { b.disabled = false; }); return; }
   if (d.tselOn || d.tselSair || d.tselTodas || d.tselFrente || d.tselFeito || d.tselDel || d.tselVolta) { tarSelecao(d, t); return; }
   if (d.faqEd) { faqForm(+d.faqEd); return; }
   if (d.faqCopiar) { const q = FAQ[+d.faqCopiar], r = faqDoc()["q" + d.faqCopiar]; if (r) copiarTexto(r.txt, "Resposta copiada"); return; }
