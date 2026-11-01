@@ -200,7 +200,7 @@ const NIVEIS = [
 const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && (!v.demo || DEMO) && liberada(v));
 // a página já foi lançada no app real? (o que ainda está só na demo não aparece no menu nem em Usuários)
 const liberada = v => !(v.org && !ORG()) && !(v.extra && !EXTRA()) && !(v.nfc && !NFC()) && !(v.id === "campo" && !CAMPO()) && !(v.id === "celulares" && !CEL())
-  && !(TOP2_VIEWS.includes(v.id) && !TOP2()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM());
+  && !(TOP2_VIEWS.includes(v.id) && !TOP2()) && !(v.id === "carros" && TOP2()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM());
 // "_v2" marca o cadastro salvo já com a escolha página por página; cadastros antigos seguem a regra antiga (página que usa dados de outra aparece junto)
 const ABA_V2 = "_v2";
 /* Coordenadores e subcoordenadores de equipe (demo): perfil "coord" no cadastro, só leitura, vê só a própria equipe */
@@ -221,6 +221,7 @@ const canSee = v => {
   if (v.id === "campo" && !CAMPO()) return false;
   if (v.id === "celulares" && !CEL()) return false;
   if (TOP2_VIEWS.includes(v.id) && !TOP2()) return false;
+  if (v.id === "carros" && TOP2()) return false;   // na demo os Carros ficam dentro do Transporte
   if ((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
   if (!ME.acesso) return v.id === "painel";
@@ -2256,7 +2257,12 @@ const trOnib = () => (trDoc().onibus || []).slice().sort((a, b) => (+a.num || 99
 const trCap = o => +((o.vist || {}).lugares) || +o.vagas || 0;
 const trBusPess = (o, sent) => ((o.fam || {})[sent] || []).flatMap(f => famDe(f));
 const trCarPess = (cid, sent) => (((trDoc().carros || {})[cid] || {})[sent] || []).map(pid => S.P.find(p => p.id === pid)).filter(p => p && !cancelado(p));
+const trAbas = aba => `<div class="seg campo-abas tr-abas"><button type="button" data-tr-aba="viagem" aria-pressed="${aba !== "carros"}">🚌 Ônibus e embarque</button><button type="button" data-tr-aba="carros" aria-pressed="${aba === "carros"}">🚗 Carros</button></div>`;
 function vTransporte() {
+  if (S.trAba === "carros" && CARROS()) return vCarros().replace("<h2>Carros</h2>", "<h2>Transporte</h2>").replace('\n  <div class="kpis">', trAbas("carros") + '\n  <div class="kpis">');
+  return vTransporteViagem();
+}
+function vTransporteViagem() {
   const D = trDoc(), O = trOnib(), C = trCarros(), sent = S.trSent || "ida", E = D.emb || {}, ed = podeEditar(), ab = S.trAberto, q = norm(S.trQ || "");
   const famCom = new Set(O.flatMap(o => (o.fam || {})[sent] || [])), famSem = trFams().filter(f => !famCom.has(f));
   const lgCom = new Set(C.flatMap(c => ((D.carros || {})[c.id] || {})[sent] || [])), lgSem = trLgs().filter(p => !lgCom.has(p.id));
@@ -2281,6 +2287,7 @@ function vTransporte() {
   return `
   <div class="head"><div><h2>Transporte</h2><p>Os ônibus levam as famílias e os carros levam os legendários. Monte a ida, copie para a volta e, na hora de sair, confira o embarque de cada um.</p></div>
     <div class="actions">${ed ? `<button class="btn primary" type="button" data-tr-v="">${ico("plus")} Ônibus</button>${sent === "volta" ? `<button class="btn" type="button" data-act="tr-copiar">Volta igual à ida</button>` : ""}` : ""}</div></div>
+  ${CARROS() ? trAbas("viagem") : ""}
   <div class="seg campo-abas"><button type="button" data-tr-sent="ida" aria-pressed="${sent === "ida"}">Ida</button><button type="button" data-tr-sent="volta" aria-pressed="${sent === "volta"}">Volta</button></div>
   ${sent === "volta" && !temVolta && (O.length || C.length) ? `<div class="banner"><span>A volta ainda está vazia. Toque em <b>Volta igual à ida</b> para copiar tudo e depois ajuste quem mudou.</span></div>` : ""}
   <div class="kpis">
@@ -2470,7 +2477,7 @@ function carLinkForm() {
   if (D.token) abrir(); else carSalvar(() => ({ token: Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4) })).then(abrir);
 }
 document.addEventListener("input", e => { if (e.target && e.target.id === "carQ") { S.carQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $("#carQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } } });
-window.addEventListener("storage", e => { if (e.key === CAR_LS && S.view === "carros" && !$("#modalRoot").innerHTML) render(); });
+window.addEventListener("storage", e => { if (e.key === CAR_LS && (S.view === "carros" || S.view === "transporte" && S.trAba === "carros") && !$("#modalRoot").innerHTML) render(); });
 
 /* ---------- COMUNICADOS (app real desde 01/11/2026): mensagem para senderistas e legendários pelo WhatsApp, uma pessoa por vez ----------
    O WhatsApp não deixa disparar para todos de uma vez pelo número pessoal: o app abre a conversa de cada um com a mensagem pronta.
@@ -5609,6 +5616,7 @@ document.addEventListener("click", e => {
   if (d.remDose) { if (podeEditar()) remSalvar(D => { const x = { ...(D.doses || {}) }; if (x[d.remDose]) delete x[d.remDose]; else x[d.remDose] = { por: ME.adm || "", em: agoraISO() }; return { doses: x }; }, ""); return; }
   if (d.act === "emg-editar") { emergForm(); return; }
   if (d.trSent) { S.trSent = d.trSent; render(); return; }
+  if (d.trAba) { S.trAba = d.trAba; render(); return; }
   if (d.trAbrir) { S.trAberto = S.trAberto === d.trAbrir ? null : d.trAbrir; render(); return; }
   if (d.car != null && t.matches("[data-car]")) { if (podeEditar()) carForm(d.car); return; }
   if (d.carVer) { carVer(d.carVer); return; }
