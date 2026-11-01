@@ -2297,7 +2297,7 @@ function trDistForm(vid) {
    que grava cada carro em config/carlink-<top>-<id>; na demo guarda no próprio aparelho (localStorage "adm3-carros-link").
    Fotos que a ADM tira vão para o Storage (fotoPath/placaPath); as que vêm pelo link ficam no carlink, sem copiar para a lista. */
 const CARROS = () => true;
-const CAR_FUNC = ["Apoio", "Ambulância", "Visitante", ...EQUIPES];
+const CAR_FUNC = [...EQUIPES, "Ambulância"];   // as áreas das equipes dos legendários e ambulância
 const CAR_LS = "adm3-carros-link";
 const carId = () => `carros-${curTopId()}`;
 const carDoc = () => cfgDe(carId()) || {};
@@ -2364,7 +2364,7 @@ function carVer(id) {
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button>${ed ? `<button class="btn" type="button" data-car="${esc(c.id)}">${ico("edit")} Editar</button>` : ""}${ed && carPend(c) ? `<button class="btn primary" type="button" data-car-ok="${esc(c.id)}">${ico("check")} Aprovar</button>` : ""}</div></div>`, () => closeModal());
 }
 function carForm(id) {
-  const c = carLista().find(x => x.id === id) || { funcao: "Apoio" }, arq = {};
+  const c = carLista().find(x => x.id === id) || { funcao: "" }, arq = {};
   const fotoCampo = (k, l, v) => `<div class="field"><span class="lab">${l}</span><label class="btn car-up"><img id="${k}Prev" src="${esc(v)}" ${v ? "" : "hidden"} alt=""><span>${ico("upload")} ${v ? "Trocar" : "Tirar foto"}</span><input type="file" accept="image/*" capture="environment" id="${k}Arq" hidden></label></div>`;
   modal(`<h3>${c.id ? "Editar carro" : "Cadastrar carro"}</h3><div class="form">
     <div class="field full"><label for="f-cn">Nome do dono ou motorista</label><input id="f-cn" name="nome" value="${esc(c.nome || "")}" list="carPessoas" required autocomplete="off"><datalist id="carPessoas">${S.P.filter(p => !cancelado(p)).map(p => `<option value="${esc(p.nome)}">`).join("")}</datalist></div>
@@ -2372,14 +2372,14 @@ function carForm(id) {
     <div class="field"><label for="f-cp">Placa</label><input id="f-cp" name="placa" value="${esc(carPlaca(c.placa))}" placeholder="ABC-1D23" style="text-transform:uppercase" required></div>
     <div class="field"><label for="f-cm">Modelo</label><input id="f-cm" name="modelo" value="${esc(c.modelo || "")}" placeholder="ex.: Hilux, Gol, Sprinter"></div>
     <div class="field"><label for="f-cc">Cor</label><input id="f-cc" name="cor" value="${esc(c.cor || "")}"></div>
-    <div class="field"><label for="f-cf">Função</label><select id="f-cf" name="funcao">${CAR_FUNC.map(x => `<option ${c.funcao === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+    <div class="field"><label for="f-cf">Função</label><select id="f-cf" name="funcao" required><option value="">Selecione</option>${(c.funcao && !CAR_FUNC.includes(c.funcao) ? [c.funcao, ...CAR_FUNC] : CAR_FUNC).map(x => `<option ${c.funcao === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
     <div class="field"><label for="f-cv">Lugares</label><input id="f-cv" name="vagas" type="number" min="1" max="60" value="${esc(c.vagas || "")}"></div>
     <div class="field full"><label for="f-cl">Onde fica estacionado</label><input id="f-cl" name="local" value="${esc(c.local || "")}" placeholder="ex.: estacionamento da base, portaria"></div>
     ${fotoCampo("carF", "Foto do carro", carImg(c))}${fotoCampo("carP", "Foto da placa", carImg(c, 1))}
     <div class="field full"><label for="f-co">Observação</label><input id="f-co" name="obs" value="${esc(c.obs || "")}"></div></div>
     <div class="modal-foot"><div>${c.id ? `<button class="btn danger" type="button" id="carDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
     const g = k => String(fd.get(k) || "").trim();
-    if (!g("nome") || !g("placa")) { toast("Preencha o nome e a placa."); return; }
+    if (!g("nome") || !g("placa") || !g("funcao")) { toast("Preencha o nome, a placa e a função."); return; }
     const novo = { ...c, id: c.id || "car" + Date.now().toString(36), nome: g("nome"), tel: g("tel"), placa: carPlaca(g("placa")), modelo: g("modelo"), cor: g("cor"), funcao: g("funcao"), vagas: +g("vagas") || "", local: g("local"), obs: g("obs"), origem: c.origem || "adm", em: c.em || new Date().toISOString(), por: c.por || ME.adm || "" };
     if (novo.origem === "link") novo.conferido = true;
     closeModal(); (async () => {
