@@ -2599,7 +2599,7 @@ document.addEventListener("change", e => { const t = e.target; if (!t) return;
 let finFotoArq = null;
 const FIN_AREAS = ["Alimentação", "Logística", "Transporte", "Saúde", "Material e brindes", "Hospedagem", "Mídia", "Outros"];
 const finDoc = () => cfgDe(`fin-${curTopId()}`) || {};
-const finSalvar = (fn, msg) => { const D = finDoc(); return save(() => api.set("config", `fin-${curTopId()}`, { itens: D.itens || [], orc: D.orc || {}, ...fn(D), top: curTopId() }), msg).then(render); };
+const finSalvar = (fn, msg) => { const D = finDoc(); return save(() => api.set("config", `fin-${curTopId()}`, { ...D, itens: D.itens || [], orc: D.orc || {}, ...fn(D), top: curTopId() }), msg).then(render); };
 /* Financeiro 2 (demo, flag FIN2): previsão, custo por senderista, aviso de contas, saídas sem recibo, filtros, gráfico e Excel */
 const FIN2 = () => DEMO;
 const finSemRecibo = () => (finDoc().itens || []).filter(i => i.tipo !== "entrada" && !i.foto && !i.fotoPath);
@@ -2640,7 +2640,7 @@ function vFinanceiro() {
 
     ${FIN2() ? (() => { const pf = VR.parcFut || 0, aPagar = contasAbertas().reduce((s, p) => s + (+p.valor || 0), 0), fim = se + pf - sg, nS = S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).length;
       return `<button type="button" class="kpi kpi-btn ${fim < 0 ? "alert" : ""}" data-fin-det="prev"><span class="lbl">Vai sobrar no fim</span><span class="val num" style="font-size:24px">${brl(fim)}</span><span class="sub">${pf ? `+ ${brl(pf)} em parcelas a receber` : "sem parcelas a receber"}${aPagar ? ` · ${brl(aPagar)} de contas ainda a pagar` : ""}</span></button>
-      <button type="button" class="kpi kpi-btn" data-fin-det="saidas"><span class="lbl">Custo por senderista</span><span class="val num" style="font-size:24px">${nS ? brl(sg / nS) : "—"}</span><span class="sub">${nS} senderista(s) inscrito(s)</span></button>`; })() : ""}
+      ${(() => { const C = custoCalc(); return `<button type="button" class="kpi kpi-btn" data-act="custo-pessoa"><span class="lbl">Custo por pessoa</span><span class="val num" style="font-size:22px">${C.nS ? brl(C.porS) : "—"}<small style="font-size:.5em;opacity:.7"> /senderista</small></span><span class="sub">${C.nL ? brl(C.porL) + " por legendário" : "sem legendários"}${C.semC ? ` · ${C.semC} sem classificar` : ""}</span></button>`; })()}`; })() : ""}
     <button type="button" class="kpi kpi-btn ${totOrc && sg > totOrc ? "alert" : ""}" data-fin-det="orc"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></button>
   </div>
   ${FIN2() && sg ? (() => { const cores = ["#ff7a1a", "#60a5fa", "#46c486", "#f5c542", "#c084fc", "#f472b6", "#2dd4bf", "#94a3b8", "#fb7185", "#a3e635"], A = areas.map(a => [a, porA(a)]).filter(x => x[1] > 0).sort((x, y) => y[1] - x[1]);
@@ -2658,6 +2658,31 @@ function vFinanceiro() {
     <b class="num fin-v ${i.tipo === "entrada" ? "ent" : ""}">${i.tipo === "entrada" ? "+" : "−"} ${brl(i.valor)}</b></div>`).join("") || `<div class="empty">${I.length ? "Nenhum lançamento com esses filtros." : "Toque em Lançar para registrar a primeira saída."}</div>`}</div></section>`;
 }
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+/* Custo por pessoa: o dono (ou quem edita o Financeiro) marca cada saída como Senderistas (s), Legendários (l) ou Geral (g).
+   Fica em fin-<top>.custoPara {"<id do lançamento>" | "<doc da equipe>|<id>": "s"|"l"|"g"}; sem marcação conta como Geral. Geral é repartido pelo número de pessoas. */
+const custoKey = i => i.doc ? `${i.doc}|${i.id}` : i.id;
+const custoSaidas = () => [...(finDoc().itens || []).filter(i => i.tipo !== "entrada"), ...feqAprovados()].sort((a, b) => (b.valor || 0) - (a.valor || 0));
+function custoCalc(M = finDoc().custoPara || {}) {
+  const nS = S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).length, nL = S.P.filter(p => p.tipo === "legendario" && !cancelado(p)).length, n = nS + nL || 1;
+  let s = 0, l = 0, g = 0, semC = 0; custoSaidas().forEach(i => { const v = +i.valor || 0, k = M[custoKey(i)]; if (!k) semC++; if (k === "s") s += v; else if (k === "l") l += v; else g += v; });
+  const gS = g * nS / n, gL = g * nL / n;
+  return { nS, nL, s, l, g, gS, gL, semC, porS: nS ? (s + gS) / nS : 0, porL: nL ? (l + gL) / nL : 0 };
+}
+function custoForm() {
+  const ed = podeEditar(), M = { ...(finDoc().custoPara || {}) }, L = custoSaidas(), F = { f: "" };
+  const resumo = () => { const C = custoCalc(M); return `<div class="imp-kpis"><div class="ok"><b class="num">${brl(C.porS)}</b><span>por senderista (${C.nS})</span></div><div class="ok"><b class="num">${brl(C.porL)}</b><span>por legendário (${C.nL})</span></div></div>
+    <p class="hint" style="margin:0">Senderistas ${brl(C.s)} · Legendários ${brl(C.l)} · Geral ${brl(C.g)} (${brl(C.gS)} para senderistas e ${brl(C.gL)} para legendários, pelo número de pessoas)${C.semC ? ` · <b>${C.semC} sem classificar</b> (contam como Geral)` : ""}</p>`; };
+  const linhas = () => L.filter(i => !F.f || (F.f === "sem" ? !M[custoKey(i)] : (M[custoKey(i)] || "g") === F.f)).map(i => { const k = custoKey(i), v = M[k] || "";
+    return `<div class="li custo-li"><span class="grow"><b>${esc(i.desc)}</b><br><span class="hint">${esc(i.area || "")}${i.equipe ? " · Equipe " + esc(i.equipe) : ""} · ${brl(i.valor)}</span></span>
+      <span class="sn3 custo-sn">${[["s", "Senderistas"], ["l", "Legendários"], ["g", "Geral"]].map(([x, t]) => `<label><input type="radio" name="c-${esc(k)}" value="${x}" data-custo="${esc(k)}" ${v === x ? "checked" : ""} ${ed ? "" : "disabled"}><span class="${x === "g" ? "" : "ok"}">${t}</span></label>`).join("")}</span></div>`; }).join("") || `<div class="empty">Nada neste filtro.</div>`;
+  modal(`<h3>Custo por pessoa</h3><div id="custoRes">${resumo()}</div>
+    <div class="custo-f" id="custoF">${[["", "Todas"], ["sem", "Sem classificar"], ["s", "Senderistas"], ["l", "Legendários"], ["g", "Geral"]].map(([x, t]) => `<button type="button" class="btn sm ${F.f === x ? "primary" : ""}" data-cf="${x}">${t}</button>`).join("")}</div>
+    <div class="list custo-lista" id="custoL">${linhas()}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>${ed ? "Cancelar" : "Fechar"}</button>${ed ? `<button class="btn primary" type="submit">Salvar</button>` : ""}</div></div>`, () => {
+    if (!ed) return closeModal(); closeModal(); finSalvar(() => ({ custoPara: M }), "Classificação salva"); });
+  $("#custoL").addEventListener("change", e => { const t = e.target; if (!t.dataset.custo) return; M[t.dataset.custo] = t.value; $("#custoRes").innerHTML = resumo(); });
+  $("#custoF").addEventListener("click", e => { const b = e.target.closest("[data-cf]"); if (!b) return; F.f = b.dataset.cf; $("#custoF").querySelectorAll("button").forEach(x => x.classList.toggle("primary", x === b)); $("#custoL").innerHTML = linhas(); });
+}
 function finFiltrar(I) {
   const F = finFilt(), q = norm(F.q || "");
   return I.filter(i => (!F.tipo || (F.tipo === "entrada" ? i.tipo === "entrada" : i.tipo !== "entrada")) && (!F.area || i.area === F.area) && (!F.mes || (i.data || "").slice(0, 7) === F.mes)
@@ -5737,6 +5762,7 @@ document.addEventListener("click", e => {
   if (d.act === "pt-licoes") { licoesForm(); return; }
   if (d.act === "backup") { backupForm(); return; }
   if (d.act === "fin-xlsx") { finXlsx(); return; }
+  if (d.act === "custo-pessoa") { custoForm(); return; }
   if (d.act === "fin-limpar") { S.finF = null; render(); return; }
   if (d.act === "fin-sem") { S.finF = { ...finFilt(), sem: true, tipo: "" }; render(); setTimeout(() => { const el = $(".fin-filtros"); if (el) el.scrollIntoView({ behavior: "smooth" }); }, 50); return; }
   if (d.act === "cmd-enviar") { if (podeEditar()) cmdEnviar(); return; }
