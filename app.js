@@ -1341,6 +1341,7 @@ function licoesForm() {
 
 /* ---------- Guia "Como usar": o que fazer em cada página, só das páginas que a pessoa vê ---------- */
 const GUIA = {
+  meta: ["Meta do TOP", ["Resumo: o que é desta semana, inscritos contra a meta e os checkpoints.", "Indicações: os nomes de cada equipe, com respostas prontas para as dúvidas.", "Equipes: as frentes do PDF, cada uma com as suas tarefas. Ida a igreja e pré-TOP contam sozinhos pela Agenda."]],
   agenda: ["Agenda", ["Todos os eventos de divulgação do Legendários e o TOP, por mês.", "Toque num evento para ver quantos vão, quem vai e mandar o link para mais pessoas confirmarem.", "Qualquer coordenador pode criar um evento em \"Novo evento\"."]],
   painel: ["Visão geral do TOP", ["Mostra quantos dias faltam, quantos estão prontos e o que fazer hoje.", "Toque em qualquer item de \"O que fazer hoje\" para ir direto à tela certa."]],
   participantes: ["Lista dos senderistas", ["Toque no status de atestado ou termo para avançar.", "O lápis abre a ficha completa. Quem mexe por último vira o ADM responsável."]],
@@ -5348,8 +5349,7 @@ function metaPlacar() {
     cp ? `Próximo checkpoint: semana ${-cp.w} (${fmt(cp.d)}), mínimo de ${cp.min} inscritos` : "",
     ``, `*Por canal*`, ...(canais.length ? canais : ["• ainda sem indicações"]),
     ``, `*Nomes indicados por equipe*`, ...E.filter(e => e.nomes).sort((a, b) => b.nomes / b.metaNomes - a.nomes / a.metaNomes).map(e => `• ${e.e}: ${e.nomes} de ${e.metaNomes}${e.nomes >= e.metaNomes ? " 🏆" : ""}${e.insc ? ` · ${e.insc} inscrito(s)` : ""}`),
-    ...(() => { const at = tarLista(D).filter(t => t.sit === "atrasada"), por = {}; at.forEach(t => { por[t.equipe] = (por[t.equipe] || 0) + 1; });
-      return at.length ? [``, `*Tarefas atrasadas*`, ...Object.entries(por).map(([e, n]) => `• ${e}: ${n}`)] : [``, `Tarefas em dia ✅`]; })(),
+    ``, `*Frentes*`, ...frentesDados(D).map(f => `• ${f.l}: ${f.feitas}/${f.total} tarefas${f.ind.length ? " · " + f.ind.map(i => `${i.l.toLowerCase()} ${i.n}/${i.alvo}`).join(" · ") : ""}${f.atras ? ` · ${f.atras} atrasada(s)` : " ✅"}`),
     ...(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 4); return A.length ? [``, `*Próximos eventos*`, ...A.map(a => `• ${a.titulo} · ${acaoQuando(a)}`)] : []; })(),
     ``, `Bora juntos! 💪`].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
 }
@@ -5360,7 +5360,7 @@ function metaCoordCard() {
       <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : `<p class="hint">Sua equipe ainda não tem servidores contados para a meta.</p>`}
     <p class="hint" style="margin:0">Placar geral: <b class="num">${D.inscritos}</b> inscritos de ${D.meta} · meta para hoje ${D.metaHoje}</p>
     <div class="actions"><button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button><button class="btn" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>${mine.length ? `<span class="hint">${mine.length} indicação(ões) da equipe</span>` : ""}</div></section>
-  ${(() => { const T = tarLista(D).filter(t => t.equipe === ME.equipeLgnd && (t.sit === "atrasada" || t.sit === "semana")); return T.length ? `<section class="panel"><h3>Tarefas da equipe nesta semana <small>${T.length}</small><button class="linkbtn" type="button" data-meta-aba="tar">ver todas ›</button></h3><div class="list">${T.map(tarLi).join("")}</div></section>` : ""; })()}
+  ${(() => { const T = tarLista(D).filter(t => t.equipe === ME.equipeLgnd && (t.sit === "atrasada" || t.sit === "semana")); return T.length ? `<section class="panel"><h3>Tarefas da equipe nesta semana <small>${T.length}</small><button class="linkbtn" type="button" data-meta-aba="eq">ver todas ›</button></h3><div class="list">${T.map(tarLi).join("")}</div></section>` : ""; })()}
   ${(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 3); return A.length ? `<section class="panel"><h3>Próximos eventos <button class="linkbtn" type="button" data-go="agenda">agenda ›</button></h3><div class="acao-lista">${A.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.equipe)} · ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div></section>` : ""; })()}`;
 }
 function vMeta() {
@@ -5374,7 +5374,7 @@ function vMeta() {
   const tel = x => waNumber(x.tel);
   const cab = `
   <div class="head"><div><h2>Meta do TOP</h2><p>${esc(topName())}: ${D.vagas} vagas + ${D.desist}% de desistência = <b>${D.meta} inscritos</b> até ${fmt(D.fimD)}. A meta é montada sozinha para cada TOP novo.</p></div>
-    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${podeEditar() ? `<button class="btn" type="button" data-act="ind-link">${ico("route")} Link de indicação</button>` : ""}${ehCoordEq() ? "" : `<button class="btn" type="button" data-act="meta-placar">${ico("wa")} Copiar placar</button>`}${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
+    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${podeEditar() ? `<button class="btn" type="button" data-act="ind-link">${ico("route")} Link de indicação</button>` : ""}<button class="btn" type="button" data-go="agenda">${ico("clock")} Agenda</button>${ehCoordEq() ? "" : `<button class="btn" type="button" data-act="meta-placar">${ico("wa")} Copiar placar</button>`}${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
 `;
   const pPlacar = `
   <div class="kpis">
@@ -5406,24 +5406,24 @@ function vMeta() {
         <button class="linkbtn" type="button" data-ind-ed="${esc(x.doc)}|${esc(x.id)}" aria-label="Editar">${ico("edit")}</button></div>` : ""}</div>`).join("")}</div>`
     : `<div class="empty">${I.length ? "Nada neste filtro." : "Nenhum nome indicado ainda. Cada servidor indica 5 nomes."}</div>`}
   </section>`;
-  const aba = S.metaAba || "placar";
-  return cab + metaAbas(aba) + (aba === "tar" ? vMetaTarefas(D) : aba === "acoes" ? vMetaAcoes(D) : aba === "ind" ? pInd : pPlacar);
+  const aba = ["placar", "ind", "eq"].includes(S.metaAba) ? S.metaAba : "placar";
+  return cab + metaAbas(aba) + (aba === "eq" ? vMetaFrentes(D) : aba === "ind" ? metaFaq() + pInd : metaSemana(D) + pPlacar);
 }
 document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
 document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[data-ind-zap]"); if (!a) return;
   const [doc, id] = a.dataset.indZap.split("|"), x = indTodas().find(y => y.doc === doc && y.id === id); if (x && x.status === "novo") setTimeout(() => indMarcar(doc, id, "contatado"), 300); });
 /* Tarefas das equipes (Estratégia 150): já nascem do PDF; estado em config metatar-<top> {estado:{tid:{feito,n,em,por}}, extras:[], apagadas:[]} */
 const TAR_PDF = [
-  ["Diretoria", -12, "Aprovar meta, gastos e o desconto da panfletagem"], ["Diretoria", -10, "Abrir igrejas e conversar com os pastores", 3],
-  ["Intercessão", -9, "Adote um nome: cada intercessor ora por 3 convidados e manda mensagem"], ["Intercessão", -8, "Abrir as igrejas dos intercessores", 2],
+  ["Diretoria", -12, "Aprovar meta, gastos e o desconto da panfletagem"], ["Diretoria", -10, "Abrir igrejas e conversar com os pastores", 3, "igreja"],
+  ["Intercessão", -9, "Adote um nome: cada intercessor ora por 3 convidados e manda mensagem"], ["Intercessão", -8, "Abrir as igrejas dos intercessores", 2, "igreja"],
   ["ADM", -13, "Planilha única e formulário de inscrição prontos"], ["ADM", -10, "Formulário da panfletagem e controle dos cupons"], ["ADM", -6, "Pesquisa de feedback do pré-TOP"],
   ["Logística", -13, "Fechar o limite de vagas"], ["Logística", -6, "Abrir a lista de caronas"], ["Logística", -1, "Comunicado prático aos confirmados"],
   ["Produção", -10, "Panfletos com QR code impressos (1.400)"], ["Produção", -8, "Kit do pré-TOP"], ["Produção", -5, "Mesas de inscrição com banner e QR code", 8],
   ["Mídia", -11, "Arte do panfleto e kit de divulgação"], ["Mídia", -6, "Vídeos de testemunho", 4],
   ["Segurança", -12, "FAQ de segurança"], ["Segurança", -10, "Escolher 3 membros para a panfletagem"],
   ["Hakunas", -12, "FAQ de saúde"], ["Hakunas", -10, "Escolher 3 membros para a panfletagem"], ["Hakunas", -3, "Fichas de saúde de 100% dos inscritos"],
-  ["Voz", -8, "Vídeos curtos de convite para a família", 2], ["Voz", -5, "Apresentações de 5 min nas igrejas parceiras", 3], ["Voz", -10, "Escolher 3 membros para a panfletagem"],
-  ["Eventos", -12, "Calendário de eventos da cidade"], ["Eventos", -9, "Encontro menor de apresentação"], ["Eventos", -7, "Pré-TOP com 60 presentes"], ["Eventos", -10, "Escolher 3 membros para a panfletagem"],
+  ["Voz", -8, "Vídeos curtos de convite para a família", 2], ["Voz", -5, "Apresentações de 5 min nas igrejas parceiras", 3, "igreja"], ["Voz", -10, "Escolher 3 membros para a panfletagem"],
+  ["Eventos", -12, "Calendário de eventos da cidade"], ["Eventos", -9, "Encontro menor de apresentação", 1, "encontro"], ["Eventos", -7, "Fazer o pré-TOP (meta: 60 presentes)", 1, "pretop"], ["Eventos", -10, "Escolher 3 membros para a panfletagem"],
   ["Esposas", -7, "Ajudar na recepção do pré-TOP"], ["Esposas", -4, "Conversar com as esposas dos inscritos indecisos"],
 ];
 const TAR_CONT = [[-11, "Diretoria", "Lançamento do TOP"], [-10, "Voz", "Convite aos homens de Franca"], [-9, "Mídia", "Testemunhos do último TOP"], [-8, "Eventos", "Convite para o pré-TOP"],
@@ -5433,16 +5433,19 @@ const tarId = () => "metatar-" + curTopId();
 const tarDoc = () => cfgDe(tarId()) || {};
 function tarLista(D) {
   const T = tarDoc(), E = T.estado || {}, fora = new Set(T.apagadas || []), hoje = new Date();
-  const base = [...TAR_PDF.map(([equipe, semana, titulo, alvo], i) => ({ id: "p" + i, equipe, semana, titulo, alvo: alvo || 0, tipo: alvo ? "num" : "simples" })),
+  const A = acoesTodas().filter(a => a.data < hojeISO()), auto = (k, eq) => k === "igreja" ? new Set(A.filter(a => a.tipo === "Apresentação em igreja" && a.equipe === eq).map(a => norm(a.local || a.titulo))).size
+    : A.filter(a => a.tipo === (k === "pretop" ? "Pré-TOP" : "Encontro de apresentação")).length;   // conta sozinho pelo que já aconteceu na Agenda
+  const base = [...TAR_PDF.map(([equipe, semana, titulo, alvo, ag], i) => ({ id: "p" + i, equipe, semana, titulo, alvo: alvo || 0, tipo: ag ? "auto" : alvo ? "num" : "simples", ag })),
     ...TAR_CONT.map(([semana, equipe, tema], i) => ({ id: "c" + i, equipe, semana, titulo: "Conteúdo para a Mídia: " + tema, tipo: "conteudo" })), ...(T.extras || [])];
   return base.filter(t => !fora.has(t.id)).map(t => { const e = E[t.id] || {}, prazo = D.fimD ? new Date(D.fimD - (-t.semana) * 7 * 864e5) : null;
-    const n = +e.n || 0, feito = t.tipo === "num" ? n >= t.alvo : !!e.feito;
+    const n = t.tipo === "auto" ? Math.min(t.alvo, auto(t.ag, t.equipe)) : Math.min(t.alvo || 1e9, +e.n || 0), feito = t.tipo === "num" || t.tipo === "auto" ? n >= t.alvo : !!e.feito;
     const sit = feito ? "feito" : prazo && prazo < hoje ? "atrasada" : prazo && prazo - hoje <= 7 * 864e5 ? "semana" : "proxima";
     return { ...t, ...e, n, feito, prazo, sit }; }).sort((a, b) => a.semana - b.semana || a.equipe.localeCompare(b.equipe));
 }
 const podeTar = t => podeEditar() || (ehCoordEq() && t.equipe === ME.equipeLgnd);
 function tarMarcar(id, op) {
   const D = metaDados(), t = tarLista(D).find(x => x.id === id); if (!t) return;
+  if (t.tipo === "auto") { toast("Esta tarefa conta sozinha pelos eventos da Agenda."); return; }
   if (!podeTar(t)) { toast("Só a equipe " + t.equipe + " ou a ADM marcam esta tarefa."); return; }
   const T = tarDoc(), E = { ...(T.estado || {}) }, a = E[id] || {};
   E[id] = op === "mais" ? { ...a, n: Math.min(t.alvo, (+a.n || 0) + 1), em: new Date().toISOString(), por: ME.adm || "" } : op === "menos" ? { ...a, n: Math.max(0, (+a.n || 0) - 1) } : { ...a, feito: !a.feito, em: new Date().toISOString(), por: ME.adm || "" };
@@ -5467,10 +5470,10 @@ function tarForm(t) {
 }
 function tarLi(t) {
   const fmt = d => d ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "", pode = podeTar(t);
-  const btn = t.tipo === "num" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b>${pode && !t.feito ? `<button class="btn sm primary" type="button" data-tar-mais="${t.id}">+1</button>` : ""}${pode && t.n ? `<button class="linkbtn" type="button" data-tar-menos="${t.id}" aria-label="Desfazer 1">−</button>` : ""}</div>`
+  const btn = t.tipo === "auto" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b><small class="hint">conta pela Agenda</small></div>` : t.tipo === "num" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b>${pode && !t.feito ? `<button class="btn sm primary" type="button" data-tar-mais="${t.id}">+1</button>` : ""}${pode && t.n ? `<button class="linkbtn" type="button" data-tar-menos="${t.id}" aria-label="Desfazer 1">−</button>` : ""}</div>`
     : pode ? `<button class="btn sm ${t.feito ? "" : "primary"}" type="button" data-tar-feito="${t.id}">${t.feito ? "Desfazer" : t.tipo === "conteudo" ? "Entregue" : "Feito"}</button>` : t.feito ? `<span class="chip ok">Feito</span>` : "";
   return `<div class="li tar-li ${t.sit}"><span class="tar-ck">${t.feito ? ico("check") : ""}</span><div class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)} · semana ${t.semana} (até ${fmt(t.prazo)})${t.feito && t.por ? ` · feito por ${esc(t.por.split(" ")[0])}` : ""}</small>
-    ${t.tipo === "num" ? `<div class="bar good"><i style="width:${pct(t.n, t.alvo)}%"></i></div>` : ""}</div>${btn}${podeEditar() ? `<button class="linkbtn" type="button" data-tar-ed="${t.id}" aria-label="Editar">${ico("edit")}</button>` : ""}</div>`;
+    ${t.tipo === "num" || (t.tipo === "auto" && t.alvo > 1) ? `<div class="bar good"><i style="width:${pct(t.n, t.alvo)}%"></i></div>` : ""}</div>${btn}${podeEditar() ? `<button class="linkbtn" type="button" data-tar-ed="${t.id}" aria-label="Editar">${ico("edit")}</button>` : ""}</div>`;
 }
 function vMetaTarefas(D) {
   const eqF = ehCoordEq() ? ME.equipeLgnd : (S.tarEq || ""), L = tarLista(D).filter(t => !eqF || t.equipe === eqF);
@@ -5511,7 +5514,7 @@ function acaoForm(a) {
     <div class="field"><label for="ac-h">Hora</label><input id="ac-h" name="hora" type="time" value="${esc(a.hora || "")}"></div>
     <div class="field full"><label for="ac-l">Local</label><input id="ac-l" name="local" value="${esc(a.local || "")}" placeholder="ex.: Igreja Batista Central"></div>
     <div class="field full"><label for="ac-en">Endereço</label><input id="ac-en" name="endereco" value="${esc(a.endereco || "")}" placeholder="Rua, número, bairro"></div>
-    <div class="field"><label for="ac-eq">Equipe</label>${ehCoordEq() ? `<input id="ac-eq" name="equipe" value="${esc(a.equipe)}" readonly>` : `<select id="ac-eq" name="equipe" class="sel">${equipesUsadas().map(e => `<option ${a.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>`}</div>
+    <div class="field"><label for="ac-eq">Equipe</label>${ehCoordEq() ? `<input id="ac-eq" name="equipe" value="${esc(a.equipe)}" readonly>` : `<select id="ac-eq" name="equipe" class="sel">${[...new Set([...equipesUsadas(), "Diretoria", "Esposas"])].map(e => `<option ${a.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>`}</div>
     <div class="field"><label for="ac-v">Legendários precisos</label><input id="ac-v" name="vagas" type="number" min="0" value="${a.vagas || ""}" placeholder="ex.: 6"></div>
     <div class="field full"><label for="ac-o">Recado para quem for (opcional)</label><input id="ac-o" name="obs" value="${esc(a.obs || "")}" placeholder="ex.: ir de camiseta da Base, chegar 30 min antes"></div>
   </div><div class="modal-foot"><div>${novo ? "" : `<button class="btn danger" type="button" id="delBtn">Excluir</button>`}</div>
@@ -5561,18 +5564,6 @@ function acaoVer(a) {
   $("#acPdf").onclick = () => acaoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
   const ed = $("#acEd"); if (ed) ed.onclick = () => { closeModal(); acaoForm(a); };
 }
-function vMetaAcoes(D) {
-  const A = acoesTodas(), hoje = hojeISO();   // todos veem todos os eventos (legendário de outra equipe também pode ir)
-  const prox = A.filter(a => a.data >= hoje), pass = A.filter(a => a.data < hoje).reverse();
-  const card = a => { const c = acaoConfirmados(a).length, d = new Date(a.data + "T12:00:00");
-    return `<button class="acao-c ${a.equipe === ME.equipeLgnd ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="acao-d"><b class="num">${String(d.getDate()).padStart(2, "0")}</b><small>${d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</small></span>
-      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.tipo)} · ${esc(a.equipe)}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
-      <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
-  return `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Idas a igrejas, panfletagens, pré-TOP e encontros. Cada evento tem um link para os legendários confirmarem presença e um convite em PDF. Tudo aparece também na Agenda.</p>
-      ${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}</div>
-    <section class="panel"><h3>Próximas <small>${prox.length}</small></h3>${prox.length ? `<div class="acao-lista">${prox.map(card).join("")}</div>` : `<div class="empty">Nenhum evento marcado. Que tal a primeira ida a uma igreja?</div>`}</section>
-    ${pass.length ? `<section class="panel"><h3>Já aconteceram <small>${pass.length}</small></h3><div class="acao-lista">${pass.map(card).join("")}</div></section>` : ""}`;
-}
 /* Agenda: eventos de divulgação + os TOPs, por mês. Toque no evento: quantos vão, quem vai e o link de presença. */
 function agTops() { return (S.tops.length ? S.tops : [topDoc()].filter(Boolean)).filter(t => t.inicio); }
 function vAgenda() {
@@ -5611,9 +5602,91 @@ function agTopVer(t) {
   const c = $("#agCopiar"); if (c) c.onclick = () => copiarTexto(l, "Link copiado");
   const e = $("#agEd"); if (e) e.onclick = () => { closeModal(); topForm(t); };
 }
+/* Frentes (Estratégia 150): os blocos que unem equipes numa missão. As tarefas são as mesmas da lista, agrupadas por frente. */
+const FRENTES = [
+  { k: "esp", l: "Espiritual", eq: ["Diretoria", "Intercessão"], m: "Cobertura em oração e abertura das igrejas" },
+  { k: "adm", l: "Administrativo", eq: ["ADM"], m: "Funil, inscrições, pagamentos, contato em 48 h e placar da segunda" },
+  { k: "op", l: "Operacional", eq: ["Logística", "Produção"], m: "Vagas, caronas, mesas de inscrição, banners e panfletos" },
+  { k: "com", l: "Comercial", eq: ["Segurança", "Hakunas", "Voz", "Eventos"], sub: "Equipe 1: Segurança e Hakunas · Equipe 2: Voz e Eventos", m: "Rua, igrejas e pré-TOP; tirar dúvidas e virar interesse em inscrição" },
+  { k: "mkt", l: "Marketing", eq: ["Mídia"], m: "Redes sociais, vídeos e a arte de tudo" },
+  { k: "apoio", l: "Apoio", eq: ["Esposas"], m: "Esposas de legendários cuidam das famílias; coordenadores cobram os 5 nomes por servidor" }];
+function frentesDados(D) {
+  const T = tarLista(D), I = indTodas(), A = acoesTodas(), hoje = hojeISO(), passou = a => a.data < hoje;
+  const igrejas = new Set(A.filter(a => passou(a) && a.tipo === "Apresentação em igreja").map(a => norm(a.local || a.titulo))).size;
+  const ind = { esp: [{ l: "Igrejas visitadas", n: igrejas, alvo: 8 }],
+    adm: I.length ? [{ l: "Indicações com contato em dia", n: I.filter(x => !indAtrasada(x)).length, alvo: I.length }] : [],
+    com: [{ l: "Saídas de panfletagem", n: A.filter(a => passou(a) && a.tipo === "Panfletagem").length, alvo: 14 }, { l: "Formulários da panfletagem", n: I.filter(x => x.canal === "Panfletagem").length, alvo: 150 }],
+    mkt: [{ l: "Inscritos pelas redes", n: I.filter(x => x.canal === "Redes sociais" && indInscrito(x)).length, alvo: 15 }] };
+  const usadas = new Set(FRENTES.flatMap(f => f.eq));
+  return FRENTES.map(f => { const eqs = f.k === "apoio" ? [...f.eq, ...new Set(T.map(t => t.equipe).filter(e => !usadas.has(e)))] : f.eq, L = T.filter(t => eqs.includes(t.equipe));
+    return { ...f, eqs, L, total: L.length, feitas: L.filter(t => t.feito).length, atras: L.filter(t => t.sit === "atrasada").length, ind: ind[f.k] || [] }; }).filter(f => f.total || f.ind.length);
+}
+function vMetaFrentes(D) {
+  const F = frentesDados(D), meu = ehCoordEq() ? ME.equipeLgnd : "", temSaidas = acoesTodas().some(a => /^Panfletagem · Equipe/.test(a.titulo || ""));
+  const ord = meu ? [...F].sort((a, b) => b.eqs.includes(meu) - a.eqs.includes(meu)) : F;
+  const card = f => { const minha = meu && f.eqs.includes(meu), L = minha ? f.L.filter(t => t.equipe === meu) : f.L, pend = L.filter(t => !t.feito), ja = L.filter(t => t.feito);
+    const agora = pend.filter(t => t.sit !== "proxima"), depois = pend.filter(t => t.sit === "proxima");
+    return `<details class="panel frente ${f.atras ? "atras" : ""}" ${minha || (!meu && f.atras) ? "open" : ""}><summary><div class="grow"><b>${esc(f.l)}${minha ? ' <span class="chip acc">sua equipe</span>' : ""}</b><small class="hint">${esc(f.sub || f.eqs.join(", "))}</small><small>${esc(f.m)}</small></div>
+      <div class="fr-st"><b class="num">${f.feitas}/${f.total}</b><small>${f.atras ? `<span class="chip bad">${f.atras} atrasada(s)</span>` : "tarefas"}</small></div></summary>
+      ${f.ind.length ? `<div class="fr-ind">${f.ind.map(i => `<div><small class="hint">${esc(i.l)}</small><b class="num">${i.n}<small>/${i.alvo}</small></b><div class="bar good"><i style="width:${pct(i.n, i.alvo)}%"></i></div></div>`).join("")}</div>` : ""}
+      ${f.k === "com" && podeEditar() && !temSaidas ? `<div class="actions"><button class="btn" type="button" data-saidas-gerar="1">${ico("clock")} Marcar as 14 saídas de panfletagem na Agenda</button></div>` : ""}
+      ${agora.length ? `<h4>Agora</h4><div class="list">${agora.map(tarLi).join("")}</div>` : `<p class="hint">${pend.length ? "Nada para esta semana." : "Tudo feito 🙌"}</p>`}
+      ${depois.length ? `<h4>Depois <small class="hint">${depois.length}</small></h4><div class="list">${depois.map(tarLi).join("")}</div>` : ""}
+      ${ja.length ? `<h4>Feitas <small class="hint">${ja.length}</small></h4><div class="list">${ja.slice(-6).map(tarLi).join("")}</div>` : ""}</details>`; };
+  return `${podeEditar() ? `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Cada frente junta equipes numa missão. Toque para abrir. Ida a igreja, pré-TOP e encontro contam sozinhos quando o evento acontece na Agenda.</p><button class="btn" type="button" data-tar-novo="1">${ico("plus")} Nova tarefa</button></div>` : ""}
+    ${ord.map(card).join("")}`;
+}
+/* Resumo: o que é desta semana, num lugar só */
+function metaSemana(D) {
+  const T = tarLista(D).filter(t => !ehCoordEq() || t.equipe === ME.equipeLgnd), at = T.filter(t => t.sit === "atrasada"), sem = T.filter(t => t.sit === "semana");
+  const hoje = hojeISO(), ate = new Date(Date.now() + 7 * 864e5).toLocaleDateString("sv"), ev = acoesTodas().filter(a => a.data >= hoje && a.data <= ate);
+  const cp = D.checks.find(c => !c.passou), PB = { 10: "Reunião extra com os coordenadores e reforço dos convites pessoais", 7: "Segundo encontro de apresentação antes das Lives de Consagração", 4: "Mais igrejas, impulsionar os posts e a Direção revê a meta", 2: "Chamar um por um os indecisos e a Direção decide o número final" };
+  const bx = D.checks.filter(c => c.passou && D.inscritos < c.min).pop();
+  return `<section class="panel meta-sem"><h3>Esta semana${D.semana != null ? ` <small>semana ${D.semana}</small>` : ""}</h3>
+    ${bx ? `<p class="chk-alerta">Abaixo do mínimo da semana -${bx.w} (${bx.min}). Plano B: ${PB[bx.w] || "reunir os coordenadores"}.</p>` : cp ? `<p class="hint" style="margin:0">Próximo checkpoint: semana -${cp.w}, mínimo de ${cp.min} inscritos.</p>` : ""}
+    <div class="acao-lista">
+      ${at.length ? `<button class="acao-c" type="button" data-meta-aba="eq"><span class="grow"><b>${at.length} tarefa(s) atrasada(s)</b><small class="hint">${esc([...new Set(at.map(t => t.equipe))].join(", "))}</small></span><span class="chip bad">ver</span></button>` : ""}
+      ${sem.slice(0, 5).map(t => `<div class="acao-c" style="cursor:default"><span class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)}</small></span></div>`).join("")}
+      ${ev.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}
+      ${!at.length && !sem.length && !ev.length ? `<div class="empty">Nada marcado para esta semana.</div>` : ""}
+    </div></section>`;
+}
+/* Saídas de panfletagem: 1 por equipe por semana, das semanas -9 a -3 (14 no total), viram eventos da Agenda */
+function saidasGerar() {
+  const D = metaDados(); if (!D.fimD) return;
+  const L = []; for (let w = -9; w <= -3; w++) { const d = new Date(+D.fimD + w * 7 * 864e5); d.setDate(d.getDate() - ((d.getDay() + 1) % 7));   // sábado da semana
+    const data = d.toLocaleDateString("sv");
+    [["Equipe 1 (Segurança e Hakunas)", "Segurança", "09:00"], ["Equipe 2 (Voz e Eventos)", "Voz", "15:00"]].forEach(([n, eq, h], j) => L.push({ id: "pf" + (w + 9) + j + Date.now().toString(36), tipo: "Panfletagem", titulo: "Panfletagem · " + n, data, hora: h, local: "a definir", endereco: "", equipe: eq, vagas: 6,
+      obs: "Panfleto oficial, abordagem sem insistência. A Mídia acompanha para gravar.", token: Math.random().toString(36).slice(2, 10), por: ME.adm || "", em: new Date().toISOString() })); }
+  const doc = acaoDocMeu(), atual = ((S.cfgDocs || {})[doc] || {}).lista || [];
+  (async () => { try { await api.set("config", doc, { lista: [...atual, ...L] }); toast("14 saídas marcadas na Agenda. Ajuste o local de cada uma."); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
+}
+/* Respostas prontas: as perguntas do PDF, quem responde e o texto aprovado. config meta-faq {q0:{txt,por,em}} */
+const FAQ = [["Será que eu aguento?", "Hakunas", "Como é o preparo e o cuidado com a saúde, e o que fazer antes"], ["É seguro?", "Segurança", "Como a equipe cuida de quem sobe"],
+  ["Quanto custa e para onde vai o dinheiro?", "ADM", "Valor e destino dos recursos; toda contribuição é voluntária"], ["Não tenho tempo", "Eventos", "Datas e programa com antecedência, e a lista de caronas"],
+  ["Minha esposa tem dúvidas", "Esposas", "Conversa direta e convite para o pré-TOP"], ["Será que é para mim?", "Voz", "O propósito do TOP e o testemunho de quem já subiu"],
+  ["Sou de outra igreja", "Diretoria", "O TOP serve às igrejas locais e não batiza ninguém"]];
+const faqDoc = () => cfgDe("meta-faq") || {};
+const podeFaq = i => podeEditar() || (ehCoordEq() && FAQ[i][1] === ME.equipeLgnd);
+function metaFaq() {
+  const F = faqDoc(), prontas = FAQ.filter((_, i) => F["q" + i]).length;
+  return `<details class="panel faq"><summary><b>Respostas prontas para as dúvidas</b> <small class="hint">${prontas} de ${FAQ.length} escritas</small></summary><div class="list">
+    ${FAQ.map(([q, eq, dica], i) => { const r = F["q" + i]; return `<div class="li faq-li"><div class="grow"><b>${esc(q)}</b> <span class="tag">${esc(eq)}</span><br>${r ? `<span>${esc(r.txt)}</span>` : `<small class="hint">Falta escrever. Precisa dizer: ${esc(dica)}.</small>`}</div>
+      <div class="actions">${r ? `<button class="btn sm" type="button" data-faq-copiar="${i}">Copiar</button>` : ""}${podeFaq(i) ? `<button class="linkbtn" type="button" data-faq-ed="${i}" aria-label="Escrever resposta">${ico("edit")}</button>` : ""}</div></div>`; }).join("")}
+  </div></details>`;
+}
+function faqForm(i) {
+  if (!podeFaq(i)) { toast("Quem escreve esta resposta é a equipe " + FAQ[i][1] + "."); return; }
+  const r = faqDoc()["q" + i] || {};
+  modal(`<h3>${esc(FAQ[i][0])}</h3><p class="hint" style="margin:0">Responde: ${esc(FAQ[i][1])}. Precisa dizer: ${esc(FAQ[i][2])}. A Coordenação aprova antes de usar.</p>
+    <div class="field"><label for="fq-t">Resposta</label><textarea id="fq-t" name="txt" style="min-height:140px">${esc(r.txt || "")}</textarea></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { const txt = String(fd.get("txt") || "").trim(), F = { ...faqDoc() }; if (txt) F["q" + i] = { txt, por: ME.adm || "", em: new Date().toISOString() }; else delete F["q" + i]; closeModal();
+    (async () => { try { await api.set("config", "meta-faq", F); toast("Resposta salva"); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })(); });
+}
 function metaAbas(aba) {
   const at = tarLista(metaDados()).filter(t => t.sit === "atrasada" && (!ehCoordEq() || t.equipe === ME.equipeLgnd)).length;
-  return `<div class="seg meta-abas" role="tablist">${[["placar", "Placar"], ["ind", "Indicações"], ["tar", "Tarefas" + (at ? ` <span class="badge num">${at}</span>` : "")], ["acoes", "Eventos"]].map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
+  return `<div class="seg meta-abas" role="tablist">${[["placar", "Resumo"], ["ind", "Indicações"], ["eq", "Equipes" + (at ? ` <span class="badge num">${at}</span>` : "")]].map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
 }
 function metaAjustarForm() {
   const D = metaDados();
@@ -6361,6 +6434,9 @@ document.addEventListener("click", e => {
   if (d.tarEd) { const t = tarLista(metaDados()).find(x => x.id === d.tarEd); if (t) tarForm(t); return; }
   if (d.tarNovo) { tarForm(); return; }
   if (d.acaoNovo) { acaoForm(); return; }
+  if (d.saidasGerar) { saidasGerar(); return; }
+  if (d.faqEd) { faqForm(+d.faqEd); return; }
+  if (d.faqCopiar) { const q = FAQ[+d.faqCopiar], r = faqDoc()["q" + d.faqCopiar]; if (r) copiarTexto(r.txt, "Resposta copiada"); return; }
   if (d.agTop) { const t = S.tops.find(x => x.id === d.agTop) || topDoc(); if (t) agTopVer(t); return; }
   if (d.agPass) { S.agPass = !S.agPass; render(); return; }
   if (d.acaoVer) { const [doc, id] = d.acaoVer.split("|"), a = acoesTodas().find(x => x.doc === doc && x.id === id); if (a) acaoVer(a); return; }

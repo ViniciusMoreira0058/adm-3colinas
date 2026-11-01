@@ -1606,6 +1606,10 @@ window.ADM_DEMO.notifs = [
   }
   window.ADM_DEMO.docs.push({ col: "config", id: "dash-hist-top1922", data: { dias, top: "top1922" } });
 })();
+// respostas prontas da Meta (fictícias, só para a demonstração)
+(function () { const docs = window.ADM_DEMO.docs; if (docs.some(d => d.col === "config" && d.id === "meta-faq")) return;
+  docs.push({ col: "config", id: "meta-faq", data: { q0: { txt: "Aguenta sim! O TOP é puxado, mas a equipe de saúde acompanha o tempo todo. Antes, faça a ficha de saúde, caminhe algumas vezes por semana e durma bem na véspera.", por: "Thalisson", em: new Date().toISOString() },
+    q1: { txt: "É seguro. A Segurança acompanha cada trecho, tem carro de apoio e equipe médica, e ninguém fica sozinho.", por: "Fábio Henrique Alves", em: new Date().toISOString() } } }); })();
 // data do TOP na demonstração (para a contagem regressiva do Dashboard)
 (function () {
   const t = window.ADM_DEMO.docs.find(d => d.col === "tops" && d.id === "top1922"); if (!t) return;
@@ -1882,6 +1886,8 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
   ] } });
   D.push({ col: "config", id: "acao-top1922-m-dono", data: { lista: [
     { id: "ac2", tipo: "Panfletagem", titulo: "Panfletagem na Feira do Calçado", data: dia(6), hora: "09:00", local: "Parque de Exposições", endereco: "Av. Dr. Hélio Palermo", equipe: "Eventos", vagas: 12, token: "demoac2tok", por: "Vinicius Moreira", em: new Date().toISOString() },
+    { id: "ac4", tipo: "Apresentação em igreja", titulo: "Culto na Igreja Presbiteriana Renovada", data: dia(-30), hora: "19:00", local: "Igreja Presbiteriana Renovada", equipe: "Voz", vagas: 4, token: "demoac4tok", por: "Vinicius Moreira", em: new Date().toISOString() },
+    { id: "ac5", tipo: "Apresentação em igreja", titulo: "Conversa com o pastor da Igreja Quadrangular", data: dia(-40), hora: "20:00", local: "Igreja do Evangelho Quadrangular", equipe: "Diretoria", vagas: 2, token: "demoac5tok", por: "Vinicius Moreira", em: new Date().toISOString() },
     { id: "ac3", tipo: "Pré-TOP", titulo: "Pré-TOP 1922", data: dia(-20), hora: "19:00", local: "Base 3 Colinas", equipe: "Eventos", vagas: 20, token: "demoac3tok", por: "Vinicius Moreira", em: new Date().toISOString() },
   ] } });
   try { if (!localStorage.getItem("adm3-acao-link")) localStorage.setItem("adm3-acao-link", JSON.stringify([{ acao: "ac1", nome: "Marcelo Duarte Lima", equipe: "Segurança", top: "top1922" }, { acao: "ac1", nome: "Paulo Roberto Nunes", equipe: "Segurança", top: "top1922" }, { acao: "ac1", nome: "Leonardo Prado Souza", equipe: "Mídia", top: "top1922" }])); } catch (e) {}
