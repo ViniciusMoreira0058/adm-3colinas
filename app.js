@@ -5261,7 +5261,30 @@ function metaDados() {
     semanas.push({ d, meta: metaEm(fimS), real: fimS <= hoje ? sen.filter(p => !p.criadoEm || new Date(p.criadoEm) < fimS).length : null }); } }
   return { td, vagas, desist, meta, metaHoje, dias, semana, inscritos, checks, semanas, iniD, fimD };
 }
-function indTodas() { const pre = "indic-" + curTopId() + "-"; return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k }))); }
+// indicações pelo link público (indica.html): config indlink-<top>-<id> (na demo, localStorage "adm3-indic-link"). Quando a ADM mexe nela, vira item da lista dela (mesmo id).
+const IND_LS = "adm3-indic-link";
+const indCfgId = () => "indic-cfg-" + curTopId();
+const indLink = () => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}indica.html?t=${encodeURIComponent((cfgDe(indCfgId()) || {}).token || "")}&top=${encodeURIComponent(curTopId())}${DEMO ? "&demo=1" : ""}`;
+function indDoLink() {
+  if (DEMO) { try { return (JSON.parse(localStorage.getItem(IND_LS) || "[]") || []).filter(x => x && x.id && (x.top || curTopId()) === curTopId()).map(x => ({ ...x, doc: "link" })); } catch { return []; } }
+  return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`indlink-${curTopId()}-`)).map(([k, d]) => ({ ...d, id: k, doc: "link" }));
+}
+function indTodas() {
+  const pre = "indic-" + curTopId() + "-", L = Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre) && k !== indCfgId()).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k })));
+  const ids = new Set(L.map(x => x.id)), fora = new Set((cfgDe(indCfgId()) || {}).apagados || []);
+  return [...L, ...indDoLink().filter(x => !ids.has(x.id) && !fora.has(x.id)).map(x => ({ canal: "Indicação pessoal", status: "novo", ...x, origem: "link", por: "link" }))];
+}
+function indLinkForm() {
+  const abrir = () => { const l = indLink(), msg = `Quer indicar um amigo para o próximo TOP dos Legendários 3 Colinas? Preencha aqui, leva 1 minuto: ${l}`;
+    modal(`<h3>Link de indicação</h3><p class="hint">Mande este link para os servidores (no grupo da equipe, por exemplo). Cada um coloca o nome dele, a área em que serve e os dados de quem quer indicar. A indicação cai aqui na hora e já conta para a equipe que ele escolheu.</p>
+      <div class="field"><input readonly value="${esc(l)}" id="indLinkTxt" onfocus="this.select()"></div>
+      ${DEMO ? `<p class="hint">Na demonstração a indicação fica guardada só neste aparelho: abra o link aqui mesmo para testar.</p>` : ""}
+      <div class="modal-foot"><span></span><div class="actions"><button class="btn" type="button" id="indCopiar">Copiar</button><a class="btn" href="${esc(l)}" target="_blank" rel="noopener">Abrir</a><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Enviar no WhatsApp</a></div></div>`, () => closeModal());
+    $("#indCopiar").onclick = () => copiarTexto(l, "Link copiado"); };
+  if ((cfgDe(indCfgId()) || {}).token) abrir();
+  else save(() => api.set("config", indCfgId(), { ...(cfgDe(indCfgId()) || {}), token: Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4) })).then(abrir);
+}
+window.addEventListener("storage", e => { if (e.key === IND_LS && (S.view === "meta" || S.view === "painel") && !$("#modalRoot").innerHTML) render(); });
 const indDocMeu = () => "indic-" + curTopId() + "-" + (ME.id || "eu");
 function indInscrito(x) { const t = telLimpo(x.tel).slice(-10), n = norm(x.nome || "").trim();
   return S.P.find(p => p.tipo !== "legendario" && !cancelado(p) && ((t.length >= 10 && telLimpo(p.telefone).slice(-10) === t) || (n && norm(p.nome).trim() === n))) || null; }
@@ -5300,13 +5323,17 @@ function indForm(x) {
   const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); indSalvar(x.doc, null, "Indicação excluída", x.id); };
 }
 function indSalvar(doc, item, msg, apagar) {
+  if (doc === "link") {
+    if (apagar) { save(() => api.set("config", indCfgId(), { ...(cfgDe(indCfgId()) || {}), apagados: [...((cfgDe(indCfgId()) || {}).apagados || []), apagar] }), msg); return; }
+    doc = indDocMeu(); const { doc: _d, origem: _o, ...x } = item; item = { ...x, origem: "link" };
+  }
   const L = ((S.cfgDocs || {})[doc] || {}).lista || [], id = apagar || item.id;
   const nova = L.filter(y => y.id !== id); if (item) nova.push(item);
   if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }   // o coordenador grava só o documento dele (indic-<top>-<id>)
   (async () => { try { await api.set("config", doc, { lista: nova }); if (msg) toast(msg); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
 }
 function indMarcar(doc, id, st) {
-  const L = ((S.cfgDocs || {})[doc] || {}).lista || [], x = L.find(y => y.id === id); if (!x) return;
+  const x = doc === "link" ? indTodas().find(y => y.doc === "link" && y.id === id) : (((S.cfgDocs || {})[doc] || {}).lista || []).find(y => y.id === id); if (!x) return;
   indSalvar(doc, { ...x, status: st, contatoEm: st !== "novo" ? (x.contatoEm || new Date().toISOString()) : null, contatoPor: st !== "novo" ? (x.contatoPor || ME.adm || "") : null }, IND_ST.find(o => o.v === st).l);
 }
 function metaPlacar() {
@@ -5340,7 +5367,7 @@ function vMeta() {
   const tel = x => waNumber(x.tel);
   return `
   <div class="head"><div><h2>Meta do TOP</h2><p>${esc(topName())}: ${D.vagas} vagas + ${D.desist}% de desistência = <b>${D.meta} inscritos</b> até ${fmt(D.fimD)}. A meta é montada sozinha para cada TOP novo.</p></div>
-    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${ehCoordEq() ? "" : `<button class="btn" type="button" data-act="meta-placar">${ico("wa")} Copiar placar</button>`}${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
+    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${podeEditar() ? `<button class="btn" type="button" data-act="ind-link">${ico("route")} Link de indicação</button>` : ""}${ehCoordEq() ? "" : `<button class="btn" type="button" data-act="meta-placar">${ico("wa")} Copiar placar</button>`}${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
   <div class="kpis">
     <div class="kpi ${ok ? "" : "alert"}"><span class="lbl">Inscritos</span><span class="val num">${D.inscritos}<small style="font-size:.5em;color:var(--muted)"> / ${D.meta}</small></span><span class="sub">meta para hoje: ${D.metaHoje} ${ok ? "· no ritmo ✓" : `· faltam ${D.metaHoje - D.inscritos}`}</span></div>
     <div class="kpi"><span class="lbl">Semana</span><span class="val num">${D.semana ?? "—"}</span><span class="sub">${D.dias > 0 ? `faltam ${D.dias} dias` : "semana do TOP"}</span></div>
@@ -5362,7 +5389,7 @@ function vMeta() {
   <section class="panel"><h3>${ehCoordEq() ? `Indicações da ${esc(ME.equipeLgnd || "equipe")}` : "Indicações"} <small>${filt.length}</small></h3>
     ${ehCoordEq() ? "" : `<div class="seg" role="group" aria-label="Filtro">${[["todas", "Todas"], ["atras", "Sem contato +48 h"], ["int", "Interessados"], ["insc", "Inscritos"]].map(([k, l]) => `<button type="button" data-ind-f="${k}" aria-pressed="${f === k || (k === "todas" && f === "equipe")}">${l}</button>`).join("")}</div>`}
     ${filt.length ? `<div class="list">${[...filt].sort((a, b) => (indAtrasada(b) - indAtrasada(a)) || String(b.em).localeCompare(String(a.em))).map(x => `<div class="li ind-li">
-      <div class="grow"><b>${esc(x.nome)}</b> ${st(x)}<br><small class="hint">${[x.equipe, x.canal, x.quem && "indicado por " + x.quem, haQuanto(x.em)].filter(Boolean).map(esc).join(" · ")}${x.obs ? " · " + esc(x.obs) : ""}</small></div>
+      <div class="grow"><b>${esc(x.nome)}</b> ${st(x)}${x.origem === "link" ? ' <span class="tag">pelo link</span>' : ""}<br><small class="hint">${[x.equipe, x.canal, x.quem && "indicado por " + x.quem, haQuanto(x.em)].filter(Boolean).map(esc).join(" · ")}${x.obs ? " · " + esc(x.obs) : ""}</small></div>
       ${!ehCoordEq() && ed && !indInscrito(x) ? `<div class="actions">${tel(x) ? `<a class="btn sm" href="https://wa.me/${tel(x)}?text=${encodeURIComponent(`Olá ${x.nome.split(" ")[0]}, tudo bem? Aqui é da equipe ADM dos Legendários 3 Colinas. ${x.quem ? x.quem.split(" ")[0] + " indicou você para o próximo TOP" : "Você foi indicado para o próximo TOP"}. Posso te contar como funciona?`)}" target="_blank" rel="noopener" data-ind-zap="${esc(x.doc)}|${esc(x.id)}">${ico("wa")} Chamar</a>` : ""}
         <select class="sel sm" data-ind-st="${esc(x.doc)}|${esc(x.id)}" aria-label="Situação">${IND_ST.map(o => `<option value="${o.v}" ${x.status === o.v ? "selected" : ""}>${o.l}</option>`).join("")}</select>
         <button class="linkbtn" type="button" data-ind-ed="${esc(x.doc)}|${esc(x.id)}" aria-label="Editar">${ico("edit")}</button></div>` : ""}</div>`).join("")}</div>`
@@ -5371,7 +5398,7 @@ function vMeta() {
 }
 document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
 document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[data-ind-zap]"); if (!a) return;
-  const [doc, id] = a.dataset.indZap.split("|"), x = (((S.cfgDocs || {})[doc] || {}).lista || []).find(y => y.id === id); if (x && x.status === "novo") setTimeout(() => indMarcar(doc, id, "contatado"), 300); });
+  const [doc, id] = a.dataset.indZap.split("|"), x = indTodas().find(y => y.doc === doc && y.id === id); if (x && x.status === "novo") setTimeout(() => indMarcar(doc, id, "contatado"), 300); });
 function metaAjustarForm() {
   const D = metaDados();
   modal(`<h3>Ajustar meta</h3>
@@ -6222,6 +6249,7 @@ document.addEventListener("click", e => {
   if (d.act === "ocorr-rapida") { ocorrRapida(); return; }
   if (d.act === "fam-importar") { famImportarForm(); return; }
   if (d.act === "meta-ajustar") { metaAjustarForm(); return; }
+  if (d.act === "ind-link") { indLinkForm(); return; }
   if (d.act === "meta-placar") { copiarTexto(metaPlacar(), "Placar copiado: cole no grupo da Direção e dos Coordenadores"); return; }
   if (d.indF) { S.indF = d.indF; render(); return; }
   if (d.indEd) { const [doc, id] = d.indEd.split("|"); const x = indTodas().find(y => y.doc === doc && y.id === id); if (x) indForm(x); return; }

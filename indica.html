@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex"><meta name="theme-color" content="#090d13">
+<title>Indique um amigo · TOP 3 Colinas</title>
+<style>
+:root{--bg:#090d13;--card:#121821;--card2:#1a222d;--fg:#fff6ee;--muted:#a59d94;--line:#283240;--accent:#ff7a1a;--red:#ef4444}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;padding-bottom:48px}
+main{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{text-align:center}header img{width:72px}
+.eb{color:var(--accent);font-weight:800;font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+h1{margin:4px 0;font-size:24px}p{margin:0}.muted{color:var(--muted);font-size:14px}
+.demo{padding:10px 12px;border-radius:10px;border:1px solid var(--accent);background:rgba(255,122,26,.1);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+h2{margin:0 0 10px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}h2.red{color:var(--red)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:1/-1}
+label.l{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+input,select,textarea{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit}
+textarea{min-height:70px;resize:vertical}
+output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2);font-weight:800}
+.foto{display:flex;flex-direction:column;align-items:center;gap:8px}
+.foto img,.foto .v{width:110px;height:110px;border-radius:50%;object-fit:cover;background:var(--card2);display:grid;place-items:center;color:var(--muted);font-size:40px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit;font-weight:700;cursor:pointer}
+.primary{background:var(--accent);border-color:var(--accent);color:#111;width:100%;font-size:17px}
+.c{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+.sn{display:flex;gap:4px}.sn label{position:relative}.sn input{position:absolute;opacity:0;inset:0}
+.sn span{display:block;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card2);font-weight:700;font-size:14px;cursor:pointer}
+.sn input:checked+span{background:var(--accent);border-color:var(--accent);color:#111}
+.sn label:first-child input:checked+span{background:var(--red);border-color:var(--red);color:#fff}
+.ck{display:flex;gap:10px;align-items:flex-start;font-size:15px}.ck input{width:auto;margin-top:4px}
+.err{color:var(--red);font-weight:700}
+.ok{text-align:center;padding:30px 16px}.ok b{font-size:44px;display:block}
+@media (max-width:480px){.grid{grid-template-columns:1fr}}
+.fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px}.fotos .foto img,.fotos .foto .v{width:100%;height:120px;border-radius:12px}
+#placa{text-transform:uppercase;letter-spacing:.1em;font-weight:800;font-size:20px}
+</style>
+<style>.mais{width:100%;margin-top:10px} form{display:flex;flex-direction:column;gap:14px}</style></head>
+<body><main>
+<header><img src="assets/logo.png" alt="Track 3 Colinas"><div class="eb">TOP 3 Colinas · Indicação</div><h1>Indique um homem para o próximo TOP</h1>
+<p class="muted">Leva 1 minuto. A equipe ADM entra em contato com ele em até 48 horas, falando que foi você quem indicou.</p></header>
+<div class="demo" id="aviso" hidden><b>Demonstração:</b> a indicação fica guardada só neste aparelho, para você ver como chega na página Meta do TOP.</div>
+<div class="card err" id="semLink" hidden>Este link não está completo. Peça um link novo para a equipe ADM.</div>
+<form id="f" novalidate>
+<div class="card"><h2>Você</h2><div class="grid">
+<div class="full"><label class="l" for="quem">Seu nome</label><input id="quem" required autocomplete="name"></div>
+<div class="full"><label class="l" for="eq">Área em que você serve</label><select id="eq" required><option value="">Selecione</option></select></div>
+</div></div>
+<div class="card"><h2>Quem você indica</h2><div class="grid">
+<div class="full"><label class="l" for="nome">Nome completo</label><input id="nome" required autocomplete="off"></div>
+<div class="full"><label class="l" for="tel">Telefone / WhatsApp</label><input id="tel" inputmode="tel" placeholder="(16) 99999-0000" required autocomplete="off"></div>
+<div class="full"><label class="l" for="obs">De onde você conhece (opcional)</label><textarea id="obs" placeholder="ex.: amigo do trabalho, da minha igreja, meu cunhado"></textarea></div>
+</div></div>
+<div class="card"><label class="ck"><input type="checkbox" id="consent"> Ele sabe que estou passando o contato dele para a equipe do TOP falar sobre o evento.</label>
+<p class="err" id="err" hidden></p><div style="margin-top:14px"><button class="btn primary" type="submit">Enviar indicação</button></div></div>
+</form></main>
+<script>
+(function () {
+  const URL_SB = "https://jgoewqyfihdzpurlvaxe.supabase.co", KEY_SB = "sb_publishable_QBxqFv2T9W-4-XTj_OSVEA_d1olCthu";   // chave pública (anon): só consegue chamar adm_indic_enviar
+  const EQUIPES = ["ADM", "Logística", "Mídia", "Segurança", "Voz", "Hakunas", "Intercessão", "Eventos", "Produção", "Base", "Coordenação"];
+  const $ = s => document.querySelector(s), f = $("#f"), q = new URLSearchParams(location.search), demo = q.has("demo"), token = q.get("t") || "", top = q.get("top") || "";
+  $("#aviso").hidden = !demo;
+  if (!token) { $("#semLink").hidden = false; f.hidden = true; return; }
+  EQUIPES.forEach(e => { const o = document.createElement("option"); o.textContent = e; $("#eq").appendChild(o); });
+  try { const eu = JSON.parse(localStorage.getItem("adm3-indic-eu") || "{}"); if (eu.quem) $("#quem").value = eu.quem; if (eu.eq) $("#eq").value = eu.eq; } catch (x) {}
+  const esc = s => String(s).replace(/[<>&"]/g, "");
+  f.addEventListener("submit", e => {
+    e.preventDefault(); const err = $("#err"), falta = [], v = id => $("#" + id).value.trim();
+    if (!v("quem")) falta.push("o seu nome"); if (!v("eq")) falta.push("a área em que você serve");
+    if (!v("nome")) falta.push("o nome de quem você indica"); if (v("tel").replace(/\D/g, "").length < 10) falta.push("o telefone dele com DDD");
+    if (!$("#consent").checked) falta.push("a confirmação no fim");
+    if (falta.length) { err.textContent = "Falta preencher: " + falta.join(", ") + "."; err.hidden = false; return; }
+    const ind = { nome: v("nome"), tel: v("tel"), quem: v("quem"), equipe: v("eq"), obs: v("obs") };
+    try { localStorage.setItem("adm3-indic-eu", JSON.stringify({ quem: ind.quem, eq: ind.equipe })); } catch (x) {}
+    const fim = () => { document.querySelector("main").innerHTML = `<div class="card ok"><b>🙌</b><h1>Indicação enviada!</h1><p class="muted">Obrigado, ${esc(ind.quem.split(" ")[0])}. A equipe ADM vai falar com o ${esc(ind.nome.split(" ")[0])} e a indicação já conta para a equipe ${esc(ind.equipe)}.</p><button class="btn mais" type="button" onclick="location.reload()">Indicar mais alguém</button></div>`; scrollTo(0, 0); };
+    if (demo) { try { const L = JSON.parse(localStorage.getItem("adm3-indic-link") || "[]"); L.push({ ...ind, id: "lk" + Date.now().toString(36), top, em: new Date().toISOString() }); localStorage.setItem("adm3-indic-link", JSON.stringify(L)); fim(); } catch (x) { err.textContent = "Não consegui guardar neste aparelho."; err.hidden = false; } return; }
+    const bt = f.querySelector("button[type=submit]"); bt.disabled = true; bt.textContent = "Enviando…"; err.hidden = true;
+    fetch(URL_SB + "/rest/v1/rpc/adm_indic_enviar", { method: "POST", headers: { "Content-Type": "application/json", apikey: KEY_SB },
+      body: JSON.stringify({ p_top: top, p_token: token, p_ind: ind }) })
+      .then(async r => { if (r.ok) return fim(); let m = ""; try { m = (await r.json()).message || ""; } catch (x) {} throw new Error(m); })
+      .catch(x => { err.textContent = (x && x.message && !/fetch|network/i.test(x.message) ? x.message : "Não consegui enviar. Confira a internet e tente de novo."); err.hidden = false; bt.disabled = false; bt.textContent = "Enviar indicação"; });
+  });
+})();
+</script></body></html>
