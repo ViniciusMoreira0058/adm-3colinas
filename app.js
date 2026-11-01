@@ -163,7 +163,7 @@ const VIEWS = [
   { id: "legendarios", l: "Legendários", i: "shield" },
   { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
-  { id: "comunicados", l: "Comunicados", c: "Comunicados", i: "wa", need: ["participantes", "legendarios"], demo: true },   // recado para senderistas e legendários pelo WhatsApp (só na demo)
+  { id: "comunicados", l: "Comunicados", c: "Comunicados", i: "wa", need: ["participantes", "legendarios"] },   // recado para senderistas e legendários pelo WhatsApp
   { id: "comunicacao", l: "Comunicação", c: "Comunicação", i: "chat", all: true, menu: true },   // recados, lembretes e aprendizados
   { id: "checkin", l: "Check-in", c: "Check-in", i: "door", need: ["participantes"] },
   { id: "remedios", l: "Remédios", c: "Remédios", i: "pill", need: [] , all: true, menu: true },
@@ -2407,10 +2407,10 @@ function carLinkForm() {
 document.addEventListener("input", e => { if (e.target && e.target.id === "carQ") { S.carQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $("#carQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } } });
 window.addEventListener("storage", e => { if (e.key === CAR_LS && S.view === "carros" && !$("#modalRoot").innerHTML) render(); });
 
-/* ---------- COMUNICADOS (demo, flag COMUNICADOS): mensagem para senderistas e legendários pelo WhatsApp, uma pessoa por vez ----------
+/* ---------- COMUNICADOS (app real desde 01/11/2026): mensagem para senderistas e legendários pelo WhatsApp, uma pessoa por vez ----------
    O WhatsApp não deixa disparar para todos de uma vez pelo número pessoal: o app abre a conversa de cada um com a mensagem pronta.
    config comunicados-<top> {envios:[{id, msg, em, por, ids:[pid], feitos:{pid: iso}, pulados:[pid]}]}; rascunho no aparelho (adm3-comunicado). */
-const COMUNICADOS = () => DEMO;
+const COMUNICADOS = () => true;   // liberado no app real em 01/11/2026
 const cmdId = () => `comunicados-${curTopId()}`;
 const cmdDoc = () => cfgDe(cmdId()) || {};
 const cmdMsg = () => S.cmdMsg != null ? S.cmdMsg : (store.get("adm3-comunicado") || "");
