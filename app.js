@@ -2446,7 +2446,7 @@ function vComunicados() {
       <span class="grow"></span><span><button class="linkbtn" type="button" data-cmd-todos="1">Marcar todos</button> · <button class="linkbtn" type="button" data-cmd-todos="0">Desmarcar</button></span></div>
     <div class="cham-lista cmd-lista">${L.map(p => { const tel = waNumber(p.telefone);
       return `<label class="cham-p ${tel ? "" : "off"}"><input type="checkbox" data-cmd-p="${esc(p.id)}" ${tel && !ex.has(p.id) ? "checked" : ""} ${tel ? "" : "disabled"}><span class="cham-box">${ico("check")}</span><span class="grow">${esc(p.nome)}${p.tipo === "legendario" ? ` <span class="tag">LGND${p.equipe ? " · " + esc(p.equipe) : ""}</span>` : ""}${tel ? "" : ' <small class="bad-text">sem telefone</small>'}</span></label>`; }).join("") || `<div class="empty">Ninguém com esse filtro.</div>`}</div>
-    ${ed ? `<div class="actions cmd-acoes"><button class="btn" type="button" data-act="cmd-copiar">Copiar números</button><button class="btn primary wa-btn" type="button" data-act="cmd-enviar">${ico("wa")} Enviar pelo WhatsApp · <span id="cmdN2">${sel.length}</span></button></div>` : ""}
+    ${ed ? `<div class="actions cmd-acoes"><button class="btn" type="button" data-act="cmd-copiar">Copiar números</button><button class="btn" type="button" data-act="cmd-xlsx">${ico("upload")} Exportar planilha</button><button class="btn primary wa-btn" type="button" data-act="cmd-enviar">${ico("wa")} Enviar pelo WhatsApp · <span id="cmdN2">${sel.length}</span></button></div>` : ""}
   </section>
   <section class="panel"><h3>Enviados <small>${E.length}</small></h3><div class="list">${E.map(e => { const ids = e.ids || [], f = Object.keys(e.feitos || {}).filter(id => ids.includes(id)).length, falta = ids.length - f;
     return `<div class="li cmd-env"><span class="grow"><b>${esc(String(e.msg || "").split("\n")[0].slice(0, 70))}</b><br><small class="hint">${esc(quando(e.em))} · ${esc(e.por || "")} · ${f} de ${ids.length} enviados</small><div class="bar good"><i style="width:${pct(f, ids.length)}%"></i></div></span>
@@ -2497,6 +2497,14 @@ function cmdVer(id) {
     <details ${ps.some(p => !F[p.id]) ? "open" : ""}><summary><b>Falta (${ps.filter(p => !F[p.id]).length})</b></summary><ul class="imp-list">${ps.filter(p => !F[p.id]).map(p => `<li>${esc(p.nome)}${(e.pulados || []).includes(p.id) ? ' <span class="hint">pulado</span>' : ""}</li>`).join("")}</ul></details>
     <div class="modal-foot"><div><button class="btn ghost" type="button" id="cmdReusar">Usar este texto de novo</button></div><button class="btn" type="button" data-close-btn>Fechar</button></div>`, () => {});
   $("#cmdReusar").onclick = () => { S.cmdMsg = e.msg; store.set("adm3-comunicado", e.msg); closeModal(); render(); scrollTo(0, 0); };
+}
+async function cmdXlsx() {
+  const sel = cmdSel(); if (!sel.length) { toast("Ninguém selecionado com telefone."); return; }
+  try { const X = await carregarXlsx(), wb = X.utils.book_new();
+    const linhas = [["Nome", "Telefone", "WhatsApp", "Tipo", "Equipe"], ...sel.map(p => [p.nome, p.telefone || "", "+" + waNumber(p.telefone), p.tipo === "legendario" ? "Legendário" : "Senderista", p.equipe || ""])];
+    const ws = X.utils.aoa_to_sheet(linhas); ws["!cols"] = [{ wch: 34 }, { wch: 18 }, { wch: 16 }, { wch: 12 }, { wch: 14 }];
+    X.utils.book_append_sheet(wb, ws, "Contatos"); X.writeFile(wb, `contatos-${curTopId()}-${hojeISO()}.xlsx`); toast(`Planilha com ${sel.length} contato(s)`);
+  } catch (e) { toast(e.message || "Não consegui gerar a planilha."); }
 }
 async function cmdCopiar() {
   const sel = cmdSel(), txt = sel.map(p => `${p.nome}\t${p.telefone}`).join("\n");
@@ -5594,6 +5602,7 @@ document.addEventListener("click", e => {
   if (d.act === "backup") { backupForm(); return; }
   if (d.act === "cmd-enviar") { if (podeEditar()) cmdEnviar(); return; }
   if (d.act === "cmd-copiar") { cmdCopiar(); return; }
+  if (d.act === "cmd-xlsx") { cmdXlsx(); return; }
   if (d.cmdQuem) { Object.assign(cmdF(), { quem: d.cmdQuem, equipe: d.cmdQuem === "participante" ? "" : cmdF().equipe, pend: d.cmdQuem === "legendario" ? false : cmdF().pend }); render(); return; }
   if (d.cmdTodos != null && t.matches("[data-cmd-todos]")) { const s = cmdExcl(); cmdLista().forEach(p => d.cmdTodos === "1" ? s.delete(p.id) : s.add(p.id)); render(); return; }
   if (d.cmdVer) { cmdVer(d.cmdVer); return; }
