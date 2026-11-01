@@ -1872,3 +1872,16 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     { id: "in7", nome: "Márcio Vieira Dias", tel: "16 99200-0005", quem: "Leonardo Prado Souza", equipe: "Mídia", canal: "Panfletagem", status: "novo", em: h(90), por: "Vinicius Moreira" },
   ] } });
 })();
+// TAREFAS E AÇÕES DA META (demo): algumas tarefas feitas e duas ações marcadas
+(function () {
+  const D = window.ADM_DEMO.docs, dia = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  D.push({ col: "config", id: "metatar-top1922", data: { estado: Object.assign(Object.fromEntries([...Array(29).keys()].filter(i => ![9, 18, 21, 26, 28, 19].includes(i)).map(i => ["p" + i, { feito: true, n: 9, por: ["Vinicius Moreira", "Fábio Henrique Alves", "Gustavo Ferreira Reis", "Henrique"][i % 4] }])), Object.fromEntries([...Array(9).keys()].map(i => ["c" + i, { feito: true, por: "Gustavo Ferreira Reis" }])), { p21: { n: 1, por: "Diego" }, p14: { n: 2, por: "Gustavo Ferreira Reis" } }) } });
+  D.push({ col: "config", id: "acao-top1922-m-coord", data: { lista: [
+    { id: "ac1", tipo: "Apresentação em igreja", titulo: "Apresentação na Igreja Batista Central", data: dia(3), hora: "19:30", local: "Igreja Batista Central", endereco: "Rua Voluntários da Franca, 1200, Centro", equipe: "Segurança", vagas: 6, obs: "Ir de camiseta da Base e chegar 30 min antes", token: "demoac1tok", por: "Fábio Henrique Alves", em: new Date().toISOString() },
+  ] } });
+  D.push({ col: "config", id: "acao-top1922-m-dono", data: { lista: [
+    { id: "ac2", tipo: "Panfletagem", titulo: "Panfletagem na Feira do Calçado", data: dia(6), hora: "09:00", local: "Parque de Exposições", endereco: "Av. Dr. Hélio Palermo", equipe: "Eventos", vagas: 12, token: "demoac2tok", por: "Vinicius Moreira", em: new Date().toISOString() },
+    { id: "ac3", tipo: "Pré-TOP", titulo: "Pré-TOP 1922", data: dia(-20), hora: "19:00", local: "Base 3 Colinas", equipe: "Eventos", vagas: 20, token: "demoac3tok", por: "Vinicius Moreira", em: new Date().toISOString() },
+  ] } });
+  try { if (!localStorage.getItem("adm3-acao-link")) localStorage.setItem("adm3-acao-link", JSON.stringify([{ acao: "ac1", nome: "Marcelo Duarte Lima", equipe: "Segurança", top: "top1922" }, { acao: "ac1", nome: "Paulo Roberto Nunes", equipe: "Segurança", top: "top1922" }, { acao: "ac1", nome: "Leonardo Prado Souza", equipe: "Mídia", top: "top1922" }])); } catch (e) {}
+})();

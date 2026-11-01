@@ -5346,6 +5346,9 @@ function metaPlacar() {
     cp ? `Próximo checkpoint: semana ${-cp.w} (${fmt(cp.d)}), mínimo de ${cp.min} inscritos` : "",
     ``, `*Por canal*`, ...(canais.length ? canais : ["• ainda sem indicações"]),
     ``, `*Nomes indicados por equipe*`, ...E.filter(e => e.nomes).sort((a, b) => b.nomes / b.metaNomes - a.nomes / a.metaNomes).map(e => `• ${e.e}: ${e.nomes} de ${e.metaNomes}${e.nomes >= e.metaNomes ? " 🏆" : ""}${e.insc ? ` · ${e.insc} inscrito(s)` : ""}`),
+    ...(() => { const at = tarLista(D).filter(t => t.sit === "atrasada"), por = {}; at.forEach(t => { por[t.equipe] = (por[t.equipe] || 0) + 1; });
+      return at.length ? [``, `*Tarefas atrasadas*`, ...Object.entries(por).map(([e, n]) => `• ${e}: ${n}`)] : [``, `Tarefas em dia ✅`]; })(),
+    ...(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 4); return A.length ? [``, `*Próximas ações*`, ...A.map(a => `• ${a.titulo} · ${acaoQuando(a)}`)] : []; })(),
     ``, `Bora juntos! 💪`].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
 }
 function metaCoordCard() {
@@ -5354,7 +5357,9 @@ function metaCoordCard() {
     ${e ? `<div class="meta-mini"><div><span class="lbl">Nomes indicados</span><b class="num">${e.nomes}<small> de ${e.metaNomes}</small></b><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div></div>
       <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : `<p class="hint">Sua equipe ainda não tem servidores contados para a meta.</p>`}
     <p class="hint" style="margin:0">Placar geral: <b class="num">${D.inscritos}</b> inscritos de ${D.meta} · meta para hoje ${D.metaHoje}</p>
-    <div class="actions"><button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>${mine.length ? `<span class="hint">${mine.length} indicação(ões) da equipe</span>` : ""}</div></section>`;
+    <div class="actions"><button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button><button class="btn" type="button" data-acao-novo="1">${ico("plus")} Nova ação</button>${mine.length ? `<span class="hint">${mine.length} indicação(ões) da equipe</span>` : ""}</div></section>
+  ${(() => { const T = tarLista(D).filter(t => t.equipe === ME.equipeLgnd && (t.sit === "atrasada" || t.sit === "semana")); return T.length ? `<section class="panel"><h3>Tarefas da equipe nesta semana <small>${T.length}</small><button class="linkbtn" type="button" data-meta-aba="tar">ver todas ›</button></h3><div class="list">${T.map(tarLi).join("")}</div></section>` : ""; })()}
+  ${(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 3); return A.length ? `<section class="panel"><h3>Próximas ações <button class="linkbtn" type="button" data-meta-aba="acoes">ver ›</button></h3><div class="acao-lista">${A.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.equipe)} · ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div></section>` : ""; })()}`;
 }
 function vMeta() {
   const D = metaDados(), E = metaEquipes(D), I = indTodas(), ed = podeEditar(), fmt = d => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
@@ -5365,9 +5370,11 @@ function vMeta() {
   const max = Math.max(D.meta, ...D.semanas.map(s => s.real || 0));
   const st = x => { const p = indInscrito(x); if (p) return `<span class="chip ok">Inscrito ✓</span>`; const o = IND_ST.find(y => y.v === x.status) || IND_ST[0]; return `<span class="chip ${indAtrasada(x) ? "bad" : o.c}">${indAtrasada(x) ? "Sem contato há +48 h" : o.l}</span>`; };
   const tel = x => waNumber(x.tel);
-  return `
+  const cab = `
   <div class="head"><div><h2>Meta do TOP</h2><p>${esc(topName())}: ${D.vagas} vagas + ${D.desist}% de desistência = <b>${D.meta} inscritos</b> até ${fmt(D.fimD)}. A meta é montada sozinha para cada TOP novo.</p></div>
     <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${podeEditar() ? `<button class="btn" type="button" data-act="ind-link">${ico("route")} Link de indicação</button>` : ""}${ehCoordEq() ? "" : `<button class="btn" type="button" data-act="meta-placar">${ico("wa")} Copiar placar</button>`}${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
+`;
+  const pPlacar = `
   <div class="kpis">
     <div class="kpi ${ok ? "" : "alert"}"><span class="lbl">Inscritos</span><span class="val num">${D.inscritos}<small style="font-size:.5em;color:var(--muted)"> / ${D.meta}</small></span><span class="sub">meta para hoje: ${D.metaHoje} ${ok ? "· no ritmo ✓" : `· faltam ${D.metaHoje - D.inscritos}`}</span></div>
     <div class="kpi"><span class="lbl">Semana</span><span class="val num">${D.semana ?? "—"}</span><span class="sub">${D.dias > 0 ? `faltam ${D.dias} dias` : "semana do TOP"}</span></div>
@@ -5386,6 +5393,8 @@ function vMeta() {
       <div class="me-bar"><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div><small class="num">${e.nomes}/${e.metaNomes} nomes</small></div>
       <div class="me-bar"><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div><small class="num">${e.insc}/${e.metaInsc} inscritos</small></div></div>`).join("")}</div>` : `<div class="empty">Importe a planilha de equipes LGND para dividir a meta entre as equipes.</div>`}
   </section>
+`;
+  const pInd = `
   <section class="panel"><h3>${ehCoordEq() ? `Indicações da ${esc(ME.equipeLgnd || "equipe")}` : "Indicações"} <small>${filt.length}</small></h3>
     ${ehCoordEq() ? "" : `<div class="seg" role="group" aria-label="Filtro">${[["todas", "Todas"], ["atras", "Sem contato +48 h"], ["int", "Interessados"], ["insc", "Inscritos"]].map(([k, l]) => `<button type="button" data-ind-f="${k}" aria-pressed="${f === k || (k === "todas" && f === "equipe")}">${l}</button>`).join("")}</div>`}
     ${filt.length ? `<div class="list">${[...filt].sort((a, b) => (indAtrasada(b) - indAtrasada(a)) || String(b.em).localeCompare(String(a.em))).map(x => `<div class="li ind-li">
@@ -5395,10 +5404,177 @@ function vMeta() {
         <button class="linkbtn" type="button" data-ind-ed="${esc(x.doc)}|${esc(x.id)}" aria-label="Editar">${ico("edit")}</button></div>` : ""}</div>`).join("")}</div>`
     : `<div class="empty">${I.length ? "Nada neste filtro." : "Nenhum nome indicado ainda. Cada servidor indica 5 nomes."}</div>`}
   </section>`;
+  const aba = S.metaAba || "placar";
+  return cab + metaAbas(aba) + (aba === "tar" ? vMetaTarefas(D) : aba === "acoes" ? vMetaAcoes(D) : aba === "ind" ? pInd : pPlacar);
 }
-document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
+document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
 document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[data-ind-zap]"); if (!a) return;
   const [doc, id] = a.dataset.indZap.split("|"), x = indTodas().find(y => y.doc === doc && y.id === id); if (x && x.status === "novo") setTimeout(() => indMarcar(doc, id, "contatado"), 300); });
+/* Tarefas das equipes (Estratégia 150): já nascem do PDF; estado em config metatar-<top> {estado:{tid:{feito,n,em,por}}, extras:[], apagadas:[]} */
+const TAR_PDF = [
+  ["Diretoria", -12, "Aprovar meta, gastos e o desconto da panfletagem"], ["Diretoria", -10, "Abrir igrejas e conversar com os pastores", 3],
+  ["Intercessão", -9, "Adote um nome: cada intercessor ora por 3 convidados e manda mensagem"], ["Intercessão", -8, "Abrir as igrejas dos intercessores", 2],
+  ["ADM", -13, "Planilha única e formulário de inscrição prontos"], ["ADM", -10, "Formulário da panfletagem e controle dos cupons"], ["ADM", -6, "Pesquisa de feedback do pré-TOP"],
+  ["Logística", -13, "Fechar o limite de vagas"], ["Logística", -6, "Abrir a lista de caronas"], ["Logística", -1, "Comunicado prático aos confirmados"],
+  ["Produção", -10, "Panfletos com QR code impressos (1.400)"], ["Produção", -8, "Kit do pré-TOP"], ["Produção", -5, "Mesas de inscrição com banner e QR code", 8],
+  ["Mídia", -11, "Arte do panfleto e kit de divulgação"], ["Mídia", -6, "Vídeos de testemunho", 4],
+  ["Segurança", -12, "FAQ de segurança"], ["Segurança", -10, "Escolher 3 membros para a panfletagem"],
+  ["Hakunas", -12, "FAQ de saúde"], ["Hakunas", -10, "Escolher 3 membros para a panfletagem"], ["Hakunas", -3, "Fichas de saúde de 100% dos inscritos"],
+  ["Voz", -8, "Vídeos curtos de convite para a família", 2], ["Voz", -5, "Apresentações de 5 min nas igrejas parceiras", 3], ["Voz", -10, "Escolher 3 membros para a panfletagem"],
+  ["Eventos", -12, "Calendário de eventos da cidade"], ["Eventos", -9, "Encontro menor de apresentação"], ["Eventos", -7, "Pré-TOP com 60 presentes"], ["Eventos", -10, "Escolher 3 membros para a panfletagem"],
+  ["Esposas", -7, "Ajudar na recepção do pré-TOP"], ["Esposas", -4, "Conversar com as esposas dos inscritos indecisos"],
+];
+const TAR_CONT = [[-11, "Diretoria", "Lançamento do TOP"], [-10, "Voz", "Convite aos homens de Franca"], [-9, "Mídia", "Testemunhos do último TOP"], [-8, "Eventos", "Convite para o pré-TOP"],
+  [-7, "Eventos", "Pré-TOP ao vivo e bastidores"], [-6, "Hakunas", "Cuidado com você: saúde"], [-6, "Segurança", "Cuidado com você: segurança"], [-5, "Logística", "Bastidores da estrutura"],
+  [-5, "Produção", "Bastidores da montagem"], [-4, "Intercessão", "Oração e mensagem de fé"], [-3, "ADM", "Como se inscrever e últimas vagas"], [-2, "Esposas", "Esposas e famílias"], [-1, "ADM", "Reta final e orientações práticas"]];
+const tarId = () => "metatar-" + curTopId();
+const tarDoc = () => cfgDe(tarId()) || {};
+function tarLista(D) {
+  const T = tarDoc(), E = T.estado || {}, fora = new Set(T.apagadas || []), hoje = new Date();
+  const base = [...TAR_PDF.map(([equipe, semana, titulo, alvo], i) => ({ id: "p" + i, equipe, semana, titulo, alvo: alvo || 0, tipo: alvo ? "num" : "simples" })),
+    ...TAR_CONT.map(([semana, equipe, tema], i) => ({ id: "c" + i, equipe, semana, titulo: "Conteúdo para a Mídia: " + tema, tipo: "conteudo" })), ...(T.extras || [])];
+  return base.filter(t => !fora.has(t.id)).map(t => { const e = E[t.id] || {}, prazo = D.fimD ? new Date(D.fimD - (-t.semana) * 7 * 864e5) : null;
+    const n = +e.n || 0, feito = t.tipo === "num" ? n >= t.alvo : !!e.feito;
+    const sit = feito ? "feito" : prazo && prazo < hoje ? "atrasada" : prazo && prazo - hoje <= 7 * 864e5 ? "semana" : "proxima";
+    return { ...t, ...e, n, feito, prazo, sit }; }).sort((a, b) => a.semana - b.semana || a.equipe.localeCompare(b.equipe));
+}
+const podeTar = t => podeEditar() || (ehCoordEq() && t.equipe === ME.equipeLgnd);
+function tarMarcar(id, op) {
+  const D = metaDados(), t = tarLista(D).find(x => x.id === id); if (!t) return;
+  if (!podeTar(t)) { toast("Só a equipe " + t.equipe + " ou a ADM marcam esta tarefa."); return; }
+  const T = tarDoc(), E = { ...(T.estado || {}) }, a = E[id] || {};
+  E[id] = op === "mais" ? { ...a, n: Math.min(t.alvo, (+a.n || 0) + 1), em: new Date().toISOString(), por: ME.adm || "" } : op === "menos" ? { ...a, n: Math.max(0, (+a.n || 0) - 1) } : { ...a, feito: !a.feito, em: new Date().toISOString(), por: ME.adm || "" };
+  (async () => { try { await api.set("config", tarId(), { ...T, estado: E }); if (op !== "menos" && (E[id].feito || (t.tipo === "num" && E[id].n >= t.alvo))) toast("Feito! 🙌"); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
+}
+function tarForm(t) {
+  if (!podeEditar()) return;
+  const novo = !t; t = t || { equipe: equipesUsadas()[0], semana: -8, tipo: "simples", titulo: "", alvo: 0 };
+  modal(`<h3>${novo ? "Nova tarefa" : "Editar tarefa"}</h3><div class="form">
+    <div class="field full"><label for="tf-t">O que fazer</label><input id="tf-t" name="titulo" value="${esc(t.titulo)}" required></div>
+    <div class="field"><label for="tf-e">Equipe</label><select id="tf-e" name="equipe" class="sel">${[...new Set([...equipesUsadas(), "Diretoria", "Esposas", t.equipe])].map(e => `<option ${t.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select></div>
+    <div class="field"><label for="tf-s">Semana de entrega</label><select id="tf-s" name="semana" class="sel">${Array.from({ length: 14 }, (_, i) => -13 + i).map(w => `<option value="${w}" ${+t.semana === w ? "selected" : ""}>Semana ${w}${w === 0 ? " (do TOP)" : ""}</option>`).join("")}</select></div>
+    <div class="field"><label for="tf-a">Quantidade (opcional)</label><input id="tf-a" name="alvo" type="number" min="0" value="${t.alvo || ""}" placeholder="ex.: 3 igrejas"></div>
+  </div><div class="modal-foot"><div>${novo ? "" : `<button class="btn danger" type="button" id="delBtn">Excluir</button>`}</div>
+    <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { const titulo = String(fd.get("titulo") || "").trim(); if (!titulo) return; const alvo = +fd.get("alvo") || 0, T = tarDoc();
+    const item = { id: t.id && !/^[pc]\d+$/.test(t.id) ? t.id : "x" + Date.now().toString(36), titulo, equipe: fd.get("equipe"), semana: +fd.get("semana"), alvo, tipo: t.tipo === "conteudo" ? "conteudo" : alvo ? "num" : "simples" };
+    const apagadas = [...(T.apagadas || []), ...(t.id && /^[pc]\d+$/.test(t.id) ? [t.id] : [])];   // tarefa do PDF editada vira uma tarefa própria
+    closeModal(); save(() => api.set("config", tarId(), { ...T, apagadas, extras: [...(T.extras || []).filter(x => x.id !== item.id), item] }), novo ? "Tarefa criada" : "Tarefa salva"); });
+  const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); const T = tarDoc();
+    save(() => api.set("config", tarId(), { ...T, apagadas: [...(T.apagadas || []), t.id], extras: (T.extras || []).filter(x => x.id !== t.id) }), "Tarefa excluída"); };
+}
+function tarLi(t) {
+  const fmt = d => d ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "", pode = podeTar(t);
+  const btn = t.tipo === "num" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b>${pode && !t.feito ? `<button class="btn sm primary" type="button" data-tar-mais="${t.id}">+1</button>` : ""}${pode && t.n ? `<button class="linkbtn" type="button" data-tar-menos="${t.id}" aria-label="Desfazer 1">−</button>` : ""}</div>`
+    : pode ? `<button class="btn sm ${t.feito ? "" : "primary"}" type="button" data-tar-feito="${t.id}">${t.feito ? "Desfazer" : t.tipo === "conteudo" ? "Entregue" : "Feito"}</button>` : t.feito ? `<span class="chip ok">Feito</span>` : "";
+  return `<div class="li tar-li ${t.sit}"><span class="tar-ck">${t.feito ? ico("check") : ""}</span><div class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)} · semana ${t.semana} (até ${fmt(t.prazo)})${t.feito && t.por ? ` · feito por ${esc(t.por.split(" ")[0])}` : ""}</small>
+    ${t.tipo === "num" ? `<div class="bar good"><i style="width:${pct(t.n, t.alvo)}%"></i></div>` : ""}</div>${btn}${podeEditar() ? `<button class="linkbtn" type="button" data-tar-ed="${t.id}" aria-label="Editar">${ico("edit")}</button>` : ""}</div>`;
+}
+function vMetaTarefas(D) {
+  const eqF = ehCoordEq() ? ME.equipeLgnd : (S.tarEq || ""), L = tarLista(D).filter(t => !eqF || t.equipe === eqF);
+  const grp = [["atrasada", "Atrasadas"], ["semana", "Desta semana"], ["proxima", "Próximas"], ["feito", "Feitas"]];
+  const eqs = [...new Set(tarLista(D).map(t => t.equipe))];
+  return `${ehCoordEq() ? "" : `<div class="actions" style="justify-content:space-between"><select class="sel" data-tar-eq aria-label="Equipe"><option value="">Todas as equipes</option>${eqs.map(e => `<option ${eqF === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>
+    ${podeEditar() ? `<button class="btn" type="button" data-tar-novo="1">${ico("plus")} Nova tarefa</button>` : ""}</div>`}
+    <div class="kpis"><div class="kpi ${L.some(t => t.sit === "atrasada") ? "alert" : ""}"><span class="lbl">Atrasadas</span><span class="val num">${L.filter(t => t.sit === "atrasada").length}</span></div>
+      <div class="kpi"><span class="lbl">Desta semana</span><span class="val num">${L.filter(t => t.sit === "semana").length}</span></div>
+      <div class="kpi"><span class="lbl">Feitas</span><span class="val num">${L.filter(t => t.feito).length}<small style="font-size:.5em;color:var(--muted)"> / ${L.length}</small></span></div></div>
+    ${grp.map(([k, l]) => { const g = L.filter(t => t.sit === k); return g.length ? `<section class="panel"><h3>${l} <small>${g.length}</small></h3><div class="list">${(k === "feito" ? g.slice(-8) : g).map(tarLi).join("")}</div></section>` : ""; }).join("")}`;
+}
+/* Ações de captação (ida à igreja, panfletagem, pré-TOP…): config acao-<top>-<membroId> {lista:[{id,tipo,titulo,data,hora,local,endereco,equipe,obs,token,por,em,resultado}]}.
+   Link de presença acao.html (na demo, localStorage "adm3-acao-link"; no real, RPC adm_acao_confirmar). Convite em PDF para os legendários. */
+const ACAO_TIPOS = ["Apresentação em igreja", "Panfletagem", "Pré-TOP", "Encontro de apresentação", "Outro"];
+const ACAO_LS = "adm3-acao-link";
+const acaoDocMeu = () => "acao-" + curTopId() + "-" + (ME.id || "eu");
+function acoesTodas() { const pre = "acao-" + curTopId() + "-"; return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k }))).sort((a, b) => String(a.data + a.hora).localeCompare(String(b.data + b.hora))); }
+function acaoConfirmados(a) {
+  if (DEMO) { try { return (JSON.parse(localStorage.getItem(ACAO_LS) || "[]") || []).filter(x => x.acao === a.id); } catch { return []; } }
+  return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`acaopres-${curTopId()}-${a.id}-`)).map(([, d]) => d);
+}
+const acaoLink = a => { const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: a.equipe };
+  return `${location.origin}${location.pathname.replace(/[^/]*$/, "")}acao.html?t=${encodeURIComponent(a.token)}&top=${encodeURIComponent(curTopId())}&a=${encodeURIComponent(a.id)}&i=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(info)))))}${DEMO ? "&demo=1" : ""}`; };
+const acaoQuando = a => { const d = a.data ? new Date(a.data + "T12:00:00") : null; return (d ? d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) : "data a definir") + (a.hora ? " às " + a.hora : ""); };
+function acaoSalvar(doc, item, msg, apagar) {
+  if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }
+  const L = ((S.cfgDocs || {})[doc] || {}).lista || [], id = apagar || item.id, nova = L.filter(y => y.id !== id); if (item) { const { doc: _d, ...x } = item; nova.push(x); }
+  (async () => { try { await api.set("config", doc, { lista: nova }); if (msg) toast(msg); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
+}
+function acaoForm(a) {
+  if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }
+  const novo = !a; a = a || { tipo: ACAO_TIPOS[0], equipe: ehCoordEq() ? ME.equipeLgnd : "", data: "", hora: "19:00" };
+  modal(`<h3>${novo ? "Nova ação de captação" : "Editar ação"}</h3><div class="form">
+    <div class="field full"><label for="ac-tp">Tipo</label><select id="ac-tp" name="tipo" class="sel">${ACAO_TIPOS.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+    <div class="field full"><label for="ac-ti">Título</label><input id="ac-ti" name="titulo" value="${esc(a.titulo || "")}" placeholder="ex.: Apresentação na Igreja Batista Central" required></div>
+    <div class="field"><label for="ac-d">Dia</label><input id="ac-d" name="data" type="date" value="${esc(a.data || "")}" required></div>
+    <div class="field"><label for="ac-h">Hora</label><input id="ac-h" name="hora" type="time" value="${esc(a.hora || "")}"></div>
+    <div class="field full"><label for="ac-l">Local</label><input id="ac-l" name="local" value="${esc(a.local || "")}" placeholder="ex.: Igreja Batista Central"></div>
+    <div class="field full"><label for="ac-en">Endereço</label><input id="ac-en" name="endereco" value="${esc(a.endereco || "")}" placeholder="Rua, número, bairro"></div>
+    <div class="field"><label for="ac-eq">Equipe</label>${ehCoordEq() ? `<input id="ac-eq" name="equipe" value="${esc(a.equipe)}" readonly>` : `<select id="ac-eq" name="equipe" class="sel">${equipesUsadas().map(e => `<option ${a.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>`}</div>
+    <div class="field"><label for="ac-v">Legendários precisos</label><input id="ac-v" name="vagas" type="number" min="0" value="${a.vagas || ""}" placeholder="ex.: 6"></div>
+    <div class="field full"><label for="ac-o">Recado para quem for (opcional)</label><input id="ac-o" name="obs" value="${esc(a.obs || "")}" placeholder="ex.: ir de camiseta da Base, chegar 30 min antes"></div>
+  </div><div class="modal-foot"><div>${novo ? "" : `<button class="btn danger" type="button" id="delBtn">Excluir</button>`}</div>
+    <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { const titulo = String(fd.get("titulo") || "").trim(), data = String(fd.get("data") || ""); if (!titulo || !data) { toast("Coloque o título e o dia."); return; }
+    const item = { ...a, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: fd.get("tipo"), titulo, data,
+      hora: String(fd.get("hora") || ""), local: String(fd.get("local") || "").trim(), endereco: String(fd.get("endereco") || "").trim(), equipe: String(fd.get("equipe") || ""), vagas: +fd.get("vagas") || 0,
+      obs: String(fd.get("obs") || "").trim(), por: a.por || ME.adm || "", em: a.em || new Date().toISOString() };
+    closeModal(); acaoSalvar(a.doc || acaoDocMeu(), item, novo ? "Ação criada: agora mande o link e o convite" : "Ação salva"); });
+  const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); acaoSalvar(a.doc, null, "Ação excluída", a.id); };
+}
+async function acaoPdf(a) {
+  const jsPDF = await carregarPdf(), C = PDF_COR, [logo, fundo] = await Promise.all([imagemDataUrl("assets/logo.png"), imagemDataUrl("assets/bg.jpg")]);
+  const doc = new jsPDF({ unit: "mm", format: "a4" }), W = 210, H = 297;
+  doc.setFillColor(...C.NAVY); doc.rect(0, 0, W, H, "F");
+  if (fundo) try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.35 })); doc.addImage(fundo, "JPEG", -40, 0, 290, 150, "fundo", "FAST"); doc.restoreGraphicsState(); } catch (e) {}
+  if (logo) try { doc.addImage(logo, "PNG", W / 2 - 14, 16, 28, 35.4, "logo"); } catch (e) {}
+  doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("CONVITE · LEGENDÁRIOS BASE 3 COLINAS", W / 2, 64, { align: "center", charSpace: 0.8 });
+  doc.setTextColor(255, 255, 255); doc.setFontSize(27); const tl = doc.splitTextToSize(a.titulo.toUpperCase(), W - 36); doc.text(tl, W / 2, 78, { align: "center", lineHeightFactor: 1.1 });
+  let y = 78 + tl.length * 11 + 2;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(12.5); doc.setTextColor(220, 210, 200);
+  doc.text(doc.splitTextToSize(`A equipe ${a.equipe} convida os legendários para estar junto nesta ${a.tipo.toLowerCase()} e levar o TOP para mais homens.`, W - 50), W / 2, y, { align: "center" }); y += 16;
+  const caixa = (lbl, val, yy) => { doc.setFillColor(26, 34, 45); doc.roundedRect(24, yy, W - 48, 21, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(24, yy + 4, 1.6, 13, "F");
+    doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text(lbl, 32, yy + 7.5, { charSpace: 0.5 });
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.text(doc.splitTextToSize(val, W - 64)[0] || "", 32, yy + 15.5); };
+  caixa("QUANDO", acaoQuando(a), y); y += 25;
+  caixa("ONDE", a.local || "a definir", y); y += 25;
+  if (a.endereco) { caixa("ENDEREÇO", a.endereco, y); y += 25; }
+  if (a.obs) { doc.setTextColor(255, 210, 160); doc.setFont("helvetica", "italic"); doc.setFontSize(12); doc.text(doc.splitTextToSize(a.obs, W - 50), W / 2, y + 6, { align: "center" }); y += 16; }
+  doc.setFillColor(...C.LARANJA); doc.roundedRect(24, y + 4, W - 48, 30, 4, 4, "F");
+  doc.setTextColor(26, 12, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text("CONFIRME SUA PRESENÇA", W / 2, y + 15, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.text("Toque aqui ou use o link enviado no grupo", W / 2, y + 23, { align: "center" });
+  doc.link(24, y + 4, W - 48, 30, { url: acaoLink(a) });
+  if (a.endereco || a.local) { doc.setTextColor(180, 170, 160); doc.setFontSize(10); doc.setTextColor(255, 170, 110); doc.textWithLink("Abrir no mapa", W / 2 - 12, y + 44, { url: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([a.local, a.endereco, "Franca SP"].filter(Boolean).join(", ")) }); }
+  doc.setTextColor(140, 130, 120); doc.setFontSize(8.5); doc.text(`${topName()} · Equipe ${a.equipe}${a.por ? " · " + a.por : ""}`, W / 2, H - 12, { align: "center" });
+  await entregarPdf(doc.output("blob"), `Convite - ${a.titulo.replace(/[^\wÀ-ú -]/g, "").slice(0, 50)}.pdf`, `Convite: ${a.titulo}`, true);
+}
+function acaoVer(a) {
+  const C = acaoConfirmados(a), l = acaoLink(a), msg = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}\n\nA equipe ${a.equipe} convida você! Confirme sua presença: ${l}`, pode = podeEditar() || (ehCoordEq() && a.equipe === ME.equipeLgnd);
+  modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${esc(a.tipo)} · ${esc(a.equipe)} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
+    <div class="actions" style="flex-wrap:wrap"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Mandar link no WhatsApp</a>
+      <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button>${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}</div>
+    <section class="panel" style="margin-top:6px"><h3>Confirmados <small>${C.length}${a.vagas ? " de " + a.vagas : ""}</small></h3>
+      ${C.length ? `<div class="list">${C.map(x => `<div class="li"><span class="grow"><b>${esc(x.nome)}</b> <span class="hint">${esc(x.equipe || "")}</span></span></div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
+  $("#acCopiar").onclick = () => copiarTexto(l, "Link copiado");
+  $("#acPdf").onclick = () => acaoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
+  const ed = $("#acEd"); if (ed) ed.onclick = () => { closeModal(); acaoForm(a); };
+}
+function vMetaAcoes(D) {
+  const A = acoesTodas(), hoje = hojeISO();   // todos veem todas as ações (legendário de outra equipe também pode ir)
+  const prox = A.filter(a => a.data >= hoje), pass = A.filter(a => a.data < hoje).reverse();
+  const card = a => { const c = acaoConfirmados(a).length, d = new Date(a.data + "T12:00:00");
+    return `<button class="acao-c ${a.equipe === ME.equipeLgnd ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="acao-d"><b class="num">${String(d.getDate()).padStart(2, "0")}</b><small>${d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</small></span>
+      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.tipo)} · ${esc(a.equipe)}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
+      <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
+  return `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Idas a igrejas, panfletagens e o pré-TOP. Cada ação tem um link para os legendários confirmarem presença e um convite em PDF.</p>
+      ${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Nova ação</button>` : ""}</div>
+    <section class="panel"><h3>Próximas <small>${prox.length}</small></h3>${prox.length ? `<div class="acao-lista">${prox.map(card).join("")}</div>` : `<div class="empty">Nenhuma ação marcada. Que tal a primeira ida a uma igreja?</div>`}</section>
+    ${pass.length ? `<section class="panel"><h3>Já aconteceram <small>${pass.length}</small></h3><div class="acao-lista">${pass.map(card).join("")}</div></section>` : ""}`;
+}
+function metaAbas(aba) {
+  const at = tarLista(metaDados()).filter(t => t.sit === "atrasada" && (!ehCoordEq() || t.equipe === ME.equipeLgnd)).length;
+  return `<div class="seg meta-abas" role="tablist">${[["placar", "Placar"], ["ind", "Indicações"], ["tar", "Tarefas" + (at ? ` <span class="badge num">${at}</span>` : "")], ["acoes", "Ações"]].map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
+}
 function metaAjustarForm() {
   const D = metaDados();
   modal(`<h3>Ajustar meta</h3>
@@ -6135,6 +6311,14 @@ document.addEventListener("click", e => {
   if (d.act === "csg-rep") { csgRepForm(); return; }
   if (t.id === "notifBtn") { pedirNotificacao(); return; }
   if (d.indNovo) { indForm(); return; }   // coordenador também indica nomes
+  if (d.metaAba) { S.metaAba = d.metaAba; if (S.view !== "meta") go("meta"); else render(); return; }
+  if (d.tarFeito) { tarMarcar(d.tarFeito, "feito"); return; }
+  if (d.tarMais) { tarMarcar(d.tarMais, "mais"); return; }
+  if (d.tarMenos) { tarMarcar(d.tarMenos, "menos"); return; }
+  if (d.tarEd) { const t = tarLista(metaDados()).find(x => x.id === d.tarEd); if (t) tarForm(t); return; }
+  if (d.tarNovo) { tarForm(); return; }
+  if (d.acaoNovo) { acaoForm(); return; }
+  if (d.acaoVer) { const [doc, id] = d.acaoVer.split("|"), a = acoesTodas().find(x => x.doc === doc && x.id === id); if (a) acaoVer(a); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
   if (d.act === "novo") { personForm(null, S.view === "legendarios" ? "legendario" : "participante"); return; }

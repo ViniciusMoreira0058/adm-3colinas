@@ -989,6 +989,17 @@ body.d2 .empty.e2.busca .e2-ic { background: var(--surface2); color: var(--muted
 .meta-mini{display:grid;grid-template-columns:1fr 1fr;gap:12px} .meta-mini .lbl{display:block;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
 .meta-mini b{font-size:26px} .meta-mini b small{font-size:.5em;color:var(--muted)}
 .ind-li{flex-wrap:wrap} .ind-li .grow{flex:1 1 220px;min-width:0} .ind-li .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .ind-li .sel.sm{min-height:32px;font-size:13px;padding:0 8px}
+.meta-abas{margin-bottom:4px} .meta-abas .badge{margin-left:4px}
+.tar-li{align-items:center;gap:10px} .tar-li .grow{display:flex;flex-direction:column;gap:3px;min-width:0} .tar-li .bar{max-width:220px}
+.tar-ck{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center} .tar-ck svg{width:14px;height:14px}
+.tar-li.feito .tar-ck{background:var(--good);border-color:var(--good);color:#fff} .tar-li.feito b{text-decoration:line-through;opacity:.65}
+.tar-li.atrasada .tar-ck{border-color:var(--bad)} .tar-li.atrasada small{color:var(--bad)} .tar-li.semana .tar-ck{border-color:var(--warn)}
+.tar-num{display:flex;align-items:center;gap:6px} .tar-num b{font-size:15px}
+.acao-lista{display:flex;flex-direction:column;gap:8px}
+.acao-c{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;cursor:pointer}
+.acao-c:hover{border-color:var(--accent)} .acao-c.minha{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))} .acao-c .grow{display:flex;flex-direction:column;min-width:0} .acao-c small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acao-d{flex:none;width:46px;height:50px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.acao-d b{font-size:20px} .acao-d small{font-size:11px;text-transform:uppercase;font-weight:700}
 .fam-pre{display:inline-block;min-width:30px;margin-right:6px;padding:1px 6px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-size:.8em;font-weight:800;text-align:center;vertical-align:1px}
 .mp-f{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 13px var(--body);cursor:pointer}
 .mp-f span{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;border:2px solid var(--c);font-size:11px}
