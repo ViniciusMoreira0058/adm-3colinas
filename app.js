@@ -5239,7 +5239,7 @@ function vPainelCoord() {
    Equipes: nomes e inscritos por indicação divididos pelo nº de servidores (legendários da equipe; sem legendários ainda, usa o TOP anterior).
    Indicações: config indic-<top>-<membroId> {lista:[{id,nome,tel,quem,equipe,canal,status,em,contatoEm,contatoPor,obs}]} (cada um grava o seu; coordenador também).
    Ajustes do dono: config meta-<top> {vagas, desist}. Inscrito = senderista do TOP com o mesmo telefone ou nome. */
-const META = () => DEMO;
+const META = () => true;   // Meta do TOP, Agenda e próximo TOP: liberados no app real em 01/11/2026 (precisa do supabase/indicacoes.sql)
 const META_CURVA = [0, 0, 5, 15, 28, 42, 58, 75, 92, 108, 125, 142, 158, 165];   // acumulado no fim das semanas -13 … 0 (PDF)
 const META_CHECK = [[10, 10], [7, 45], [4, 90], [2, 125]];   // semana antes do TOP, mínimo (para 165)
 const IND_CANAIS = ["Indicação pessoal", "Igreja", "Redes sociais", "Panfletagem"];
