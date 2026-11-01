@@ -1,19 +1,24 @@
 /* Service worker do ADM 3Colinas: deixa o app instalável e faz ele abrir sem internet.
    Os arquivos do app vêm da rede quando dá (sempre a versão mais nova) e da cópia guardada quando não dá.
    Os dados não passam por aqui: ficam guardados pelo próprio app (dados.js) e vão para o Supabase quando a internet volta. */
-const CACHE = "adm3-v126";
+const CACHE = "adm3-v127";
+const TILES = "adm3-mapa";   // pedaços do mapa (satélite/ruas) já vistos: ficam para usar sem internet
 const ARQUIVOS = ["./", "index.html", "app.js", "dados.js", "cronograma.js", "demo.js", "nfc.js", "e.html", "manifest.webmanifest",
   "assets/bg.jpg", "assets/logo.png", "icons/v2/icon-192.png", "icons/v2/icon-512.png"];
 // bibliotecas e fontes de fora (supabase-js, leitor de planilha, fonte Plus Jakarta Sans)
 const EXTERNOS = ["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js",
-  "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"];
-const CDN = /^https:\/\/(cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
+  "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"];
+const CDN = /^https:\/\/(cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com|unpkg\.com\/leaflet@|cdnjs\.cloudflare\.com\/ajax\/libs\/jszip\/)/;
+const TILE = /^https:\/\/([abc]\.tile\.openstreetmap\.org|server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery)\//;
+let tilesNovos = 0;
+const aparar = () => caches.open(TILES).then(c => c.keys().then(ks => ks.length > 6000 ? Promise.all(ks.slice(0, ks.length - 5000).map(k => c.delete(k))) : 0));
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS).then(() => Promise.all(EXTERNOS.map(u => c.add(new Request(u, { mode: "cors" })).catch(() => {})))))
     .then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== TILES).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 const guardar = (req, r) => { if (r && (r.ok || r.type === "opaque")) { const c = r.clone(); caches.open(CACHE).then(k => k.put(req, c)); } return r; };
 self.addEventListener("fetch", e => {
@@ -26,6 +31,12 @@ self.addEventListener("fetch", e => {
       if (c) { rede.catch(() => {}); return c; }
       return rede;
     }));
+    return;
+  }
+  // mapa: usa o pedaço guardado; sem guardado, baixa e guarda (só os que a pessoa já viu, nada é baixado em massa)
+  if (TILE.test(e.request.url)) {
+    e.respondWith(caches.open(TILES).then(c => c.match(e.request).then(m => m || fetch(e.request).then(r => {
+      if (r && r.ok) { c.put(e.request, r.clone()); if (++tilesNovos % 300 === 0) aparar(); } return r; }))));
     return;
   }
   if (u.origin !== location.origin) return;   // Supabase e o resto: direto, sem cache

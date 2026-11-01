@@ -1845,3 +1845,14 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
   const fin = window.ADM_DEMO.docs.find(x => x.col === "config" && x.id === "fin-top1922"); if (!fin) return;
   fin.data.itens.filter(i => /^(Pulseiras numeradas|Lonas e cordas)/.test(i.desc)).forEach(i => { i.foto = ""; i.fotoPath = ""; });
 })();
+// PONTOS NO MAPA (demo): hidratação, almoço dos legendários, carro de apoio e ambulância adicionados pelo app
+(function () {
+  const h = m => new Date(Date.now() - m * 6e4).toISOString();
+  window.ADM_DEMO.docs.push({ col: "config", id: "mapa-pontos-top1922", data: { lista: [
+    { id: "mp1", tipo: "agua", nome: "Hidratação 1", obs: "20 galões de 20 L. Responsável: Henrique.", lat: -20.229013, lng: -47.300745, por: "Henrique", em: h(300) },
+    { id: "mp2", tipo: "agua", nome: "Hidratação 2", obs: "Reabastecer às 15h.", lat: -20.221238, lng: -47.286874, por: "Henrique", em: h(290) },
+    { id: "mp3", tipo: "almoco-l", nome: "Almoço legendários D1", obs: "Marmitas chegam 12h30.", lat: -20.203972, lng: -47.273045, por: "Bruno Costa", em: h(240) },
+    { id: "mp4", tipo: "apoio", nome: "Carro de apoio (Cemitério)", obs: "Hilux branca, motorista Rafael.", lat: -20.217911, lng: -47.281159, por: "Rafael Lima", em: h(200) },
+    { id: "mp5", tipo: "ambulancia", nome: "Ambulância", obs: "Fica no portão da base o TOP todo.", lat: -20.203521, lng: -47.27185, por: "Vinicius Moreira", em: h(500) },
+  ] } });
+})();

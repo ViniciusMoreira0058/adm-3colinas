@@ -3329,10 +3329,13 @@ function vMapaVivo() {
   return `<section class="panel av-pista"><div class="av-pista-head"><h3>Onde está a corrente</h3>
       <div class="actions"><div class="seg" role="group" aria-label="Dia da pista">${dias.map(d => `<button type="button" data-av-dia="${esc(d.id)}" aria-pressed="${d.id === dia.id}">${esc(d.dia)}</button>`).join("")}</div>
       ${E.lin && MAPA_CHEIO() ? `<button class="btn" type="button" data-act="mapa-cheio">${S.mapaCheio ? "Fechar mapa" : "⤢ Mapa em tela cheia"}</button>` : ""}
+      ${ed && MAPA_PONTOS() && E.lin ? `<button class="btn primary" type="button" data-act="mp-novo">${ico("plus")} Ponto no mapa</button>` : ""}
       ${ed ? `<button class="btn" type="button" data-act="kmz">${ico("upload")} Importar KMZ</button>` : ""}</div></div>
+    ${MAPA_PONTOS() && S.mpPick ? `<div class="mp-faixa">${ico("route")} <b>Toque no mapa</b> onde fica o ponto <span class="grow"></span><button class="btn sm" type="button" data-act="mp-gps">Estou aqui (GPS)</button><button class="btn sm ghost" type="button" data-act="mp-cancelar">Cancelar</button></div>` : ""}
     ${mom ? `<div class="av-momento"><span class="lbl">${mom.andando ? "Acontecendo agora" : "Último momento"}</span><b>${esc(mom.atv)}</b><small class="hint">${mom.andando ? "começou " : "terminou "}${esc(mom.andando ? mom.ini : mom.fim || mom.ini)}${E.ponto ? ` · no mapa: ${esc(E.ponto.n)}` : ""}</small></div>` : ""}
     <p class="hint" style="margin:0">${!E.andou ? "A corrente ainda não saiu neste dia." : E.lin ? `${km(E.ateM)} de ${km(E.total)} km do ${esc(dia.dia)} (${Math.round(E.ateM / (E.total || 1) * 100)}%)${!E.usaPonto && pos.estimado ? " · posição estimada pelo tempo previsto do trecho" : ""}` : ""}</p>
     ${E.lin ? `<div id="avMapa" class="av-mapa"></div>` : `<div class="empty">${pistaMapa() ? `O KMZ não tem a linha do ${esc(dia.dia)}.` : ed ? "Importe o KMZ da pista para ver o mapa." : "O mapa da pista ainda não foi enviado."}</div>`}
+    ${MAPA_PONTOS() && E.lin ? mpFiltro() : ""}
     <details ${E.usaPonto ? "" : "open"}><summary>Trechos do ${esc(dia.dia)} (marcar saída e chegada da corrente)</summary><ol class="av-trechos">${tr.map(linha).join("")}</ol></details>
     ${pistaMapa() ? `<p class="hint" style="margin:0">Mapa: ${esc(pistaMapa().arquivo || "KMZ")}${pistaMapa().por ? " · enviado por " + esc(pistaMapa().por) : ""}</p>` : ""}
   </section>`;
@@ -3347,8 +3350,8 @@ async function montarMapaVivo() {
   const antes = mapaAV && mapaAV.dia === dia.id ? { c: mapaAV.map.getCenter(), z: mapaAV.map.getZoom(), cam: mapaAV.cam } : null;
   if (mapaAV) try { mapaAV.map.remove(); } catch (e) {}
   const map = L.map(el, { zoomControl: true, attributionControl: true });
-  const ruas = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" });
-  const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Esri" });
+  const ruas = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap", crossOrigin: true });
+  const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Esri", crossOrigin: true });
   const cam = antes ? antes.cam : (mapaAV && mapaAV.cam) || "sat"; (cam === "sat" ? sat : ruas).addTo(map);
   L.control.layers({ "Satélite": sat, "Ruas": ruas }, null, { position: "topright" }).addTo(map);
   map.on("baselayerchange", e => { if (mapaAV) mapaAV.cam = e.name === "Ruas" ? "ruas" : "sat"; });
@@ -3359,7 +3362,10 @@ async function montarMapaVivo() {
   const feito = linhaAte(lin, E.ateM);
   if (E.andou) L.polyline(feito.parte, { color: "#ff7a1a", weight: 6 }).addTo(map);
   // pontos do KMZ (prédicas, camps): o do momento atual acende
-  (P.pontos || []).forEach(p => { const on = ponto && p === ponto;
+  const tipos = MAPA_PONTOS() ? mpOcultos() : null;
+  (P.pontos || []).forEach(p => { const on = ponto && p === ponto, tp = MAPA_PONTOS() && mpTipoDoNome(p.n);
+    if (tp) { if (!tipos.has(tp.k)) mpMarcador(L, map, { ...p, nome: p.n, tipo: tp.k, kmz: true }, on); return; }
+    if (MAPA_PONTOS() && tipos.has("kmz")) return;
     L.circleMarker([p.lat, p.lng], { radius: on ? 9 : 5, color: on ? "#fff" : "#0b1119", weight: 2, fillColor: on ? "#ff7a1a" : "#ffd29a", fillOpacity: 1 }).addTo(map)
       .bindTooltip(esc(p.n), { direction: "top", permanent: !on && map.getZoom && false }); });
   if (!(P.pontos || []).length) { let acc = 0; const tr = dia.trechos || [], tot = E.pos.tot;
@@ -3371,8 +3377,74 @@ async function montarMapaVivo() {
     L.marker(onde, { icon: L.divIcon({ className: "corrente-pin", html: `<i></i><b>${rot}</b>`, iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000 }).addTo(map);
   }
   equipeNoMapa(L, map);
+  if (MAPA_PONTOS()) { const off = mpOcultos(); mpLista().filter(x => !off.has(x.tipo)).forEach(x => mpMarcador(L, map, x));
+    if (S.mpPick) { el.classList.add("mp-pegar"); map.once("click", e => { S.mpPick = false; el.classList.remove("mp-pegar"); pontoForm(null, { lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6) }); }); } }
   if (antes) map.setView(antes.c, antes.z); else map.fitBounds(L.latLngBounds(lin), { padding: [30, 30] });
   mapaAV = { map, dia: dia.id, cam };
+}
+/* Pontos no mapa (01/11/2026, só DEMO): hidratação, almoço, carro de apoio etc. Quem edita adiciona pelo app (tocar no mapa ou GPS) e todos veem.
+   config mapa-pontos-<top> {lista:[{id,tipo,nome,obs,lat,lng,por,em}]}. Pontos do KMZ com o tipo no nome ("Hidratação 1", "Almoço D2") ganham o mesmo ícone. */
+const MAPA_PONTOS = () => DEMO;
+const MP_TIPOS = [
+  { k: "agua", l: "Hidratação", e: "💧", c: "#3ba3ff", re: /hidrat|\bagua\b|abastec/ },
+  { k: "almoco-s", l: "Almoço senderistas", e: "🍽️", c: "#ff7a1a", re: /almoco.*send|refeic.*send|almoco(?!.*leg)/ },
+  { k: "almoco-l", l: "Almoço legendários", e: "🍲", c: "#f2b233", re: /almoco.*(leg|lgnd)|refeic.*(leg|lgnd)/ },
+  { k: "apoio", l: "Carro de apoio", e: "🚙", c: "#a78bfa", re: /apoio|resgate/ },
+  { k: "ambulancia", l: "Ambulância", e: "🚑", c: "#ff5d52", re: /ambulan|medic|socorr/ },
+  { k: "banheiro", l: "Banheiro", e: "🚻", c: "#46c486", re: /banheir|sanitar/ },
+  { k: "acesso", l: "Ponto de acesso", e: "🚧", c: "#9ca3af", re: /acesso|portao|portaria/ },
+  { k: "outro", l: "Outro", e: "📍", c: "#e5e7eb", re: null },
+];
+const mpTipo = k => MP_TIPOS.find(t => t.k === k) || MP_TIPOS[MP_TIPOS.length - 1];
+const mpTipoDoNome = n => { const x = norm(n || ""); return MP_TIPOS.find(t => t.re && (t.k === "almoco-l" ? t.re.test(x) : false)) || MP_TIPOS.find(t => t.re && t.re.test(x)) || null; };
+const mpId = () => "mapa-pontos-" + curTopId();
+const mpLista = () => ((S.cfgDocs || {})[mpId()] || {}).lista || [];
+const mpOcultos = () => { try { return new Set(JSON.parse(store.get("adm3-mp-off") || "[]")); } catch (e) { return new Set(); } };
+function mpMarcador(L, map, p, on) {
+  const t = mpTipo(p.tipo), ed = !p.kmz && podeEditar();
+  L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "mp-pin" + (on ? " on" : ""), html: `<i style="--c:${t.c}">${t.e}</i>`, iconSize: [30, 30], iconAnchor: [15, 15] }), zIndexOffset: on ? 950 : 800 })
+    .addTo(map).bindTooltip(esc(p.nome || t.l), { direction: "top", offset: [0, -12] })
+    .bindPopup(`<div class="mp-pop"><small>${t.e} ${esc(t.l)}</small><b>${esc(p.nome || t.l)}</b>${p.obs ? `<p>${esc(p.obs)}</p>` : ""}
+      <small class="hint">${p.kmz ? "do KMZ da pista" : [p.por && "por " + esc(p.por), p.em && haQuanto(p.em)].filter(Boolean).join(" · ")}</small>
+      <div class="mp-pop-a"><a class="btn sm" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" rel="noopener">Rota</a>${ed ? `<button class="btn sm" type="button" data-mp-edit="${esc(p.id)}">Editar</button>` : ""}</div></div>`);
+}
+function mpFiltro() {
+  const P = pistaMapa() || {}, off = mpOcultos(), cont = {};
+  mpLista().forEach(x => { cont[x.tipo] = (cont[x.tipo] || 0) + 1; });
+  (P.pontos || []).forEach(x => { const t = mpTipoDoNome(x.n); const k = t ? t.k : "kmz"; cont[k] = (cont[k] || 0) + 1; });
+  const ks = [...MP_TIPOS.map(t => t.k), "kmz"].filter(k => cont[k]); if (!ks.length) return "";
+  return `<div class="mp-filtro" role="group" aria-label="Mostrar no mapa">${ks.map(k => { const t = k === "kmz" ? { e: "•", l: "Outros pontos da pista", c: "#ffd29a" } : mpTipo(k);
+    return `<button type="button" class="mp-f" data-mp-f="${k}" aria-pressed="${!off.has(k)}" style="--c:${t.c}"><span>${t.e}</span>${esc(t.l)} <small class="num">${cont[k]}</small></button>`; }).join("")}</div>`;
+}
+function pontoForm(p, pos) {
+  if (!podeEditar()) { toast("Seu acesso é somente leitura."); return; }
+  const novo = !p; p = p || { tipo: "agua", nome: "", obs: "" }; let onde = pos || { lat: p.lat, lng: p.lng };
+  modal(`<h3>${novo ? "Novo ponto no mapa" : "Editar ponto"}</h3>
+    <div class="form">
+      <div class="field full"><span class="lab">Tipo</span><div class="or-tipos">${MP_TIPOS.map(t => `<label class="or-t"><input type="radio" name="tipo" value="${t.k}" ${p.tipo === t.k ? "checked" : ""}><span>${t.e} ${t.l}</span></label>`).join("")}</div></div>
+      <div class="field full"><label for="mp-n">Nome (opcional)</label><input id="mp-n" name="nome" value="${esc(p.nome || "")}" placeholder="ex.: Hidratação 2, Almoço D2"></div>
+      <div class="field full"><label for="mp-o">Observação (opcional)</label><input id="mp-o" name="obs" value="${esc(p.obs || "")}" placeholder="ex.: 40 galões, chega às 11h, responsável Henrique"></div>
+      <p class="hint full" id="mpOnde">Local: ${onde.lat.toFixed(5)}, ${onde.lng.toFixed(5)}${novo ? "" : ` · <button class="linkbtn" type="button" id="mpGps">usar minha posição agora</button>`}</p>
+    </div>
+    <div class="modal-foot"><div>${novo ? "" : `<button class="btn danger" type="button" id="delBtn">Excluir</button>`}</div>
+      <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => {
+    const t = mpTipo(fd.get("tipo") || "outro"), item = { ...p, id: p.id || "mp" + Date.now().toString(36), tipo: t.k, nome: String(fd.get("nome") || "").trim() || t.l,
+      obs: String(fd.get("obs") || "").trim(), lat: onde.lat, lng: onde.lng, por: p.por || ME.adm || "", em: p.em || new Date().toISOString() };
+    closeModal();
+    const L = mpLista().filter(x => x.id !== item.id); L.push(item);
+    save(() => api.set("config", mpId(), { lista: L }), novo ? `${t.l} adicionado no mapa` : "Ponto atualizado");
+  });
+  const g = $("#mpGps"); if (g) g.onclick = () => mpPegarGps(q => { onde = q; $("#mpOnde").textContent = `Local: ${q.lat.toFixed(5)}, ${q.lng.toFixed(5)} (sua posição)`; });
+  const del = $("#delBtn");
+  if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal();
+    save(() => api.set("config", mpId(), { lista: mpLista().filter(x => x.id !== p.id) }), "Ponto excluído"); };
+}
+function mpPegarGps(ok) {
+  const falha = () => toast("Não consegui sua localização. Confira a permissão ou toque no mapa.");
+  if (!navigator.geolocation) { if (DEMO) ok({ lat: -20.2105, lng: -47.2731 }); else falha(); return; }
+  toast("Pegando sua localização…");
+  navigator.geolocation.getCurrentPosition(g => ok({ lat: +g.coords.latitude.toFixed(6), lng: +g.coords.longitude.toFixed(6) }), () => DEMO ? ok({ lat: -20.2105, lng: -47.2731 }) : falha(), { enableHighAccuracy: true, timeout: 10000 });
 }
 function marcarTrecho(i, campo) {
   const dias = pistaDias(), V = pistaVivo(), diaId = estadoMapa().dia.id, k = diaId + "-" + i;
@@ -5913,6 +5985,11 @@ document.addEventListener("click", e => {
   if (d.copiarLink) { const p = S.pessoas.find(x => x.id === d.copiarLink); if (p && p.termoLink) copiarTexto(p.termoLink, "Link do termo copiado"); return; }
   if (d.act === "nova-ocorr") { ocorrForm(); return; }
   if (d.act === "ocorr-rapida") { ocorrRapida(); return; }
+  if (d.act === "mp-novo") { S.mpPick = true; render(); return; }
+  if (d.act === "mp-cancelar") { S.mpPick = false; render(); return; }
+  if (d.act === "mp-gps") { S.mpPick = false; render(); mpPegarGps(q => pontoForm(null, q)); return; }
+  if (d.mpEdit) { const x = mpLista().find(y => y.id === d.mpEdit); if (x) { if (mapaAV) mapaAV.map.closePopup(); pontoForm(x); } return; }
+  if (d.mpF) { const off = mpOcultos(); off.has(d.mpF) ? off.delete(d.mpF) : off.add(d.mpF); store.set("adm3-mp-off", JSON.stringify([...off])); render(); return; }
   if (d.act === "av-aviso") { if (avAvisoLigado()) { store.set("adm3-av-aviso", "0"); toast("Aviso desligado neste aparelho"); render(); return; }
     store.set("adm3-av-aviso", "1"); try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().then(render); } catch (e) {}
     toast("Vou avisar 10 min antes de cada momento enquanto o app estiver aberto"); render(); return; }
