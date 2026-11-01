@@ -2286,7 +2286,7 @@ function vTransporteViagem() {
       <div class="actions" style="margin-top:8px">${ed ? `<button class="btn sm primary" type="button" data-tr-lg="${esc(c.id)}">Quem vai</button>` : ""}${waNumber(c.tel) ? `<a class="btn sm" href="https://wa.me/${waNumber(c.tel)}" target="_blank" rel="noopener">${ico("wa")}</a>` : ""}</div></section>`; };
   return `
   <div class="head"><div><h2>Transporte</h2><p>Os ônibus levam as famílias e os carros levam os legendários. Monte a ida, copie para a volta e, na hora de sair, confira o embarque de cada um.</p></div>
-    <div class="actions">${ed ? `<button class="btn primary" type="button" data-tr-v="">${ico("plus")} Ônibus</button>${sent === "volta" ? `<button class="btn" type="button" data-act="tr-copiar">Volta igual à ida</button>` : ""}` : ""}</div></div>
+    <div class="actions">${ed ? `<button class="btn primary" type="button" data-tr-v="">${ico("plus")} Ônibus</button>${CARROS() ? `<button class="btn primary" type="button" data-car="">${ico("plus")} Carros</button>` : ""}${sent === "volta" ? `<button class="btn" type="button" data-act="tr-copiar">Volta igual à ida</button>` : ""}` : ""}</div></div>
   ${CARROS() ? trAbas("viagem") : ""}
   <div class="seg campo-abas"><button type="button" data-tr-sent="ida" aria-pressed="${sent === "ida"}">Ida</button><button type="button" data-tr-sent="volta" aria-pressed="${sent === "volta"}">Volta</button></div>
   ${sent === "volta" && !temVolta && (O.length || C.length) ? `<div class="banner"><span>A volta ainda está vazia. Toque em <b>Volta igual à ida</b> para copiar tudo e depois ajuste quem mudou.</span></div>` : ""}
