@@ -997,17 +997,112 @@ function vAoVivo() {
     <div class="av-top"><div><span class="eyebrow">${esc(topName())} · ${esc(D.nome || "")}</span><b class="av-relogio num">${hora}</b></div>
       <div class="actions"><span class="chip ${atraso > 10 ? "bad" : atraso > 0 ? "wait" : "ok"} av-atraso">${atraso == null ? "Sem marcações ainda" : atraso > 0 ? "Atrasado " + fmtDif(atraso).replace("+", "") : atraso < 0 ? "Adiantado " + fmtDif(atraso).replace("−", "") : "No horário"}</span>
       ${RELATORIO_FINAL() && !ehCoordEq() && ocorrAbertas().length ? `<button class="chip bad av-atraso" type="button" data-go="ocorrencias">${ocorrAbertas().length} ocorrência(s) aberta(s)</button>` : ""}
-      ${paisagem.matches ? "" : tv ? `<button class="btn" type="button" data-act="aovivo-tv">Sair do modo TV</button>` : `<button class="btn" type="button" data-act="aovivo-tv">Modo TV</button><button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button>`}</div></div>
+      ${AOVIVO2() && podeEditar() ? `<button class="btn primary" type="button" data-act="ocorr-rapida">${ico("plus")} Ocorrência</button>` : ""}${paisagem.matches ? "" : tv ? `<button class="btn" type="button" data-act="aovivo-tv">Sair do modo TV</button>` : `<button class="btn" type="button" data-act="aovivo-tv">Modo TV</button><button class="btn" type="button" data-act="aovivo-tela">Tela cheia</button>`}</div></div>
     <section class="av-agora"><span class="lbl">Agora</span><h2>${agora ? esc(agora.atv) : prox ? "Aguardando início" : "Dia encerrado"}</h2>
-      ${agora ? `<p>${[agora.local, agora.resp].filter(Boolean).map(esc).join(" · ")}${M[agora.id].ini ? ` · desde ${esc(M[agora.id].ini)}${agora.hora ? ` (previsto ${esc(agora.hora)})` : ""}` : ""}</p>` : ""}</section>
+      ${agora ? `<p>${[agora.local, agora.resp].filter(Boolean).map(esc).join(" · ")}${M[agora.id].ini ? ` · desde ${esc(M[agora.id].ini)}${agora.hora ? ` (previsto ${esc(agora.hora)})` : ""}` : ""}</p>` : ""}${avBtn(agora, "fim")}</section>
     <section class="av-prox"><span class="lbl">Próximo</span><h3>${prox ? esc(prox.atv) : "—"}</h3>
-      ${prox ? `<p>${prox.hora ? `previsto ${esc(prox.hora)}${prev && prev !== prox.hora ? ` · deve começar ~${esc(prev)}` : ""}` : ""}${prox.local ? " · " + esc(prox.local) : ""}</p>` : ""}</section>
+      ${prox ? `<p>${prox.hora ? `previsto ${esc(prox.hora)}${prev && prev !== prox.hora ? ` · deve começar ~${esc(prev)}` : ""}` : ""}${prox.local ? " · " + esc(prox.local) : ""}</p>` : ""}${avBtn(prox, "ini")}</section>${avAviso(prox, prev)}
     ${seguintes.length ? `<ul class="av-depois">${seguintes.map(i => `<li><span class="num">${esc(i.hora || "")}</span>${esc(i.atv)}</li>`).join("")}</ul>` : ""}
     <div class="av-barra"><div class="bar good"><i style="width:${pct(nFeito, D.itens.length)}%"></i></div><span class="hint num">${nFeito} de ${D.itens.length} momentos do ${esc(D.nome || "dia")} concluídos · atualiza sozinho</span></div>
-    ${ehCoordEq() ? "" : equipeMapaBarra()}${climaCard()}
+    ${ehCoordEq() ? "" : equipeMapaBarra()}${avPista()}${climaCard()}${avSol()}${avUltimas(D)}
   </div>${mapa}</div>`;
 }
 setInterval(() => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) render(); }, 30000);
+/* Ao vivo 2 (01/11/2026, só DEMO): marcar daqui, contagem na pista, ocorrência rápida, pôr do sol, aviso 10 min antes e últimas marcações */
+const AOVIVO2 = () => DEMO;
+const avAvisoLigado = () => store.get("adm3-av-aviso") === "1";
+function avBtn(i, tipo) {
+  if (!AOVIVO2() || !i || !podeMarcar(eu())) return "";
+  const minha = cronoMarcas(eu())[i.id] || {};
+  if (tipo === "ini" && minha.ini) return "";
+  if (tipo === "fim" && minha.fim) return "";
+  return `<div class="av-marcar"><button class="btn ${tipo === "ini" ? "primary" : ""}" type="button" data-av-marca="${tipo}|${esc(i.id)}">${tipo === "ini" ? "Começou agora" : "Terminou agora"}</button></div>`;
+}
+function avAviso(prox, prev) {
+  if (!AOVIVO2() || !prox || !(prev || prox.hora)) return "";
+  const falta = difMin(agoraHM(), prev || prox.hora);
+  if (falta == null || falta < 0 || falta > 10) return "";
+  avNotificar(prox, falta);
+  return `<div class="av-aviso">${ico("bell")} <b>${falta ? `Em ${falta} min` : "Agora"}:</b> ${esc(prox.atv)}</div>`;
+}
+function avNotificar(prox, falta) {
+  if (!avAvisoLigado()) return;
+  const k = "adm3-av-avisado-" + hojeISO() + "-" + prox.id; if (store.get(k)) return; store.set(k, "1");
+  const txt = `${falta ? `Em ${falta} min` : "Agora"}: ${prox.atv}`;
+  try { if ("Notification" in window && Notification.permission === "granted" && navigator.serviceWorker) navigator.serviceWorker.ready.then(r => r.showNotification("Próximo momento", { body: txt, tag: "av-" + prox.id, icon: "icons/icon-192.png" })); } catch (e) {}
+  toast(txt);
+}
+function avPessoasPista() {
+  const sen = S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)), ids = new Set(sen.map(p => p.id));
+  const oc = ocorrencias().filter(o => o.pessoaId && ids.has(o.pessoaId));
+  const desist = new Set(oc.filter(o => o.tipo === "Desistência").map(o => o.pessoaId));
+  const atend = new Set(oc.filter(o => o.status !== "resolvida" && !desist.has(o.pessoaId) && (o.medico || ["Mal-estar", "Lesão", "Atendimento médico"].includes(o.tipo))).map(o => o.pessoaId));
+  return { total: sen.length, desist: desist.size, atend: atend.size, pista: sen.length - desist.size };
+}
+function avPista() {
+  if (!AOVIVO2() || ehCoordEq()) return "";
+  const c = avPessoasPista(); if (!c.total) return "";
+  return `<section class="panel av-napista"><div><span class="lbl">Na pista</span><b class="num">${c.pista}<small> de ${c.total}</small></b></div>
+    <div class="av-napista-chips"><button class="chip ${c.desist ? "bad" : ""}" type="button" data-go="ocorrencias">${c.desist} desistência${c.desist === 1 ? "" : "s"}</button>
+    <button class="chip ${c.atend ? "wait" : ""}" type="button" data-go="ocorrencias">${c.atend} em atendimento</button></div></section>`;
+}
+function avSol() {
+  if (!AOVIVO2()) return "";
+  const c = climaDados(), d = c && c.d && c.d.daily; if (!d || !d.sunset) return "";
+  const hoje = hojeISO(), i = Math.max(0, d.time.indexOf(hoje)), hm = x => String(x || "").slice(11, 16);
+  const agora = minDe(agoraHM()), por = minDe(hm(d.sunset[i])), nasce = minDe(hm(d.sunrise[i])), nasceAm = hm(d.sunrise[i + 1] || d.sunrise[i]);
+  const dur = m => m >= 60 ? Math.floor(m / 60) + "h" + String(m % 60).padStart(2, "0") : m + " min";
+  let t;
+  if (agora < nasce) t = `Ainda escuro. Amanhece às <b>${hm(d.sunrise[i])}</b> (falta ${dur(nasce - agora)})`;
+  else if (agora < por) t = `Escurece às <b>${hm(d.sunset[i])}</b> (falta ${dur(por - agora)})${por - agora <= 60 ? " · separar lanternas" : ""}`;
+  else t = `Já escureceu (${hm(d.sunset[i])}). Amanhece às <b>${nasceAm}</b>`;
+  return `<section class="panel av-sol ${agora >= nasce && por - agora <= 60 && agora < por ? "perto" : ""}">${ico(agora >= nasce && agora < por ? "sun" : "moon")}<span>${t}</span></section>`;
+}
+function avUltimas(D) {
+  if (!AOVIVO2()) return "";
+  const nomes = {}; (D.itens || []).forEach(i => { nomes[i.id] = i.atv; });
+  const ev = [];
+  admsVisiveis().forEach(a => Object.entries(cronoMarcas(a)).forEach(([k, m]) => { if (!m || typeof m !== "object" || !nomes[k]) return;
+    if (m.ini) ev.push({ h: m.ini, quem: m.iniPor || a.nome, txt: `marcou o início de ${nomes[k]}` });
+    if (m.fim) ev.push({ h: m.fim, quem: m.fimPor || a.nome, txt: `marcou o fim de ${nomes[k]}` }); }));
+  const hoje = hojeISO();
+  ocorrencias().filter(o => String(o.em || "").slice(0, 10) === hoje || (o.em && Date.now() - new Date(o.em) < 12 * 3600e3)).forEach(o => {
+    ev.push({ h: new Date(o.em).toTimeString().slice(0, 5), quem: o.por || "", txt: `registrou ${o.tipo.toLowerCase()}${o.nome ? " de " + o.nome : ""}`, oc: true }); });
+  ev.sort((a, b) => (minDe(b.h) || 0) - (minDe(a.h) || 0));
+  const L = ev.slice(0, 6); if (!L.length) return "";
+  return `<section class="panel av-ultimas"><div class="av-ult-top"><h3>Últimos acontecimentos</h3>
+      <button class="btn sm" type="button" data-act="av-aviso">${ico("bell")} ${avAvisoLigado() ? "Aviso 10 min antes: ligado" : "Avisar 10 min antes"}</button></div>
+    <ul>${L.map(e => `<li class="${e.oc ? "ev-oc" : ""}"><span class="num">${esc(e.h)}</span><span><b>${esc(e.quem)}</b> ${esc(e.txt)}</span></li>`).join("")}</ul></section>`;
+}
+function ocorrRapida() {
+  if (!podeEditar()) { toast("Seu acesso é somente leitura."); return; }
+  const mo = momentoAtual(), pessoas = S.P.filter(p => !cancelado(p)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+  let pos = null;
+  modal(`<h3>Ocorrência rápida</h3>
+    <p class="hint">Hora: <b>${agoraHM()}</b>${mo ? ` · ${esc(mo.atv)}` : ""} · <span id="orGps">buscando localização…</span></p>
+    <div class="form">
+      <div class="field full"><label for="or-p">Quem</label><input id="or-p" name="nome" list="orPessoas" placeholder="Nome do senderista ou legendário" autocomplete="off">
+        <datalist id="orPessoas">${pessoas.map(p => `<option value="${esc(p.nome)}">${p.tipo === "legendario" ? "Legendário" : "Senderista"}</option>`).join("")}</datalist></div>
+      <div class="field full"><span class="lab">O que foi</span><div class="or-tipos">${OC_TIPOS.map((t, n) => `<label class="or-t"><input type="radio" name="tipo" value="${t}" ${n ? "" : "checked"}><span>${t}</span></label>`).join("")}</div></div>
+      <div class="field full"><span class="lab">Gravidade</span><div class="or-tipos">${OC_GRAV.map((g, n) => `<label class="or-t ${g.c}"><input type="radio" name="grav" value="${g.v}" ${n ? "" : "checked"}><span>${g.l}</span></label>`).join("")}</div></div>
+      <div class="field full"><label for="or-d">Detalhe (opcional)</label><input id="or-d" name="desc" placeholder="ex.: torceu o tornozelo na descida"></div>
+    </div>
+    <div class="modal-foot"><div><button class="btn ghost" type="button" id="orCompleta">Formulário completo</button></div>
+      <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Registrar</button></div></div>`,
+  fd => {
+    const nome = String(fd.get("nome") || "").trim(), desc = String(fd.get("desc") || "").trim();
+    if (!nome && !desc) { $("#or-p").focus(); toast("Diga quem ou o que aconteceu."); return; }
+    const p = S.P.find(x => norm(x.nome) === norm(nome)), agora = new Date();
+    closeModal();
+    salvarOcorr(ocPref() + Date.now().toString(36), { nome: p ? p.nome : nome, pessoaId: p ? p.id : null, tipo: fd.get("tipo"), grav: fd.get("grav"), em: agora.toISOString(),
+      local: mo ? mo.atv : "", desc, prov: "", atendido: ME.adm || "", status: "aberta", por: ME.adm || "", criadaEm: agora.toISOString(), ...(pos ? { lat: pos.lat, lng: pos.lng } : {}) }, "Ocorrência registrada " + agoraHM());
+  });
+  $("#orCompleta").onclick = () => { closeModal(); ocorrForm(); };
+  const ok = (lat, lng) => { pos = { lat, lng }; const e = $("#orGps"); if (e) e.textContent = "localização anotada"; };
+  const falha = () => { const e = $("#orGps"); if (e) e.textContent = "sem localização"; };
+  if (!navigator.geolocation) { if (DEMO) ok(-20.2028, -47.2706); else falha(); return; }
+  navigator.geolocation.getCurrentPosition(g => ok(g.coords.latitude, g.coords.longitude), () => DEMO ? ok(-20.2028, -47.2706) : falha(), { enableHighAccuracy: true, timeout: 10000 });
+}
 // Modo TV: tudo numa tela só, sem menu. Liga pelo botão (fica salvo no aparelho) ou sozinho com o celular deitado.
 const paisagem = matchMedia("(orientation: landscape) and (max-height: 540px)");
 const modoTv = () => S.view === "aovivo" && (paisagem.matches || (() => { try { return localStorage.getItem("adm3-avtv") === "1"; } catch (e) { return false; } })());
@@ -1716,7 +1811,7 @@ function climaDados() {
   if ((!c || Date.now() - c.t > 30 * 6e4) && Date.now() - climaBusca > 60e3 && navigator.onLine !== false) {
     climaBusca = Date.now();
     const P = pistaMapa(), p0 = (P && P.pontos || [])[0] || { lat: -20.2028, lng: -47.2706 };
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p0.lat}&longitude=${p0.lng}&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code&current=temperature_2m,weather_code,wind_speed_10m,precipitation&timezone=America%2FSao_Paulo&forecast_days=3`)
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p0.lat}&longitude=${p0.lng}&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code&current=temperature_2m,weather_code,wind_speed_10m,precipitation&daily=sunrise,sunset&timezone=America%2FSao_Paulo&forecast_days=3`)
       .then(r => r.json()).then(d => { if (!d.hourly) return; store.set("adm3-clima", JSON.stringify({ t: Date.now(), d })); if (S.view === "aovivo" || S.view === "painel") render(); }).catch(() => {});
   }
   return c;
@@ -4575,6 +4670,7 @@ function vOcorrencias() {
       <h3>${esc(o.nome || "Sem pessoa")}${p ? ` <small>${tipoNome(p)}${p.equipe ? " · " + esc(equipeTxt(p)) : ""}</small>` : ""}</h3>
       ${o.desc ? `<p>${esc(o.desc)}</p>` : ""}
       ${o.prov ? `<p class="hint"><b>Providência:</b> ${esc(o.prov)}</p>` : ""}
+      ${o.lat && o.lng ? `<a class="linkbtn" href="https://www.google.com/maps?q=${o.lat},${o.lng}" target="_blank" rel="noopener">${ico("route")} Ver onde foi no mapa</a>` : ""}
       <small class="hint">${[o.local && "em " + o.local, o.atendido && "atendido por " + o.atendido, o.por && "registrado por " + o.por, o.status === "resolvida" && o.resolvidaEm && `resolvida ${quando(o.resolvidaEm)}${o.resolvidaPor ? " por " + o.resolvidaPor : ""}`].filter(Boolean).map(esc).join(" · ")}</small>
       <div class="actions">${p ? `<button class="btn sm" type="button" data-oc-saude="${esc(p.id)}">${ico("heart")} Ficha de saúde</button>` : ""}
         ${ed ? `<button class="btn sm" type="button" data-oc-edit="${esc(o.id)}">${ico("edit")} Editar</button><button class="btn sm ${o.status === "resolvida" ? "" : "primary"}" type="button" data-oc-resolver="${esc(o.id)}">${o.status === "resolvida" ? "Reabrir" : "Marcar resolvida"}</button>` : ""}</div>
@@ -5816,6 +5912,12 @@ document.addEventListener("click", e => {
   if (d.act === "aovivo-tv") { const on = !modoTv(); try { localStorage.setItem("adm3-avtv", on ? "1" : "0"); } catch (e) {} if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); render(); return; }
   if (d.copiarLink) { const p = S.pessoas.find(x => x.id === d.copiarLink); if (p && p.termoLink) copiarTexto(p.termoLink, "Link do termo copiado"); return; }
   if (d.act === "nova-ocorr") { ocorrForm(); return; }
+  if (d.act === "ocorr-rapida") { ocorrRapida(); return; }
+  if (d.act === "av-aviso") { if (avAvisoLigado()) { store.set("adm3-av-aviso", "0"); toast("Aviso desligado neste aparelho"); render(); return; }
+    store.set("adm3-av-aviso", "1"); try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().then(render); } catch (e) {}
+    toast("Vou avisar 10 min antes de cada momento enquanto o app estiver aberto"); render(); return; }
+  if (d.avMarca) { const [t, id] = d.avMarca.split("|"); S.cronoAdm = ME.id; const h = agoraHM();
+    cronoMarcar(id, t === "ini" ? { ini: h, iniPor: ME.adm, iniEm: new Date().toISOString() } : { fim: h, fimPor: ME.adm, fimEm: new Date().toISOString() }, (t === "ini" ? "Início marcado " : "Fim marcado ") + h); return; }
   if (d.ocEdit) { const o = ocorrencias().find(x => x.id === d.ocEdit); if (o) ocorrForm(o); return; }
   if (d.ocResolver && podeEditar()) { const o = ocorrencias().find(x => x.id === d.ocResolver); if (o) salvarOcorr(o.id, { ...o, status: o.status === "resolvida" ? "aberta" : "resolvida", resolvidaEm: o.status === "resolvida" ? null : new Date().toISOString(), resolvidaPor: ME.adm || "" }, o.status === "resolvida" ? "Ocorrência reaberta" : "Ocorrência resolvida"); return; }
   if (d.ocSaude) { const p = S.pessoas.find(x => x.id === d.ocSaude); if (p) saudeFicha(p); return; }
