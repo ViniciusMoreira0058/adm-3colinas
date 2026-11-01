@@ -200,7 +200,7 @@ const NIVEIS = [
 const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && (!v.demo || DEMO) && liberada(v));
 // a página já foi lançada no app real? (o que ainda está só na demo não aparece no menu nem em Usuários)
 const liberada = v => !(v.org && !ORG()) && !(v.extra && !EXTRA()) && !(v.nfc && !NFC()) && !(v.id === "campo" && !CAMPO()) && !(v.id === "celulares" && !CEL())
-  && !(TOP2_VIEWS.includes(v.id) && !TOP2()) && !(v.id === "carros" && TOP2()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM());
+  && !(TOP2_VIEWS.includes(v.id) && !TOP2() && !(v.id === "transporte" && TRANSP())) && !(v.id === "carros" && TRANSP()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM());
 // "_v2" marca o cadastro salvo já com a escolha página por página; cadastros antigos seguem a regra antiga (página que usa dados de outra aparece junto)
 const ABA_V2 = "_v2";
 /* Coordenadores e subcoordenadores de equipe (demo): perfil "coord" no cadastro, só leitura, vê só a própria equipe */
@@ -220,8 +220,8 @@ const canSee = v => {
   if (v.nfc && !NFC()) return false;
   if (v.id === "campo" && !CAMPO()) return false;
   if (v.id === "celulares" && !CEL()) return false;
-  if (TOP2_VIEWS.includes(v.id) && !TOP2()) return false;
-  if (v.id === "carros" && TOP2()) return false;   // na demo os Carros ficam dentro do Transporte
+  if (TOP2_VIEWS.includes(v.id) && !TOP2() && !(v.id === "transporte" && TRANSP())) return false;
+  if (v.id === "carros" && TRANSP()) return false;   // os Carros ficam dentro do Transporte
   if ((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
   if (!ME.acesso) return v.id === "painel";
@@ -2075,6 +2075,7 @@ document.addEventListener("input", e => { if (e.target && e.target.id === "celQ"
 /* ---------- TOP completo (só na demo): Check-in + Mochila, Remédios, Emergência, Transporte e Financeiro ---------- */
 const TOP2 = () => DEMO;
 const TOP2_VIEWS = ["checkin", "remedios", "transporte"];
+const TRANSP = () => true;   // Transporte (ônibus, vistoria, carros, ida/volta) liberado no app real em 01/11/2026; Check-in e Remédios seguem só na demo
 const TOP3 = () => true;   // Financeiro e Emergência: liberados no app real em 31/10/2026
 const senderistas = () => S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
 const agoraISO = () => new Date().toISOString();
