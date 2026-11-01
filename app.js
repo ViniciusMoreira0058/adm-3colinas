@@ -5565,7 +5565,7 @@ function acaoVer(a) {
   const ed = $("#acEd"); if (ed) ed.onclick = () => { closeModal(); acaoForm(a); };
 }
 /* Agenda: eventos de divulgação + os TOPs, por mês. Toque no evento: quantos vão, quem vai e o link de presença. */
-function agTops() { return (S.tops.length ? S.tops : [topDoc()].filter(Boolean)).filter(t => t.inicio); }
+function agTops() { const p = topPrev(); return [...(S.tops.length ? S.tops : [topDoc()].filter(Boolean)).filter(t => t.inicio), ...(p ? [{ ...p, id: "previsto" }] : [])]; }
 function vAgenda() {
   const hoje = hojeISO(), M = [];
   acoesTodas().forEach(a => M.push({ k: "ev", data: a.data, fim: a.data, a }));
@@ -5576,7 +5576,7 @@ function vAgenda() {
   const dia = d => { const x = new Date(d + "T12:00:00"); return `<span class="acao-d"><b class="num">${String(x.getDate()).padStart(2, "0")}</b><small>${x.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</small></span>`; };
   const card = x => {
     if (x.k === "top") { const t = x.t, atual = t.id === curTopId(), n = atual ? S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).length : null;
-      return `<button class="acao-c ag-top" type="button" data-ag-top="${esc(t.id)}">${dia(t.inicio)}<span class="grow"><b>${esc(t.nome)} <span class="chip acc">TOP</span></b><small class="hint">${esc(fmtPeriodo(t))}${t.local ? " · " + esc(t.local) : ""}</small></span>${n != null ? `<span class="chip ok">${n} inscritos</span>` : ""}</button>`; }
+      return `<button class="acao-c ag-top" type="button" data-ag-top="${esc(t.id)}">${dia(t.inicio)}<span class="grow"><b>${esc(t.nome)} <span class="chip acc">TOP</span>${t.id === "previsto" ? ` <span class="chip ${t.confirmado ? "ok" : "wait"}">${t.confirmado ? "data confirmada" : "data prevista"}</span>` : ""}</b><small class="hint">${esc(fmtPeriodo(t))}${t.local ? " · " + esc(t.local) : ""}</small></span>${n != null ? `<span class="chip ok">${n} inscritos</span>` : ""}</button>`; }
     const a = x.a, c = acaoConfirmados(a).length;
     return `<button class="acao-c ${a.equipe === ME.equipeLgnd ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
       <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.tipo)} · ${esc(a.equipe)}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
@@ -5584,11 +5584,54 @@ function vAgenda() {
   const grupos = []; L.forEach(x => { const m = mes(x.data), g = grupos[grupos.length - 1]; if (g && g.m === m) g.l.push(x); else grupos.push({ m, l: [x] }); });
   const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
   return `<div class="head"><div><h2>Agenda</h2><p>Eventos para levar o Legendários a mais homens, e o TOP. Toque num evento para ver quem vai e mandar o link.</p></div>
-      <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}</div></div>
+      <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}${podeTops() && !topPrev() ? `<button class="btn" type="button" data-prev-ed="1">${ico("clock")} Planejar próximo TOP</button>` : ""}</div></div>
     <div class="kpis ag-kpis"><div class="kpi"><span class="lbl">Próximos eventos</span><span class="val num">${nEv}</span></div><div class="kpi"><span class="lbl">Legendários confirmados</span><span class="val num">${nVao}</span><span class="sub">nos próximos eventos</span></div></div>
     <div class="seg" role="tablist"><button type="button" ${S.agPass ? 'data-ag-pass="1"' : ""} aria-pressed="${!S.agPass}">Próximos <small>${prox.length}</small></button><button type="button" ${S.agPass ? "" : 'data-ag-pass="1"'} aria-pressed="${!!S.agPass}">Já aconteceram <small>${pass.length}</small></button></div>
     ${grupos.length ? grupos.map(g => `<section class="panel"><h3>${esc(g.m)} <small>${g.l.length}</small></h3><div class="acao-lista">${g.l.map(card).join("")}</div></section>`).join("")
       : `<section class="panel"><div class="empty">${S.agPass ? "Nenhum evento passado ainda." : "Nada marcado. Toque em Novo evento para colocar a primeira ida a uma igreja."}</div></section>`}`;
+}
+/* Próximo TOP planejado (data prevista ou confirmada), sem fechar o TOP atual: config top-previsto {nome,inicio,fim,local,confirmado,vagas,por,em} */
+const topPrev = () => { const p = cfgDe("top-previsto"); return p && p.inicio ? p : null; };
+function prevForm() {
+  if (!podeTops()) { toast("Só quem cuida dos TOPs marca a data."); return; }
+  const p = topPrev() || { local: "Franca - SP", vagas: 150 };
+  modal(`<h3>Próximo TOP</h3><p class="hint" style="margin:0">Não fecha o ${esc(topName())}. Se a data ainda não estiver certa, marque como prevista: o app já mostra o plano das 13 semanas e você ajusta depois.</p><div class="form">
+    <div class="field full"><label for="pv-n">Nome</label><input id="pv-n" name="nome" value="${esc(p.nome || "")}" placeholder="ex.: TOP 1950" required></div>
+    <div class="field"><label for="pv-i">Início</label><input id="pv-i" name="inicio" type="date" value="${esc(p.inicio || "")}" required></div>
+    <div class="field"><label for="pv-f">Fim</label><input id="pv-f" name="fim" type="date" value="${esc(p.fim || "")}"></div>
+    <div class="field"><label for="pv-l">Local</label><input id="pv-l" name="local" value="${esc(p.local || "")}"></div>
+    <div class="field"><label for="pv-v">Vagas</label><input id="pv-v" name="vagas" type="number" min="1" value="${esc(p.vagas || 150)}"></div>
+    <div class="field full"><div class="checks"><label><input type="radio" name="conf" value="0" ${p.confirmado ? "" : "checked"}> Data prevista (pode mudar)</label><label><input type="radio" name="conf" value="1" ${p.confirmado ? "checked" : ""}> Data confirmada</label></div></div>
+  </div><div class="modal-foot"><div>${topPrev() ? `<button class="btn danger" type="button" id="delBtn">Apagar</button>` : ""}</div>
+    <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { const nome = String(fd.get("nome") || "").trim(), inicio = String(fd.get("inicio") || ""); if (!nome || !inicio) { toast("Coloque o nome e o dia de início."); return; }
+    let fim = String(fd.get("fim") || ""); if (!fim || fim < inicio || (new Date(fim) - new Date(inicio)) > 7 * 864e5) fim = new Date(new Date(inicio + "T12:00:00").getTime() + 3 * 864e5).toLocaleDateString("sv");   // TOP dura 4 dias
+    const d = { nome, inicio, fim, local: String(fd.get("local") || "").trim(), vagas: +fd.get("vagas") || 150, confirmado: fd.get("conf") === "1", por: ME.adm || "", em: new Date().toISOString() };
+    closeModal(); save(() => api.set("config", "top-previsto", d), d.confirmado ? "Data confirmada" : "Data prevista salva").then(() => prevVer()); });
+  const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar"; return; } closeModal(); save(() => api.set("config", "top-previsto", {}), "Planejamento apagado"); };
+}
+// o plano das 13 semanas a partir de uma data: o que cada semana pede, com as datas de verdade
+function prevPlano(p) {
+  const fimD = new Date(p.inicio + "T00:00:00"), meta = Math.round((+p.vagas || 150) * 1.1), e = x => Math.round(x * meta / 165), hoje = new Date(), f = d => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const tops = topDoc(), fimAtual = tops && (tops.fim || tops.inicio) ? new Date((tops.fim || tops.inicio) + "T23:59:00") : null;
+  return Array.from({ length: 14 }, (_, i) => -13 + i).map(w => { const ini = new Date(+fimD + w * 7 * 864e5), fim = new Date(+ini + 6 * 864e5);
+    const ck = META_CHECK.find(c => -c[0] === w), tar = TAR_PDF.filter(x => x[1] === w).map(x => `${x[0]}: ${x[2]}`), cont = TAR_CONT.filter(x => x[0] === w).map(x => `Conteúdo (${x[1]}): ${x[2]}`);
+    const extra = [w === -13 ? "Começa logo depois do TOP anterior: testemunhos, agradecimento e 3 nomes de cada novo legendário" : "", w >= -9 && w <= -3 ? "Panfletagem: 1 saída da Equipe 1 e 1 da Equipe 2" : "", w === 0 ? "TOP" : ""].filter(Boolean);
+    return { w, ini, txt: `${f(ini)} a ${f(fim)}`, meta: w === 0 ? meta : e(META_CURVA[w + 13]), ck: ck ? e(ck[1]) : null, itens: [...extra, ...tar, ...cont], passou: fim < hoje, choca: fimAtual && ini < fimAtual }; });
+}
+function prevVer() {
+  const p = topPrev(); if (!p) { prevForm(); return; }
+  const P = prevPlano(p), meta = Math.round((+p.vagas || 150) * 1.1), hoje = new Date(), atrasadas = P.filter(x => x.passou && x.w < 0).length, choca = P.filter(x => x.choca).length;
+  const dias = Math.ceil((new Date(p.inicio + "T00:00:00") - hoje) / 864e5), sem13 = P[0];
+  modal(`<h3>${esc(p.nome)} <span class="chip ${p.confirmado ? "ok" : "wait"}">${p.confirmado ? "data confirmada" : "data prevista"}</span></h3>
+    <p class="hint" style="margin:0">${esc(fmtPeriodo(p))}${p.local ? " · " + esc(p.local) : ""} · faltam ${dias} dias · meta de ${meta} inscritos (${p.vagas} vagas + 10%)</p>
+    ${atrasadas ? `<p class="chk-alerta">Se for nesta data, ${atrasadas} semana(s) do plano já passaram (a semana -13 foi em ${sem13.txt.split(" a ")[0]}). Comece pelas tarefas dessas semanas e corra com as indicações.</p>`
+      : choca ? `<p class="chk-alerta">As primeiras ${choca} semana(s) caem antes do fim do ${esc(topName())}. Dá para começar a pedir nomes já durante este TOP.</p>`
+      : `<p class="hint">Se for nesta data, a semana -13 começa em <b>${sem13.txt.split(" a ")[0]}</b>. Até lá, deixe o TOP atual terminar e crie o novo na página Tops.</p>`}
+    <div class="list prev-plano">${P.map(x => `<div class="li ${x.passou ? "passou" : ""}"><div class="prev-w"><b class="num">${x.w}</b><small>${x.txt}</small></div><div class="grow">
+      <small class="hint">Meta acumulada: ${x.meta} inscritos${x.ck ? ` · <b>checkpoint: mínimo ${x.ck}</b>` : ""}</small>${x.itens.length ? `<ul>${x.itens.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}</div></div>`).join("")}</div>
+    <div class="modal-foot"><span></span><div class="actions">${podeTops() ? `<button class="btn ghost" type="button" id="pvEd">${ico("edit")} Mudar data</button>` : ""}<button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
+  const e = $("#pvEd"); if (e) e.onclick = () => { closeModal(); prevForm(); };
 }
 function fmtPeriodo(t) { const f = d => new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", ""); return t.fim && t.fim !== t.inicio ? `${f(t.inicio)} a ${f(t.fim)}` : f(t.inicio); }
 function agTopVer(t) {
@@ -5715,7 +5758,7 @@ function vTops() {
   const sel = curTopId();
   return `
   <div class="head"><div><h2>Tops</h2><p>Histórico de todos os TOPs da base 3 Colinas. Ao finalizar um TOP, ele fica registrado aqui com senderistas, documentos e checklist.</p></div>${ORG() && S.isOwner ? `<div class="actions"><button class="btn glass" type="button" data-act="backup">${ico("upload")} Baixar backup</button></div>` : ""}
-    <div class="actions">${RELATORIO_FINAL() ? `<button class="btn" type="button" data-act="relatorio">${ico("list")} Relatório final do ${esc(topName())}</button>` : ""}${podeTops() ? `<button class="btn primary" type="button" data-act="novo-top">${ico("plus")} Iniciar novo TOP</button>` : ""}</div></div>
+    <div class="actions">${RELATORIO_FINAL() ? `<button class="btn" type="button" data-act="relatorio">${ico("list")} Relatório final do ${esc(topName())}</button>` : ""}${podeTops() && META() ? `<button class="btn" type="button" data-prev-ed="1">${ico("clock")} ${topPrev() ? "Próximo TOP: " + esc(fmtPeriodo(topPrev())) : "Planejar próximo TOP"}</button>` : ""}${podeTops() ? `<button class="btn primary" type="button" data-act="novo-top">${ico("plus")} Iniciar novo TOP</button>` : ""}</div></div>
   ${ativo ? "" : `<div class="banner"><span>Nenhum TOP em andamento. Inicie o próximo para começar a cadastrar senderistas.</span></div>`}
   <div class="tops">${list.map(t => { const s = topStats(t.id); const fin = t.status === "finalizado"; const kits = t.kitsMRE || 0; return `
     <article class="topcard ${t.id === sel ? "sel" : ""}">
@@ -6045,7 +6088,7 @@ function itemForm(e) {
 function topForm(t) {
   const novo = !t;
   const ativo = S.tops.find(x => x.status === "ativo");
-  t = t || { local: "Franca - SP", status: "ativo" };
+  t = t || (META() && topPrev() ? { ...topPrev(), status: "ativo" } : { local: "Franca - SP", status: "ativo" });
   modal(`
     <h3>${novo ? "Iniciar novo TOP" : "Editar TOP"}</h3>
     <div class="form">
@@ -6076,6 +6119,7 @@ function topForm(t) {
         await Promise.all(modelo.slice(i, i + 8).map(x => api.add("tarefas", { top: id, fase: x.fase, ordem: x.ordem || 0, titulo: x.titulo, fornecedor: x.fornecedor || "", responsavel: "", obs: "", status: "afazer" })));
       }
     }, `${nome} iniciado`);
+    if (META() && topPrev()) try { await api.set("config", "top-previsto", {}); } catch (e) {}
     S.topSel = null; store.set("top-sel", ""); go("painel");
   });
 }
@@ -6437,7 +6481,9 @@ document.addEventListener("click", e => {
   if (d.saidasGerar) { saidasGerar(); return; }
   if (d.faqEd) { faqForm(+d.faqEd); return; }
   if (d.faqCopiar) { const q = FAQ[+d.faqCopiar], r = faqDoc()["q" + d.faqCopiar]; if (r) copiarTexto(r.txt, "Resposta copiada"); return; }
+  if (d.agTop === "previsto") { prevVer(); return; }
   if (d.agTop) { const t = S.tops.find(x => x.id === d.agTop) || topDoc(); if (t) agTopVer(t); return; }
+  if (d.prevEd) { prevForm(); return; }
   if (d.agPass) { S.agPass = !S.agPass; render(); return; }
   if (d.acaoVer) { const [doc, id] = d.acaoVer.split("|"), a = acoesTodas().find(x => x.doc === doc && x.id === id); if (a) acaoVer(a); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
