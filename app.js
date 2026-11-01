@@ -2242,56 +2242,121 @@ function emergForm() {
 }
 
 // ===== 6: TRANSPORTE =====  config transp-<top> {veiculos:[{id,nome,motorista,tel,vagas,pessoas[]}], emb:{"ida|vid|pid":{em,por}}}
+/* Transporte (demo, TOP2): ônibus por famílias e carros (os aprovados na página Carros) por legendários, na ida e na volta.
+   config transp-<top> {onibus:[{id,num,empresa,motorista,tel,vagas,fam:{ida:[n],volta:[n]},vist:{em,por,lugares,itens:{k:"ok"|"prob"|"nao"},obs,fotos:[{foto,fotoPath}]}}],
+   carros:{<carroId>:{ida:[pid],volta:[pid]}}, emb:{"ida|<vid>|<pid>":{por,em}}}  (vid = id do ônibus ou "car:<carroId>") */
 const trDoc = () => cfgDe(`transp-${curTopId()}`) || {};
-const trSalvar = (fn, msg) => { const D = trDoc(); return save(() => api.set("config", `transp-${curTopId()}`, { veiculos: D.veiculos || [], emb: D.emb || {}, ...fn(D), top: curTopId() }), msg).then(render); };
-const viajantes = () => S.P.filter(p => !cancelado(p)).sort((a, b) => (a.tipo === "legendario") - (b.tipo === "legendario") || norm(a.nome).localeCompare(norm(b.nome)));
+const trSalvar = (fn, msg) => { const D = trDoc(); return save(() => api.set("config", `transp-${curTopId()}`, { onibus: D.onibus || [], carros: D.carros || {}, emb: D.emb || {}, ...fn(D), top: curTopId() }), msg).then(render); };
+const TR_VIST = ["Pneus", "Limpeza", "Bancos", "Cintos de segurança", "Ar-condicionado", "Banheiro", "Extintor", "Bagageiro", "Documentação do veículo"];
+const TR_VST = { ok: ["OK", "ok"], prob: ["Problema", "bad"], nao: ["Não tem", ""] };
+const trFams = () => [...new Set(S.P.filter(p => p.tipo !== "legendario" && !cancelado(p) && p.familia).map(p => Number(p.familia)))].sort((a, b) => a - b);
+const trLgs = () => S.P.filter(p => p.tipo === "legendario" && !cancelado(p)).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+const trCarros = () => (CARROS() ? carLista().filter(c => !carPend(c)) : []).sort((a, b) => norm(a.nome).localeCompare(norm(b.nome)));
+const trOnib = () => (trDoc().onibus || []).slice().sort((a, b) => (+a.num || 99) - (+b.num || 99));
+const trCap = o => +((o.vist || {}).lugares) || +o.vagas || 0;
+const trBusPess = (o, sent) => ((o.fam || {})[sent] || []).flatMap(f => famDe(f));
+const trCarPess = (cid, sent) => (((trDoc().carros || {})[cid] || {})[sent] || []).map(pid => S.P.find(p => p.id === pid)).filter(p => p && !cancelado(p));
 function vTransporte() {
-  const D = trDoc(), V = D.veiculos || [], sent = S.trSent || "ida", E = D.emb || {}, ed = podeEditar(), aberto = S.trAberto;
-  const comV = new Set(V.flatMap(v => v.pessoas || [])), sem = viajantes().filter(p => !comV.has(p.id));
-  const embN = v => (v.pessoas || []).filter(pid => E[`${sent}|${v.id}|${pid}`]).length, tot = V.reduce((a, v) => a + (v.pessoas || []).length, 0), totE = V.reduce((a, v) => a + embN(v), 0);
-  const q = norm(S.trQ || "");
+  const D = trDoc(), O = trOnib(), C = trCarros(), sent = S.trSent || "ida", E = D.emb || {}, ed = podeEditar(), ab = S.trAberto, q = norm(S.trQ || "");
+  const famCom = new Set(O.flatMap(o => (o.fam || {})[sent] || [])), famSem = trFams().filter(f => !famCom.has(f));
+  const lgCom = new Set(C.flatMap(c => ((D.carros || {})[c.id] || {})[sent] || [])), lgSem = trLgs().filter(p => !lgCom.has(p.id));
+  const grupos = [...O.map(o => ({ vid: o.id, ps: trBusPess(o, sent) })), ...C.map(c => ({ vid: "car:" + c.id, ps: trCarPess(c.id, sent) }))];
+  const embN = g => g.ps.filter(p => E[`${sent}|${g.vid}|${p.id}`]).length, tot = grupos.reduce((a, g) => a + g.ps.length, 0), totE = grupos.reduce((a, g) => a + embN(g), 0);
+  const vistOk = O.filter(o => o.vist && o.vist.em).length, temVolta = O.some(o => ((o.fam || {}).volta || []).length) || Object.values(D.carros || {}).some(x => (x.volta || []).length);
+  const lista = (vid, ps) => `<div class="tr-lista">${ps.filter(p => !q || norm(p.nome).includes(q)).map(p => { const k = `${sent}|${vid}|${p.id}`, ok = E[k];
+      return `<button type="button" class="tr-p ${ok ? "on" : ""}" ${ed ? `data-tr-emb="${esc(k)}"` : "disabled"}><span class="cham-box">${ico("check")}</span><span class="grow">${esc(p.nome)}${p.familia && p.tipo !== "legendario" ? ` <small>F${String(p.familia).padStart(2, "0")}</small>` : ""}</span>${ok ? `<small>${hmDe(ok.em)}</small>` : ""}</button>`; }).join("") || `<div class="empty">Ninguém neste veículo ${sent === "ida" ? "na ida" : "na volta"}.</div>`}</div>`;
+  const busCard = o => { const ps = trBusPess(o, sent), cap = trCap(o), e = embN({ vid: o.id, ps }), v = o.vist || {}, fs = (o.fam || {})[sent] || [], probs = Object.values(v.itens || {}).filter(x => x === "prob").length;
+    return `<section class="panel tr-card ${ps.length && e === ps.length ? "completo" : ""}">
+      <button type="button" class="tr-cab" data-tr-abrir="${esc(o.id)}"><span class="tr-ic">🚌</span><span class="grow"><b>Ônibus ${esc(o.num || "?")}${o.empresa ? " · " + esc(o.empresa) : ""}</b><small>${esc(o.motorista || "sem motorista")} · ${ps.length}/${cap || "?"} lugares</small></span><span class="tr-n num">${e}/${ps.length}</span></button>
+      <div class="bar ${cap && ps.length > cap ? "bad" : "good"}"><i style="width:${cap ? Math.min(100, pct(ps.length, cap)) : 0}%"></i></div>
+      <div class="car-chips" style="margin-top:8px">${v.em ? `<span class="chip ${probs ? "bad" : "ok"}">Vistoriado${probs ? ` · ${probs} problema(s)` : " ✓"}</span>` : `<span class="chip wait">Falta vistoria</span>`}${cap && ps.length > cap ? `<span class="chip bad">passou ${ps.length - cap} da lotação</span>` : ""}${fs.map(f => `<span class="chip">F${String(f).padStart(2, "0")}</span>`).join("")}</div>
+      ${ab === o.id ? lista(o.id, ps) : ""}
+      <div class="actions" style="margin-top:8px">${ed ? `<button class="btn sm primary" type="button" data-tr-fam="${esc(o.id)}">Famílias</button><button class="btn sm" type="button" data-tr-vist="${esc(o.id)}">Vistoria</button><button class="btn sm" type="button" data-tr-v="${esc(o.id)}">${ico("edit")}</button>` : `<button class="btn sm" type="button" data-tr-vist="${esc(o.id)}">Vistoria</button>`}${o.tel ? `<a class="btn sm" href="tel:${esc(telLimpo(o.tel))}">Ligar</a>` : ""}</div></section>`; };
+  const carCard = c => { const vid = "car:" + c.id, ps = trCarPess(c.id, sent), cap = +c.vagas || 0, e = embN({ vid, ps });
+    return `<section class="panel tr-card ${ps.length && e === ps.length ? "completo" : ""}">
+      <button type="button" class="tr-cab" data-tr-abrir="${esc(vid)}"><span class="tr-ic">🚗</span><span class="grow"><b>${esc(carPlaca(c.placa))}${c.modelo ? " · " + esc(c.modelo) : ""}</b><small>${esc(c.nome || "")}${c.funcao ? " · " + esc(c.funcao) : ""} · ${ps.length}/${cap || "?"} lugares</small></span><span class="tr-n num">${e}/${ps.length}</span></button>
+      <div class="bar ${cap && ps.length > cap ? "bad" : "good"}"><i style="width:${cap ? Math.min(100, pct(ps.length, cap)) : 0}%"></i></div>
+      ${ab === vid ? lista(vid, ps) : ""}
+      <div class="actions" style="margin-top:8px">${ed ? `<button class="btn sm primary" type="button" data-tr-lg="${esc(c.id)}">Quem vai</button>` : ""}${waNumber(c.tel) ? `<a class="btn sm" href="https://wa.me/${waNumber(c.tel)}" target="_blank" rel="noopener">${ico("wa")}</a>` : ""}</div></section>`; };
   return `
-  <div class="head"><div><h2>Transporte</h2><p>Quem vai em qual ônibus ou carro. Na hora de sair, cada responsável confere o embarque, na ida e na volta, e ninguém fica para trás.</p></div></div>
+  <div class="head"><div><h2>Transporte</h2><p>Os ônibus levam as famílias e os carros levam os legendários. Monte a ida, copie para a volta e, na hora de sair, confira o embarque de cada um.</p></div>
+    <div class="actions">${ed ? `<button class="btn primary" type="button" data-tr-v="">${ico("plus")} Ônibus</button>${sent === "volta" ? `<button class="btn" type="button" data-act="tr-copiar">Volta igual à ida</button>` : ""}` : ""}</div></div>
   <div class="seg campo-abas"><button type="button" data-tr-sent="ida" aria-pressed="${sent === "ida"}">Ida</button><button type="button" data-tr-sent="volta" aria-pressed="${sent === "volta"}">Volta</button></div>
+  ${sent === "volta" && !temVolta && (O.length || C.length) ? `<div class="banner"><span>A volta ainda está vazia. Toque em <b>Volta igual à ida</b> para copiar tudo e depois ajuste quem mudou.</span></div>` : ""}
   <div class="kpis">
     <div class="kpi"><span class="lbl">Embarcados (${sent})</span><span class="val num">${totE}<small style="font-size:.5em;opacity:.7"> / ${tot}</small></span><div class="bar good"><i style="width:${pct(totE, tot)}%"></i></div></div>
-    <div class="kpi"><span class="lbl">Veículos</span><span class="val num">${V.length}</span><span class="sub">${V.reduce((a, v) => a + (+v.vagas || 0), 0)} vagas</span></div>
-    <div class="kpi ${sem.length ? "alert" : ""}"><span class="lbl">Sem veículo</span><span class="val num">${sem.length}</span><span class="sub">precisam de lugar</span></div>
+    <div class="kpi ${O.length && vistOk < O.length ? "alert" : ""}"><span class="lbl">Ônibus</span><span class="val num">${O.length}</span><span class="sub">${vistOk} vistoriado(s) · ${O.reduce((a, o) => a + trCap(o), 0)} lugares</span></div>
+    <div class="kpi"><span class="lbl">Carros</span><span class="val num">${C.length}</span><span class="sub">aprovados em Carros</span></div>
+    <div class="kpi ${famSem.length || lgSem.length ? "alert" : ""}"><span class="lbl">Sem lugar (${sent})</span><span class="val num">${famSem.length + lgSem.length}</span><span class="sub">${famSem.length} família(s) · ${lgSem.length} legendário(s)</span></div>
   </div>
-  ${ed ? `<div class="actions" style="margin:4px 0 12px"><button class="btn primary" type="button" data-tr-v="">${ico("plus")} Novo veículo</button></div>` : ""}
-  <div class="tr-grid">${V.map(v => { const n = (v.pessoas || []).length, e = embN(v), ab = aberto === v.id;
-    return `<section class="panel tr-card ${n && e === n ? "completo" : ""}"><button type="button" class="tr-cab" data-tr-abrir="${esc(v.id)}"><span class="tr-ic">${/carro|van|apoio/i.test(v.nome) ? "🚐" : "🚌"}</span><span class="grow"><b>${esc(v.nome)}</b><small>${esc(v.motorista || "sem motorista")} · ${n}/${v.vagas || "?"} lugares</small></span><span class="tr-n num">${e}/${n}</span></button>
-      <div class="bar good"><i style="width:${pct(e, n)}%"></i></div>
-      ${ab ? `<div class="tr-lista">${(v.pessoas || []).map(pid => S.P.find(x => x.id === pid)).filter(Boolean).filter(p => !q || norm(p.nome).includes(q)).map(p => { const k = `${sent}|${v.id}|${p.id}`, ok = E[k];
-        return `<button type="button" class="tr-p ${ok ? "on" : ""}" ${ed ? `data-tr-emb="${esc(k)}"` : "disabled"}><span class="cham-box">${ico("check")}</span><span class="grow">${esc(p.nome)}${p.tipo === "legendario" ? ' <span class="tag">LGND</span>' : ""}</span>${ok ? `<small>${hmDe(ok.em)}</small>` : ""}</button>`; }).join("") || `<div class="empty">Ninguém neste veículo ainda.</div>`}
-        <div class="actions" style="margin-top:8px">${v.tel ? `<a class="btn sm" href="tel:${esc(telLimpo(v.tel))}">Ligar motorista</a>` : ""}${ed ? `<button class="btn sm" type="button" data-tr-dist="${esc(v.id)}">Quem vai aqui</button><button class="btn sm" type="button" data-tr-v="${esc(v.id)}">${ico("edit")} Editar</button>` : ""}</div></div>` : ""}</section>`; }).join("")}</div>
-  ${!V.length ? `<section class="panel"><div class="empty">Cadastre os ônibus, vans e carros e distribua as pessoas.</div></section>` : ""}
-  ${sem.length && V.length ? `<section class="panel"><h3>Sem veículo <small>${sem.length}</small></h3><p class="hint">${sem.map(p => esc(p.nome)).join(", ")}</p></section>` : ""}`;
+  ${ab ? `<div class="cel-busca"><input id="trQ" type="search" placeholder="Buscar pessoa no embarque…" value="${esc(S.trQ || "")}" aria-label="Buscar"></div>` : ""}
+  <section class="tr-sec"><h3 class="tr-h">Ônibus <small>famílias</small></h3><div class="tr-grid">${O.map(busCard).join("") || `<section class="panel"><div class="empty">Cadastre os ônibus (1, 2, 3…) e faça a vistoria de cada um.</div></section>`}</div></section>
+  <section class="tr-sec"><h3 class="tr-h">Carros <small>legendários</small></h3><div class="tr-grid">${C.map(carCard).join("") || `<section class="panel"><div class="empty">Nenhum carro aprovado. Os carros cadastrados e aprovados na página <b>Carros</b> aparecem aqui.</div></section>`}</div></section>
+  ${famSem.length || lgSem.length ? `<section class="panel"><h3>Sem lugar ${sent === "ida" ? "na ida" : "na volta"}</h3>
+    ${famSem.length ? `<p class="hint"><b>Famílias sem ônibus:</b> ${famSem.map(f => `${famTxt(f)} (${famDe(f).length})`).join(", ")}</p>` : ""}
+    ${lgSem.length ? `<p class="hint"><b>Legendários sem carro:</b> ${lgSem.map(p => esc(p.nome)).join(", ")}</p>` : ""}</section>` : ""}`;
 }
 function trVeicForm(id) {
-  const D = trDoc(), v = (D.veiculos || []).find(x => x.id === id) || { vagas: 44 };
-  modal(`<h3>${v.id ? "Editar veículo" : "Novo veículo"}</h3><div class="form">
-    <div class="field full"><label for="f-vn">Nome</label><input id="f-vn" name="nome" value="${esc(v.nome || "")}" placeholder="ex.: Ônibus 1, Van da Base, Carro de apoio" required></div>
-    <div class="field"><label for="f-vm">Motorista</label><input id="f-vm" name="motorista" value="${esc(v.motorista || "")}"></div>
-    <div class="field"><label for="f-vt">Telefone</label><input id="f-vt" name="tel" inputmode="tel" value="${esc(v.tel || "")}"></div>
-    <div class="field"><label for="f-vv">Lugares</label><input id="f-vv" name="vagas" type="number" min="1" value="${esc(v.vagas || "")}"></div></div>
-    <div class="modal-foot"><div>${v.id ? `<button class="btn danger" type="button" id="vDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
-    const novo = { ...v, id: v.id || Date.now().toString(36), nome: String(fd.get("nome") || "").trim(), motorista: String(fd.get("motorista") || "").trim(), tel: String(fd.get("tel") || "").trim(), vagas: +fd.get("vagas") || 0, pessoas: v.pessoas || [] };
-    closeModal(); S.trAberto = novo.id; trSalvar(D => ({ veiculos: [...(D.veiculos || []).filter(x => x.id !== novo.id), novo] }), "Veículo salvo"); });
-  const d = $("#vDel"); if (d) d.onclick = () => { if (!confirm("Excluir " + v.nome + "?")) return; closeModal(); trSalvar(D => ({ veiculos: (D.veiculos || []).filter(x => x.id !== v.id) }), "Excluído"); };
+  const D = trDoc(), O = D.onibus || [], o = O.find(x => x.id === id) || { num: O.length + 1, vagas: 44 };
+  modal(`<h3>${o.id ? "Editar ônibus" : "Novo ônibus"}</h3><div class="form">
+    <div class="field"><label for="f-on">Número do ônibus</label><input id="f-on" name="num" type="number" min="1" value="${esc(o.num || "")}" required></div>
+    <div class="field"><label for="f-ov">Lugares</label><input id="f-ov" name="vagas" type="number" min="1" value="${esc(o.vagas || "")}"></div>
+    <div class="field full"><label for="f-oe">Empresa</label><input id="f-oe" name="empresa" value="${esc(o.empresa || "")}"></div>
+    <div class="field"><label for="f-om">Motorista</label><input id="f-om" name="motorista" value="${esc(o.motorista || "")}"></div>
+    <div class="field"><label for="f-ot">Telefone</label><input id="f-ot" name="tel" inputmode="tel" value="${esc(o.tel || "")}"></div></div>
+    <div class="modal-foot"><div>${o.id ? `<button class="btn danger" type="button" id="vDel">Excluir</button>` : ""}</div><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const g = k => String(fd.get(k) || "").trim(), novo = { ...o, id: o.id || "o" + Date.now().toString(36), num: +g("num") || "", vagas: +g("vagas") || 0, empresa: g("empresa"), motorista: g("motorista"), tel: g("tel"), fam: o.fam || { ida: [], volta: [] } };
+    closeModal(); trSalvar(D => ({ onibus: [...(D.onibus || []).filter(x => x.id !== novo.id), novo] }), "Ônibus salvo"); });
+  const d = $("#vDel"); if (d) d.onclick = () => { if (!confirm(`Excluir o Ônibus ${o.num}?`)) return; closeModal(); trSalvar(D => ({ onibus: (D.onibus || []).filter(x => x.id !== o.id) }), "Excluído"); };
 }
-function trDistForm(vid) {
-  const D = trDoc(), V = D.veiculos || [], v = V.find(x => x.id === vid); if (!v) return;
-  const outro = pid => V.find(x => x.id !== vid && (x.pessoas || []).includes(pid));
-  modal(`<h3>Quem vai no ${esc(v.nome)}</h3><p class="hint" id="trConta"></p>
-    <div class="cham-lista" style="max-height:56vh">${viajantes().map(p => { const o = outro(p.id); return `<label class="cham-p"><input type="checkbox" name="p" value="${esc(p.id)}" ${(v.pessoas || []).includes(p.id) ? "checked" : ""}><span class="cham-box">${ico("check")}</span><span class="grow">${esc(p.nome)}${p.tipo === "legendario" ? ' <span class="tag">LGND</span>' : ""}${o ? ` <small class="hint">· hoje no ${esc(o.nome)}</small>` : ""}</span></label>`; }).join("")}</div>
+function trVistForm(id) {
+  const o = (trDoc().onibus || []).find(x => x.id === id); if (!o) return; const v = o.vist || {}, it = v.itens || {}, ed = podeEditar(), fotos = [...(v.fotos || [])], novas = [];
+  const fotosHtml = () => fotos.map((f, i) => `<span class="tr-vf">${celFotoSrc(f) ? `<img src="${esc(celFotoSrc(f))}" alt="">` : "📷"}${ed ? `<button type="button" class="tr-vx" data-i="${i}" aria-label="Tirar foto">×</button>` : ""}</span>`).join("");
+  modal(`<h3>Vistoria · Ônibus ${esc(o.num)}</h3>${v.em ? `<p class="hint" style="margin:0">Última vistoria por ${esc(v.por || "")} · ${esc(quando(v.em))}</p>` : ""}
+    <div class="field"><span class="lab">Fotos do ônibus</span><div class="tr-vfotos" id="trFotos">${fotosHtml()}</div>${ed ? `<label class="btn sm" style="margin-top:6px">${ico("upload")} Adicionar foto<input type="file" accept="image/*" capture="environment" id="trFotoArq" hidden multiple></label>` : ""}</div>
+    <div class="field"><label for="f-vl">Lugares contados</label><input id="f-vl" name="lugares" type="number" min="1" value="${esc(v.lugares || o.vagas || "")}" ${ed ? "" : "disabled"}></div>
+    <div class="field"><span class="lab">Condições</span><div class="tr-vlista">${TR_VIST.map((k, i) => `<div class="tr-vi"><span class="grow">${esc(k)}</span><span class="sn3">${Object.entries(TR_VST).map(([val, [l, c]]) => `<label><input type="radio" name="i${i}" value="${val}" ${it[k] === val ? "checked" : ""} ${ed ? "" : "disabled"}><span class="${c}">${l}</span></label>`).join("")}</span></div>`).join("")}</div></div>
+    <div class="field"><label for="f-vo">Observações</label><textarea id="f-vo" name="obs" placeholder="ex.: um banco quebrado no fundo, ar fraco" ${ed ? "" : "disabled"}>${esc(v.obs || "")}</textarea></div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>${ed ? "Cancelar" : "Fechar"}</button>${ed ? `<button class="btn primary" type="submit">Salvar vistoria</button>` : ""}</div></div>`, async fd => {
+    if (!ed) return closeModal(); const itens = {}; TR_VIST.forEach((k, i) => { const x = fd.get("i" + i); if (x) itens[k] = x; });
+    const falta = TR_VIST.filter(k => !itens[k]); if (falta.length && !confirm(`Falta marcar: ${falta.join(", ")}. Salvar mesmo assim?`)) return;
+    closeModal(); if (novas.length) toast("Salvando as fotos…");
+    const subidas = []; for (const fl of novas) { try { subidas.push(await fotoGuardar(fl, `transporte/${curTopId()}/${o.id}`)); } catch {} }
+    const vist = { em: agoraISO(), por: ME.adm || "", lugares: +fd.get("lugares") || "", itens, obs: String(fd.get("obs") || "").trim(), fotos: [...fotos.filter(f => !f._nova), ...subidas] };
+    trSalvar(D => ({ onibus: (D.onibus || []).map(x => x.id === o.id ? { ...x, vist } : x) }), "Vistoria salva");
+  });
+  const box = $("#trFotos"), arq = $("#trFotoArq");
+  if (box) box.addEventListener("click", e => { const b = e.target.closest(".tr-vx"); if (!b) return; const i = +b.dataset.i, f = fotos[i]; if (f && f._nova) novas.splice(novas.indexOf(f._arq), 1); fotos.splice(i, 1); box.innerHTML = fotosHtml(); });
+  if (arq) arq.addEventListener("change", async e => { for (const fl of [...e.target.files]) { try { fotos.push({ foto: await reduzirFoto(fl, 360), _nova: true, _arq: fl }); novas.push(fl); } catch {} } box.innerHTML = fotosHtml(); arq.value = ""; });
+}
+function trFamForm(id) {
+  const sent = S.trSent || "ida", O = trDoc().onibus || [], o = O.find(x => x.id === id); if (!o) return; const cap = trCap(o);
+  const outro = f => O.find(x => x.id !== id && ((x.fam || {})[sent] || []).includes(f)), fams = trFams(), atual = (o.fam || {})[sent] || [];
+  modal(`<h3>Famílias no Ônibus ${esc(o.num)} · ${sent}</h3><p class="hint" id="trConta"></p>
+    <div class="cham-lista" style="max-height:56vh">${fams.map(f => { const x = outro(f); return `<label class="cham-p"><input type="checkbox" name="f" value="${f}" data-n="${famDe(f).length}" ${atual.includes(f) ? "checked" : ""}><span class="cham-box">${ico("check")}</span><span class="grow"><b>${famTxt(f)}</b> <small class="hint">${famDe(f).length} pessoa(s)${x ? ` · hoje no Ônibus ${esc(x.num)}` : ""}</small></span></label>`; }).join("") || `<div class="empty">Nenhuma família montada ainda. Defina as famílias na página Famílias.</div>`}</div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
-    const sel = fd.getAll("p"); closeModal();
-    trSalvar(D => ({ veiculos: (D.veiculos || []).map(x => x.id === vid ? { ...x, pessoas: sel } : { ...x, pessoas: (x.pessoas || []).filter(pid => !sel.includes(pid)) }) }), "Lista salva"); });
-  const c = () => { const n = $("#mform").querySelectorAll("[name=p]:checked").length; $("#trConta").innerHTML = `<b>${n}</b> de ${v.vagas || "?"} lugares${v.vagas && n > v.vagas ? ' · <span class="bad-text">passou da lotação</span>' : ""}`; };
+    const sel = fd.getAll("f").map(Number); closeModal();
+    trSalvar(D => ({ onibus: (D.onibus || []).map(x => { const fm = { ida: [], volta: [], ...(x.fam || {}) }; fm[sent] = x.id === id ? sel : (fm[sent] || []).filter(f => !sel.includes(f)); return { ...x, fam: fm }; }) }), "Famílias salvas"); });
+  const c = () => { const n = [...$("#mform").querySelectorAll("[name=f]:checked")].reduce((a, i) => a + +i.dataset.n, 0); $("#trConta").innerHTML = `<b>${n}</b> pessoa(s) de ${cap || "?"} lugares${cap && n > cap ? ' · <span class="bad-text">passou da lotação</span>' : ""}`; };
   $("#mform").addEventListener("change", c); c();
 }
-
+function trLgForm(cid) {
+  const sent = S.trSent || "ida", C = trCarros(), c = C.find(x => x.id === cid); if (!c) return; const M = trDoc().carros || {}, atual = (M[cid] || {})[sent] || [];
+  const outro = pid => C.find(x => x.id !== cid && ((M[x.id] || {})[sent] || []).includes(pid));
+  modal(`<h3>Quem vai no ${esc(carPlaca(c.placa))} · ${sent}</h3><p class="hint" id="trConta"></p>
+    <div class="cham-lista" style="max-height:56vh">${trLgs().map(p => { const x = outro(p.id); return `<label class="cham-p"><input type="checkbox" name="p" value="${esc(p.id)}" ${atual.includes(p.id) ? "checked" : ""}><span class="cham-box">${ico("check")}</span><span class="grow">${esc(p.nome)}${p.equipe ? ` <span class="tag">${esc(p.equipe)}</span>` : ""}${x ? ` <small class="hint">· hoje no ${esc(carPlaca(x.placa))}</small>` : ""}</span></label>`; }).join("")}</div>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`, fd => {
+    const sel = fd.getAll("p"); closeModal();
+    trSalvar(D => { const N = {}; Object.entries(D.carros || {}).forEach(([k, v]) => { N[k] = { ida: [], volta: [], ...v, [sent]: ((v || {})[sent] || []).filter(pid => !sel.includes(pid)) }; }); N[cid] = { ida: [], volta: [], ...(N[cid] || {}), [sent]: sel }; return { carros: N }; }, "Lista salva"); });
+  const n = () => { const k = $("#mform").querySelectorAll("[name=p]:checked").length; $("#trConta").innerHTML = `<b>${k}</b> de ${c.vagas || "?"} lugares${c.vagas && k > c.vagas ? ' · <span class="bad-text">passou da lotação</span>' : ""}`; };
+  $("#mform").addEventListener("change", n); n();
+}
+function trCopiarVolta() {
+  const D = trDoc(), tem = (D.onibus || []).some(o => ((o.fam || {}).volta || []).length) || Object.values(D.carros || {}).some(x => (x.volta || []).length);
+  if (tem && !confirm("A volta já tem pessoas distribuídas. Trocar tudo pelo que está na ida?")) return;
+  trSalvar(D => ({ onibus: (D.onibus || []).map(o => ({ ...o, fam: { ...(o.fam || {}), volta: [...((o.fam || {}).ida || [])] } })),
+    carros: Object.fromEntries(Object.entries(D.carros || {}).map(([k, v]) => [k, { ...v, volta: [...((v || {}).ida || [])] }])) }), "Volta igual à ida");
+}
 /* ---------- CARROS: todos os veículos que vão ao TOP (app real desde 31/10/2026) ----------
    config carros-<top> {token, lista:[{id,nome,tel,modelo,cor,placa,vagas,funcao,local,obs,foto,fotoPlaca,origem:"adm"|"link",conferido,em,chegou,saiu}]}
    Link do proprietário: carro.html?t=<token>&top=<top>. No app real o formulário chama a função adm_carro_enviar (supabase/carros.sql),
@@ -5554,7 +5619,10 @@ document.addEventListener("click", e => {
   if (d.carSt) { const [cid, ac] = d.carSt.split("|"), agora = new Date().toISOString();
     carSalvar(D => ({ lista: D.lista.map(x => x.id !== cid ? x : ac === "chegou" ? { ...x, chegou: agora, saiu: "" } : { ...x, saiu: agora }) }), ac === "chegou" ? "Chegada registrada" : "Saída registrada"); return; }
   if (d.trV != null && t.matches("[data-tr-v]")) { if (podeEditar()) trVeicForm(d.trV); return; }
-  if (d.trDist) { if (podeEditar()) trDistForm(d.trDist); return; }
+  if (d.trFam) { if (podeEditar()) trFamForm(d.trFam); return; }
+  if (d.trLg) { if (podeEditar()) trLgForm(d.trLg); return; }
+  if (d.trVist) { trVistForm(d.trVist); return; }
+  if (d.act === "tr-copiar") { if (podeEditar()) trCopiarVolta(); return; }
   if (d.trEmb) { if (podeEditar()) trSalvar(D => { const x = { ...(D.emb || {}) }; if (x[d.trEmb]) delete x[d.trEmb]; else x[d.trEmb] = { por: ME.adm || "", em: agoraISO() }; return { emb: x }; }, ""); return; }
   if (d.fin != null && t.matches("[data-fin]")) { if (podeEditar()) finForm(d.fin); return; }
   if (d.finFoto) { const i = (finDoc().itens || []).find(x => x.id === d.finFoto); if (i) modal(`<h3>${esc(i.desc)}</h3><img class="cel-grande" src="${esc(celFotoSrc(i))}" alt="Recibo"><div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal()); return; }
