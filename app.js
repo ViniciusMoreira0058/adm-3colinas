@@ -2588,6 +2588,8 @@ const cmdConta = () => { const n = cmdSel().length; ["cmdN", "cmdN2"].forEach(k 
 document.addEventListener("input", e => { const t = e.target; if (!t) return;
   if (t.id === "cmdMsg") { S.cmdMsg = t.value; store.set("adm3-comunicado", t.value); const pv = $("#cmdPrev"), p = cmdLista().find(x => waNumber(x.telefone)) || { nome: "João" }; if (pv) pv.innerHTML = t.value.trim() ? esc(cmdTexto(t.value, p)) : '<span class="hint">Escreva a mensagem acima.</span>'; }
   if (t.id === "cmdQ") { cmdF().q = t.value; const pos = t.selectionStart; render(); const n = $("#cmdQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } } });
+document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.finF) { finFilt()[t.dataset.finF] = t.type === "checkbox" ? t.checked : t.value; render(); } });
+document.addEventListener("input", e => { if (e.target && e.target.id === "finQ") { finFilt().q = e.target.value; const pos = e.target.selectionStart; render(); const n = $("#finQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } } });
 document.addEventListener("change", e => { const t = e.target; if (!t) return;
   if (t.matches && t.matches("input[data-cmd-p]")) { const s = cmdExcl(); t.checked ? s.delete(t.dataset.cmdP) : s.add(t.dataset.cmdP); cmdConta(); }
   if (t.id === "cmdEq") { cmdF().equipe = t.value; render(); }
@@ -2598,6 +2600,29 @@ let finFotoArq = null;
 const FIN_AREAS = ["Alimentação", "Logística", "Transporte", "Saúde", "Material e brindes", "Hospedagem", "Mídia", "Outros"];
 const finDoc = () => cfgDe(`fin-${curTopId()}`) || {};
 const finSalvar = (fn, msg) => { const D = finDoc(); return save(() => api.set("config", `fin-${curTopId()}`, { itens: D.itens || [], orc: D.orc || {}, ...fn(D), top: curTopId() }), msg).then(render); };
+/* Financeiro 2 (demo, flag FIN2): previsão, custo por senderista, aviso de contas, saídas sem recibo, filtros, gráfico e Excel */
+const FIN2 = () => DEMO;
+const finSemRecibo = () => (finDoc().itens || []).filter(i => i.tipo !== "entrada" && !i.foto && !i.fotoPath);
+const finFilt = () => S.finF || (S.finF = { q: "", area: "", mes: "", pag: "", tipo: "", sem: false });
+function avisoContas() {
+  if (!FIN2() || !CONTAS() || !ME.acesso || ehCoordEq() || S.view === "financeiro" || !canSee({ id: "financeiro" })) return "";
+  const hj = hojeISO(), A = contasAbertas().filter(p => p.venc && p.venc <= somaDias(hj, 3)); if (!A.length) return "";
+  const at = A.filter(p => p.venc < hj), v = A.reduce((s, p) => s + (+p.valor || 0), 0), dd = d => new Date(d + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  return `<div class="banner aviso ${at.length ? "rem-atraso" : ""}"><span>🧾 <b>${at.length ? `${at.length} conta(s) vencida(s)` : `${A.length} conta(s) vencem até ${dd(somaDias(hj, 3))}`}:</b> ${esc(A[0].item.desc)} ${brl(A[0].valor)} · ${A[0].venc < hj ? "venceu" : "vence"} ${dd(A[0].venc)}${A.length > 1 ? ` <small>e mais ${A.length - 1} · total ${brl(v)}</small>` : ""}</span><button class="btn" type="button" data-go="financeiro">Ver</button></div>`;
+}
+async function finXlsx() {
+  const D = finDoc(), dd = d => d ? d.split("-").reverse().join("/") : "";
+  const L = [...(D.itens || []).map(i => [dd(i.data), i.tipo === "entrada" ? "Entrada" : "Saída", i.area || "", i.desc || "", (i.tipo === "entrada" ? 1 : -1) * (+i.valor || 0), i.pag || "", i.fornecedor || "", { pago: "Pago", apagar: "A pagar", parcelado: "Parcelado" }[i.sit] || "", i.por || "", i.foto || i.fotoPath ? "Sim" : "Não", ""]),
+    ...feqAprovados().map(i => [dd(i.data), "Saída", i.area || "", i.desc || "", -(+i.valor || 0), i.pag || "", i.fornecedor || "", { pago: "Pago", apagar: "A pagar", parcelado: "Parcelado" }[i.sit] || "", i.por || "", i.foto || i.fotoPath ? "Sim" : "Não", "Equipe " + (i.equipe || "")])]
+    .sort((a, b) => String(a[0]).split("/").reverse().join("").localeCompare(String(b[0]).split("/").reverse().join("")));
+  const V = VENDAS() ? vendasResumo() : null;
+  try { const X = await carregarXlsx(), wb = X.utils.book_new();
+    const ws = X.utils.aoa_to_sheet([["Data", "Tipo", "Área", "Descrição", "Valor (R$)", "Forma de pagamento", "Fornecedor", "Situação", "Lançado por", "Tem recibo", "Equipe"], ...L]);
+    ws["!cols"] = [10, 8, 18, 40, 12, 18, 20, 11, 20, 10, 16].map(wch => ({ wch })); X.utils.book_append_sheet(wb, ws, "Lançamentos");
+    if (V && V.linhas) X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([["Vendas do TOP", ""], ["Vendido (bruto)", V.bruto], ["Taxa Legendários Global", V.coprod], ["Fica com a base", V.liq], ["Já repassado", V.repassado], ["Parcelas a receber", V.parcFut]]), "Vendas");
+    X.writeFile(wb, `financeiro-${curTopId()}-${hojeISO()}.xlsx`); toast("Planilha baixada");
+  } catch (e) { toast(e.message || "Não consegui gerar a planilha."); }
+}
 function vFinanceiro() {
   if (ehCoordEq()) return vFinCoord();
   const D = finDoc(), I = (D.itens || []).slice().sort((a, b) => (b.data || "").localeCompare(a.data || "") || (b.em || "").localeCompare(a.em || "")), orc = D.orc || {}, ed = podeEditar();
@@ -2605,24 +2630,56 @@ function vFinanceiro() {
   const porA = a => g.filter(i => i.area === a).reduce((s, i) => s + (+i.valor || 0), 0), areas = [...new Set([...FIN_AREAS.filter(a => porA(a) || orc[a]), ...g.map(i => i.area)])];
   return `
   <div class="head"><div><h2>Financeiro</h2><p>Saídas e entradas do TOP com a foto do recibo. No fim sai a prestação de contas em PDF.</p></div>
-    <div class="actions">${ed ? `<button class="btn primary" type="button" data-fin="">${ico("plus")} Lançar</button>` : ""}${VENDAS() && ed ? `<label class="btn">${ico("upload")} Importar vendas<input type="file" accept=".xlsx,.xls,.csv" id="vendasArq" hidden></label>` : ""}<button class="btn" type="button" data-act="fin-pdf">${ico("upload")} Prestação de contas</button></div></div>
-  <div class="kpis">
+    <div class="actions">${ed ? `<button class="btn primary" type="button" data-fin="">${ico("plus")} Lançar</button>` : ""}${VENDAS() && ed ? `<label class="btn">${ico("upload")} Importar vendas<input type="file" accept=".xlsx,.xls,.csv" id="vendasArq" hidden></label>` : ""}<button class="btn" type="button" data-act="fin-pdf">${ico("upload")} Prestação de contas</button>${FIN2() ? `<button class="btn" type="button" data-act="fin-xlsx">${ico("upload")} Excel</button>` : ""}</div></div>
+  ${FIN2() ? finAvisos() : ""}
+  <div class="kpis ${FIN2() ? "kpis-3" : ""}">
     <button type="button" class="kpi kpi-btn" data-fin-det="saidas"><span class="lbl">Saídas</span><span class="val num" style="font-size:24px">${brl(sg)}</span><span class="sub">${g.length} lançamento(s)${feqAprovados().length ? ` · ${feqAprovados().length} das equipes` : ""}</span></button>
     <button type="button" class="kpi kpi-btn" data-fin-det="entradas"><span class="lbl">Entradas</span><span class="val num" style="font-size:24px">${brl(se)}</span><span class="sub">${vl ? `vendas ${brl(vl)} + doações` : "doações e repasses"}</span></button>
     ${TAXA_GLOBAL() ? `<button type="button" class="kpi kpi-btn ${se - sg < 0 ? "alert" : "lucro"}" data-fin-det="saldo"><span class="lbl">${se - sg < 0 ? "Faltando no TOP" : "Sobrando no TOP"}</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">${se ? `lucro de ${pct(Math.max(0, se - sg), se)}% das entradas` : "entradas menos saídas"}</span></button>`
       : `<button type="button" class="kpi kpi-btn ${se - sg < 0 ? "alert" : ""}" data-fin-det="saldo"><span class="lbl">Saldo</span><span class="val num" style="font-size:24px">${brl(se - sg)}</span><span class="sub">entradas menos saídas</span></button>`}
 
+    ${FIN2() ? (() => { const pf = VR.parcFut || 0, aPagar = contasAbertas().reduce((s, p) => s + (+p.valor || 0), 0), fim = se + pf - sg, nS = S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).length;
+      return `<button type="button" class="kpi kpi-btn ${fim < 0 ? "alert" : ""}" data-fin-det="prev"><span class="lbl">Vai sobrar no fim</span><span class="val num" style="font-size:24px">${brl(fim)}</span><span class="sub">${pf ? `+ ${brl(pf)} em parcelas a receber` : "sem parcelas a receber"}${aPagar ? ` · ${brl(aPagar)} de contas ainda a pagar` : ""}</span></button>
+      <button type="button" class="kpi kpi-btn" data-fin-det="saidas"><span class="lbl">Custo por senderista</span><span class="val num" style="font-size:24px">${nS ? brl(sg / nS) : "—"}</span><span class="sub">${nS} senderista(s) inscrito(s)</span></button>`; })() : ""}
     <button type="button" class="kpi kpi-btn ${totOrc && sg > totOrc ? "alert" : ""}" data-fin-det="orc"><span class="lbl">Orçamento</span><span class="val num" style="font-size:24px">${totOrc ? pct(sg, totOrc) + "%" : "—"}</span><span class="sub">${totOrc ? "de " + brl(totOrc) + " usado" : "defina por área"}</span></button>
   </div>
+  ${FIN2() && sg ? (() => { const cores = ["#ff7a1a", "#60a5fa", "#46c486", "#f5c542", "#c084fc", "#f472b6", "#2dd4bf", "#94a3b8", "#fb7185", "#a3e635"], A = areas.map(a => [a, porA(a)]).filter(x => x[1] > 0).sort((x, y) => y[1] - x[1]);
+    return `<section class="panel"><h3>Para onde foi o dinheiro</h3><div class="fin-pizza">${A.map(([a, v], k) => `<i style="flex:${v};background:${cores[k % cores.length]}" title="${esc(a)}"></i>`).join("")}</div>
+      <div class="fin-leg">${A.map(([a, v], k) => `<button type="button" data-fin-det="${esc("area:" + a)}"><span style="background:${cores[k % cores.length]}"></span>${esc(a)} <b>${pct(v, sg)}%</b> <small>${brl(v)}</small></button>`).join("")}</div></section>`; })() : ""}
   <section class="panel"><h3>Por área ${S.isOwner ? `<button class="linkbtn" type="button" data-act="fin-orc">orçamento ›</button>` : ""}</h3>
-    <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<button type="button" class="fin-a" data-fin-det="${esc("area:" + a)}"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></button>`; }).join("") || `<div class="empty">Nenhuma saída ainda.</div>`}</div></section>
+    <div class="fin-areas">${areas.map(a => { const v = porA(a), o = +orc[a] || 0; return `<button type="button" class="fin-a" data-fin-det="${esc("area:" + a)}"><span class="grow"><b>${esc(a)}</b><small>${brl(v)}${o ? ` de ${brl(o)}` : ""}${FIN2() && sg ? ` · <b>${pct(v, sg)}%</b> das saídas` : ""}</small></span><div class="bar ${o && v > o ? "bad" : "good"}"><i style="width:${o ? Math.min(100, pct(v, o)) : v ? 100 : 0}%"></i></div></button>`; }).join("") || `<div class="empty">Nenhuma saída ainda.</div>`}</div></section>
   ${VENDAS() ? vendasPainel(ed) : ""}
   ${COORD() ? feqPainel(ed) : ""}
   ${CONTAS() ? contasPainel(ed) : ""}
-  <section class="panel"><h3>Lançamentos <small>${I.length}</small></h3><div class="cel-lista">${I.map(i => `<div class="cel-li ${i.tipo === "entrada" ? "guardado" : ""}">
+  ${FIN2() ? finFiltrosHtml(I) : ""}
+  <section class="panel"><h3>Lançamentos <small>${FIN2() ? finFiltrar(I).length + (finFiltrar(I).length !== I.length ? " de " + I.length : "") : I.length}</small></h3><div class="cel-lista">${(FIN2() ? finFiltrar(I) : I).map(i => `<div class="cel-li ${i.tipo === "entrada" ? "guardado" : ""}">
     ${i.foto || i.fotoPath ? `<button type="button" class="cel-foto" data-fin-foto="${esc(i.id)}" aria-label="Ver recibo">${celFotoSrc(i) ? `<img src="${esc(celFotoSrc(i))}" alt="">` : "🧾"}</button>` : `<span class="cel-foto vazia">${i.tipo === "entrada" ? "＋" : "🧾"}</span>`}
     <button type="button" class="cel-info" ${ed ? `data-fin="${esc(i.id)}"` : "disabled"}><b>${esc(i.desc)}</b><small>${esc(i.area || "")} · ${i.data ? new Date(i.data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""} · ${esc(i.por || "")}${CONTAS() && i.pag ? " · " + esc(i.pag) : ""}</small>${CONTAS() ? contaChip(i) : ""}</button>
-    <b class="num fin-v ${i.tipo === "entrada" ? "ent" : ""}">${i.tipo === "entrada" ? "+" : "−"} ${brl(i.valor)}</b></div>`).join("") || `<div class="empty">Toque em Lançar para registrar a primeira saída.</div>`}</div></section>`;
+    <b class="num fin-v ${i.tipo === "entrada" ? "ent" : ""}">${i.tipo === "entrada" ? "+" : "−"} ${brl(i.valor)}</b></div>`).join("") || `<div class="empty">${I.length ? "Nenhum lançamento com esses filtros." : "Toque em Lançar para registrar a primeira saída."}</div>`}</div></section>`;
+}
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+function finFiltrar(I) {
+  const F = finFilt(), q = norm(F.q || "");
+  return I.filter(i => (!F.tipo || (F.tipo === "entrada" ? i.tipo === "entrada" : i.tipo !== "entrada")) && (!F.area || i.area === F.area) && (!F.mes || (i.data || "").slice(0, 7) === F.mes)
+    && (!F.pag || i.pag === F.pag) && (!F.sem || (i.tipo !== "entrada" && !i.foto && !i.fotoPath)) && (!q || norm([i.desc, i.fornecedor, i.por, i.area].join(" ")).includes(q)));
+}
+function finFiltrosHtml(I) {
+  const F = finFilt(), opt = (l, v, cur) => `<option value="${esc(v)}" ${cur === v ? "selected" : ""}>${esc(l)}</option>`;
+  const areas = [...new Set(I.map(i => i.area).filter(Boolean))].sort(), meses = [...new Set(I.map(i => (i.data || "").slice(0, 7)).filter(Boolean))].sort().reverse(), pags = [...new Set(I.map(i => i.pag).filter(Boolean))].sort();
+  const ativo = F.q || F.area || F.mes || F.pag || F.tipo || F.sem;
+  return `<section class="panel fin-filtros"><div class="cmd-filtros">
+    <input id="finQ" type="search" placeholder="Buscar lançamento, fornecedor…" value="${esc(F.q || "")}" aria-label="Buscar">
+    <select data-fin-f="tipo" aria-label="Tipo">${opt("Saídas e entradas", "", F.tipo)}${opt("Só saídas", "saida", F.tipo)}${opt("Só entradas", "entrada", F.tipo)}</select>
+    <select data-fin-f="area" aria-label="Área">${opt("Todas as áreas", "", F.area)}${areas.map(a => opt(a, a, F.area)).join("")}</select>
+    <select data-fin-f="mes" aria-label="Mês">${opt("Todos os meses", "", F.mes)}${meses.map(m => opt(MESES[+m.slice(5) - 1] + "/" + m.slice(2, 4), m, F.mes)).join("")}</select>
+    ${pags.length ? `<select data-fin-f="pag" aria-label="Forma de pagamento">${opt("Toda forma de pagamento", "", F.pag)}${pags.map(a => opt(a, a, F.pag)).join("")}</select>` : ""}
+    <label class="selall"><input type="checkbox" data-fin-f="sem" ${F.sem ? "checked" : ""}> Só sem recibo</label>
+    ${ativo ? `<button class="linkbtn" type="button" data-act="fin-limpar">limpar filtros</button>` : ""}</div></section>`;
+}
+function finAvisos() {
+  const sr = finSemRecibo(), hj = hojeISO(), at = CONTAS() ? contasAbertas().filter(p => p.venc && p.venc < hj) : [];
+  return (at.length ? `<div class="banner rem-atraso"><span>🧾 <b>${at.length} conta(s) vencida(s)</b> · ${brl(at.reduce((s, p) => s + (+p.valor || 0), 0))}. Veja em Contas a pagar e marque como paga.</span></div>` : "")
+    + (sr.length ? `<div class="banner"><span>📎 <b>${sr.length} saída(s) sem comprovante</b> (${brl(sr.reduce((s, i) => s + (+i.valor || 0), 0))}). Anexe a foto do recibo para a prestação de contas ficar completa.</span><button class="btn" type="button" data-act="fin-sem">Ver quais</button></div>` : "");
 }
 /* Detalhe de um card do Financeiro: todas as entradas ou saídas que formam aquele número */
 function finDetalhe(key) {
@@ -2638,6 +2695,8 @@ function finDetalhe(key) {
   const [tipo, val] = key.includes(":") ? [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)] : [key, ""];
   if (key === "saidas") { titulo = "Saídas"; L = [...saiM, ...saiE]; }
   else if (key === "entradas") { titulo = "Entradas"; L = [...entM, ...vend(ap)]; nota = ap.length ? "Vendas pelo valor que fica com a base." : ""; }
+  else if (key === "prev") { const pf = VENDAS() ? vendasResumo().parcFut : 0; titulo = "Vai sobrar no fim do TOP"; L = [...entM, ...vend(ap), ...(pf ? [{ d: "", t: "Parcelas que ainda vão cair", s: "vendas parceladas na TicketAndGo", v: pf, sn: 1 }] : []), ...saiM, ...saiE];
+    nota = "Entradas + parcelas a receber − todas as saídas (as contas ainda a pagar já estão nas saídas)."; }
   else if (key === "saldo") { titulo = TAXA_GLOBAL() ? "Sobrando no TOP: entradas e saídas" : "Saldo: entradas e saídas"; L = [...entM, ...vend(ap), ...saiM, ...saiE]; }
   else if (key === "orc") {
     const areas = [...new Set([...FIN_AREAS, ...[...saiM, ...saiE].map(i => i.area)])].filter(Boolean);
@@ -2663,11 +2722,11 @@ function finDetalhe(key) {
   L.sort((a, b) => (b.d || "").localeCompare(a.d || "") || b.v - a.v);
   const tot = L.reduce((s, x) => s + (x.sn === 0 ? x.v : x.sn * x.v), 0);
   modal(`<h3>${esc(titulo)}</h3>
-    <p class="hint" style="margin:0 0 8px">${L.length} item(ns) · total <b class="num">${brl(key === "saldo" ? tot : Math.abs(tot))}</b>${nota ? " · " + esc(nota) : ""}</p>
+    <p class="hint" style="margin:0 0 8px">${L.length} item(ns) · total <b class="num">${brl(key === "saldo" || key === "prev" ? tot : Math.abs(tot))}</b>${nota ? " · " + esc(nota) : ""}</p>
     <div class="fin-det">${L.map(x => `<div class="li ${key === "orc" ? "li-btn" : ""}" ${key === "orc" ? `role="button" tabindex="0" data-fin-det="${esc("area:" + x.t)}"` : ""}>
       <span class="grow"><b>${esc(x.t)}</b><br><span class="hint">${esc([x.d && dd(x.d), x.s].filter(Boolean).join(" · "))}</span></span>
       ${x.foto ? `<button class="linkbtn" type="button" data-fin-foto="${esc(x.foto)}" aria-label="Ver recibo">🧾</button>` : ""}
-      <b class="num fin-v ${x.sn > 0 ? "ent" : ""}">${x.sn > 0 ? "+ " : x.sn < 0 && key === "saldo" ? "− " : ""}${brl(x.v)}</b></div>`).join("") || `<div class="empty">Nada aqui ainda.</div>`}</div>
+      <b class="num fin-v ${x.sn > 0 ? "ent" : ""}">${x.sn > 0 ? "+ " : x.sn < 0 && (key === "saldo" || key === "prev") ? "− " : ""}${brl(x.v)}</b></div>`).join("") || `<div class="empty">Nada aqui ainda.</div>`}</div>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn primary" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
 }
 function finForm(id) {
@@ -4911,7 +4970,7 @@ function render() {
   const other = tid !== atualId() && v !== "tops"
     ? `<div class="banner"><span>Você está vendo o <b>${esc(topName())}</b>${td && td.status === "finalizado" ? " (finalizado)" : ""}. O que mudar aqui fica no histórico dele.</span><button class="btn" type="button" data-top-open="${esc(atualId())}">Voltar para o ${esc(topName(atualId()))}</button></div>` : "";
   const faixa = avisoVisivel() ? `<div class="banner aviso"><span>${ico("bell")} <b>Planilha atualizada</b> por ${esc(S.aviso.por || "um ADM")}: ${S.aviso.novosP + S.aviso.novosL} novo(s) (${S.aviso.novosP} part. · ${S.aviso.novosL} LGND).</span><button class="btn" type="button" data-aviso="abrir">Ver resumo</button></div>` : "";
-  let html = faixa + (ehCoordEq() ? "" : avisoRemedio() + avisoLembretes() + avisoTurno()) + other + (v === "painel" ? vPainel()
+  let html = faixa + (ehCoordEq() ? "" : avisoRemedio() + avisoContas() + avisoLembretes() + avisoTurno()) + other + (v === "painel" ? vPainel()
     : v === "tops" ? vTops()
     : v === "usuarios" ? vUsuarios()
     : v === "historico" ? vHistorico()
@@ -5677,6 +5736,9 @@ document.addEventListener("click", e => {
   if (d.act === "pt-responder") { posTopForm(); return; }
   if (d.act === "pt-licoes") { licoesForm(); return; }
   if (d.act === "backup") { backupForm(); return; }
+  if (d.act === "fin-xlsx") { finXlsx(); return; }
+  if (d.act === "fin-limpar") { S.finF = null; render(); return; }
+  if (d.act === "fin-sem") { S.finF = { ...finFilt(), sem: true, tipo: "" }; render(); setTimeout(() => { const el = $(".fin-filtros"); if (el) el.scrollIntoView({ behavior: "smooth" }); }, 50); return; }
   if (d.act === "cmd-enviar") { if (podeEditar()) cmdEnviar(); return; }
   if (d.act === "cmd-copiar") { cmdCopiar(); return; }
   if (d.act === "cmd-xlsx") { cmdXlsx(); return; }

@@ -1840,3 +1840,8 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     { id: "c4", nome: "Carla Mendes", tel: "16 97777-3434", placa: "VIS-4D56", modelo: "Onix", cor: "Vermelho", funcao: "Mídia", vagas: 4, local: "", origem: "adm", em: h(2000), chegou: h(900), saiu: h(600), foto: "", fotoPlaca: "" },
     { id: "c5", nome: "Marcos Tavares", tel: "16 96666-7878", placa: "APO-9E01", modelo: "Saveiro", cor: "Branca", funcao: "Base", vagas: 2, local: "", obs: "Levo as caixas de água na sexta", origem: "link", conferido: false, em: h(45), chegou: "", saiu: "", foto: "", fotoPlaca: "" }] } });
 })();
+// FINANCEIRO 2: duas saídas ainda sem a foto do recibo
+(function () {
+  const fin = window.ADM_DEMO.docs.find(x => x.col === "config" && x.id === "fin-top1922"); if (!fin) return;
+  fin.data.itens.filter(i => /^(Pulseiras numeradas|Lonas e cordas)/.test(i.desc)).forEach(i => { i.foto = ""; i.fotoPath = ""; });
+})();
