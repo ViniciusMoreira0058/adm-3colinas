@@ -5507,7 +5507,7 @@ function acaoConfirmados(a) {
   if (DEMO) { try { return (JSON.parse(localStorage.getItem(ACAO_LS) || "[]") || []).filter(x => x.acao === a.id); } catch { return []; } }
   return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`acaopres-${curTopId()}-${a.id}-`)).map(([, d]) => d);
 }
-const acaoLink = a => { const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: SALA() && acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, ...(SALA() ? { v: 2, x: a.aberto ? 1 : 0 } : {}) };
+const acaoLink = (a, r) => { const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: r ? r.eq : SALA() && acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, ...(SALA() ? { v: 2, x: a.aberto && !r ? 1 : 0 } : {}), ...(r ? { fe: r.eq, m: String(r.oque || "").slice(0, 160), n: r.homens || 0 } : {}) };
   return `${location.origin}${DEMO ? location.pathname.replace(/[^/]*$/, "") + "acao.html" : "/api/convite"}?t=${encodeURIComponent(a.token)}&top=${encodeURIComponent(curTopId())}&a=${encodeURIComponent(a.id)}&i=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(info)))))}${DEMO ? "&demo=1" : ""}`; };
 const acaoQuando = a => { const d = a.data ? new Date(a.data + "T12:00:00") : null; return (d ? d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) : "data a definir") + (a.hora ? " às " + a.hora : ""); };
 function acaoSalvar(doc, item, msg, apagar) {
@@ -5594,16 +5594,17 @@ async function acaoPlanoPdf(a) {
   doc.setTextColor(255, 210, 170); doc.setFont("helvetica", "italic"); doc.setFontSize(10); let ml = doc.splitTextToSize("Missão: " + missao, W - 28); doc.text(ml, 14, X.y); X.y += ml.length * 4.6 + 2;
   if (a.aberto) { doc.setTextColor(225, 214, 202); doc.setFont("helvetica", "normal"); doc.text("Convite aberto: pode trazer quem ainda não é legendário.", 14, X.y); X.y += 6.6; }
   if (a.obs) { doc.setTextColor(225, 214, 202); doc.setFont("helvetica", "normal"); ml = doc.splitTextToSize("Recado: " + a.obs, W - 28); doc.text(ml, 14, X.y); X.y += ml.length * 4.6 + 2; }
-  X.y += 4; doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("QUEM FAZ O QUÊ", 14, X.y, { charSpace: 1 });
-  doc.setDrawColor(...C.LARANJA); doc.setLineWidth(0.3); doc.line(14 + doc.getTextWidth("QUEM FAZ O QUÊ") + 14 * 1 + 4, X.y - 1.2, W - 14, X.y - 1.2); X.y += 6;
+  X.y += 4; doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("O QUE PRECISAMOS DAS EQUIPES", 14, X.y, { charSpace: 1 });
+  doc.setDrawColor(...C.LARANJA); doc.setLineWidth(0.3); doc.line(14 + doc.getTextWidth("O QUE PRECISAMOS DAS EQUIPES") + 28 * 1 + 4, X.y - 1.2, W - 14, X.y - 1.2); X.y += 6;
   R.forEach(x => {
-    doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); const ol = doc.splitTextToSize(x.oque || "a combinar com a ADM", W - 80), conf = C0.filter(c => c.equipe === x.eq).length, h = Math.max(20, 12 + ol.length * 4.8);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); const ol = doc.splitTextToSize(x.oque || "a combinar com a ADM", W - 80), conf = C0.filter(c => c.equipe === x.eq).length, h = Math.max(23, 15 + ol.length * 4.8);
     X.cabe(h + 3); doc.setFillColor(24, 32, 43); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(14, X.y + 4, 1.4, h - 8, "F");
     doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(11.5); doc.text(x.eq.toUpperCase(), 20, X.y + 7.5, { charSpace: 0.4 });
     doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.text(ol, 20, X.y + 13.5);
     doc.setFillColor(...C.LARANJA); doc.roundedRect(W - 50, X.y + 4, 32, 12, 2, 2, "F"); doc.setTextColor(26, 12, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text(String(x.homens || "-"), W - 34, X.y + 11.3, { align: "center" });
     doc.setFontSize(6.5); doc.text("HOMENS", W - 34, X.y + 14.6, { align: "center" });
     if (conf) { doc.setTextColor(170, 200, 170); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(`${conf} confirmado(s)`, W - 34, X.y + h - 2.5, { align: "center" }); }
+    if (acaoResp(a).length) { doc.setTextColor(255, 170, 110); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.text("Servo desta equipe: toque aqui para confirmar", 20, X.y + h - 3); doc.link(14, X.y, W - 28, h, { url: acaoLink(a, x) }); }
     X.y += h + 3; });
   X.cabe(16); doc.setFillColor(...C.LARANJA); doc.roundedRect(14, X.y + 2, W - 28, 12, 3, 3, "F"); doc.setTextColor(26, 12, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(11.5);
   doc.text(`TOTAL: ${tot} HOMENS EM ${R.length} EQUIPE(S)`, W / 2, X.y + 9.6, { align: "center" }); doc.link(14, X.y + 2, W - 28, 12, { url: acaoLink(a) }); X.y += 18;
@@ -5641,13 +5642,17 @@ function acaoVer(a) {
   modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${SALA() ? acaoTag(a) : esc(a.tipo)} · ${esc(acaoEquipeTxt(a))} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
     <div class="actions" style="flex-wrap:wrap"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Mandar link no WhatsApp</a>
       <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button>${SALA() ? `<button class="btn" type="button" id="acPlano">${ico("upload")} PDF do evento</button>${podeEditar() && !ehCoordEq() ? `<button class="btn" type="button" id="acXls">${ico("upload")} Planilha dos confirmados</button>` : ""}` : ""}${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}</div>
-    ${R.length ? `<section class="panel" style="margin-top:6px"><h3>Quem faz o quê <small>${R.reduce((n, x) => n + (x.homens || 0), 0)} homens</small></h3><div class="list">${R.map(x => { const c = C.filter(y => y.equipe === x.eq).length; return `<div class="li ${x.eq === ME.equipeLgnd ? "ev-minha" : ""}"><span class="grow"><b>${esc(x.eq)}</b><small class="hint" style="display:block">${esc(x.oque || "a combinar")}</small></span><span class="chip ${x.homens && c >= x.homens ? "ok" : ""}">${c}/${x.homens || "-"}</span></div>`; }).join("")}</div></section>` : ""}
+    ${R.length ? `<section class="panel" style="margin-top:6px"><h3>O que precisamos das equipes <small>${R.reduce((n, x) => n + (x.homens || 0), 0)} homens</small></h3><p class="hint" style="margin:0 0 6px">Cada equipe tem o seu link: mande para os servos daquela área. Quem confirmar já entra na equipe certa.</p><div class="list">${R.map((x, i) => { const c = C.filter(y => y.equipe === x.eq).length, pode = podeEditar() || x.eq === ME.equipeLgnd;
+      const m = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}\n\n*Equipe ${x.eq}*, precisamos de você${x.homens ? ` (${x.homens} homens)` : ""}${x.oque ? ":\n" + x.oque : "."}\n\nConfirme aqui: ${acaoLink(a, x)}`;
+      return `<div class="li ${x.eq === ME.equipeLgnd ? "ev-minha" : ""}"><span class="grow"><b>${esc(x.eq)}</b><small class="hint" style="display:block;white-space:normal">${esc(x.oque || "a combinar")}</small>
+        ${pode ? `<span class="actions" style="margin-top:4px"><a class="btn sm" style="color:var(--fg)" href="https://wa.me/?text=${encodeURIComponent(m)}" target="_blank" rel="noopener">${ico("wa")} Link da equipe</a><button class="linkbtn" type="button" data-ev-copia="${i}">copiar</button></span>` : ""}</span><span class="chip ${x.homens && c >= x.homens ? "ok" : ""}">${c}/${x.homens || "-"}</span></div>`; }).join("")}</div></section>` : ""}
     <section class="panel" style="margin-top:6px"><h3>Confirmados <small>${C.length}${a.vagas ? " de " + a.vagas : ""}</small></h3>
       ${C.length ? `<div class="list">${C.map(x => `<div class="li"><span class="grow"><b>${esc(x.nome)}</b> ${x.leg === false ? `<span class="chip wait">ainda não é legendário</span>` : `<span class="hint">${esc(x.equipe || "")}${x.num ? " · nº " + esc(x.num) : ""}</span>`}${x.igreja || x.info ? `<small class="hint" style="display:block">${esc([x.igreja, x.info].filter(Boolean).join(" · "))}</small>` : ""}</span></div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
   $("#acCopiar").onclick = () => copiarTexto(l, "Link copiado");
   $("#acPdf").onclick = () => acaoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
   const xl = $("#acXls"); if (xl) xl.onclick = () => acaoXlsx(a);
+  document.querySelectorAll("[data-ev-copia]").forEach(b => b.onclick = () => copiarTexto(acaoLink(a, R[+b.dataset.evCopia]), "Link da equipe copiado"));
   const pl = $("#acPlano"); if (pl) pl.onclick = () => acaoPlanoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
   const ed = $("#acEd"); if (ed) ed.onclick = () => { closeModal(); acaoForm(a); };
 }
