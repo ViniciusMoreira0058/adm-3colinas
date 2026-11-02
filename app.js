@@ -5576,6 +5576,8 @@ function vAgenda() {
   const hoje = hojeISO(), M = [];
   acoesTodas().forEach(a => M.push({ k: "ev", data: a.data, fim: a.data, a }));
   agTops().forEach(t => M.push({ k: "top", data: t.inicio, fim: t.fim || t.inicio, t }));
+  const GR = SALA() ? grupos() : [];
+  if (SALA()) quadro().filter(t => t.prazo && (t.pegou || podeEditar())).forEach(t => M.push({ k: "tar", data: t.prazo, fim: t.feito ? t.prazo : (t.prazo < hoje ? hoje : t.prazo), t }));
   M.sort((x, y) => String(x.data + (x.a ? x.a.hora : "")).localeCompare(String(y.data + (y.a ? y.a.hora : ""))));
   const prox = M.filter(x => x.fim >= hoje), pass = M.filter(x => x.fim < hoje).reverse(), L = S.agPass ? pass : prox;
   const mes = d => { const t = new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }); return t[0].toUpperCase() + t.slice(1); };
@@ -5583,17 +5585,19 @@ function vAgenda() {
   const card = x => {
     if (x.k === "top") { const t = x.t, atual = t.id === curTopId(), n = atual ? S.P.filter(p => p.tipo !== "legendario" && !cancelado(p)).length : null;
       return `<button class="acao-c ag-top" type="button" data-ag-top="${esc(t.id)}">${dia(t.inicio)}<span class="grow"><b>${esc(t.nome)} <span class="chip acc">TOP</span>${t.id === "previsto" ? ` <span class="chip ${t.confirmado ? "ok" : "wait"}">${t.confirmado ? "data confirmada" : "data prevista"}</span>` : ""}</b><small class="hint">${esc(fmtPeriodo(t))}${t.local ? " · " + esc(t.local) : ""}</small></span>${n != null ? `<span class="chip ok">${n} inscritos</span>` : ""}</button>`; }
+    if (x.k === "tar") { const t = x.t, g = GR.find(y => y.id === (t.pegou || {}).grupo), m = MISSOES[t.missao] || MISSOES.outro, venc = !t.feito && t.prazo < hoje, minha = g && meuGrupo() && g.id === meuGrupo().id;
+      return `<button class="acao-c ag-tar ${minha ? "minha" : ""} ${t.feito ? "feito" : ""}" type="button" data-meta-tar="1">${dia(t.prazo)}<span class="grow"><b>${esc(t.titulo)} <span class="chip ${t.feito ? "ok" : venc ? "bad" : "wait"}">${t.feito ? "feita" : venc ? "atrasada" : "tarefa"}</span></b><small class="hint"><span class="tag ${m[1]}">${m[0]}</span> prazo · ${g ? esc(g.nome) : "sem grupo"}${t.resp ? " · com " + esc(t.resp.split(" ")[0]) : ""}</small></span></button>`; }
     const a = x.a, c = acaoConfirmados(a).length;
     return `<button class="acao-c ${a.equipe === ME.equipeLgnd ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
       <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `<span class="tag ${acaoCuidar(a) ? "ev-cuidar" : "ev-captar"}">${acaoCuidar(a) ? "Legendários" : "Divulgação"}</span> ` : ""}${esc(a.tipo)} · ${esc(a.equipe)}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
       <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
-  const grupos = []; L.forEach(x => { const m = mes(x.data), g = grupos[grupos.length - 1]; if (g && g.m === m) g.l.push(x); else grupos.push({ m, l: [x] }); });
+  const meses = []; L.forEach(x => { const m = mes(x.data), g = meses[meses.length - 1]; if (g && g.m === m) g.l.push(x); else meses.push({ m, l: [x] }); });
   const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
   return `<div class="head"><div><h2>Agenda</h2><p>Eventos para levar o Legendários a mais homens, e o TOP. Toque num evento para ver quem vai e mandar o link.</p></div>
       <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}<button class="btn" type="button" data-pdf-ag="1">${ico("upload")} Agenda em PDF</button>${podeTops() && !topPrev() ? `<button class="btn" type="button" data-prev-ed="1">${ico("clock")} Planejar próximo TOP</button>` : ""}</div></div>
     <div class="kpis ag-kpis"><div class="kpi"><span class="lbl">Próximos eventos</span><span class="val num">${nEv}</span></div><div class="kpi"><span class="lbl">Legendários confirmados</span><span class="val num">${nVao}</span><span class="sub">nos próximos eventos</span></div></div>
     <div class="seg" role="tablist"><button type="button" ${S.agPass ? 'data-ag-pass="1"' : ""} aria-pressed="${!S.agPass}">Próximos <small>${prox.length}</small></button><button type="button" ${S.agPass ? "" : 'data-ag-pass="1"'} aria-pressed="${!!S.agPass}">Já aconteceram <small>${pass.length}</small></button></div>
-    ${grupos.length ? grupos.map(g => `<section class="panel"><h3>${esc(g.m)} <small>${g.l.length}</small></h3><div class="acao-lista">${g.l.map(card).join("")}</div></section>`).join("")
+    ${meses.length ? meses.map(g => `<section class="panel"><h3>${esc(g.m)} <small>${g.l.length}</small></h3><div class="acao-lista">${g.l.map(card).join("")}</div></section>`).join("")
       : `<section class="panel"><div class="empty">${S.agPass ? "Nenhum evento passado ainda." : "Nada marcado. Toque em Novo evento para colocar a primeira ida a uma igreja."}</div></section>`}`;
 }
 /* Próximo TOP planejado (data prevista ou confirmada), sem fechar o TOP atual: config top-previsto {nome,inicio,fim,local,confirmado,vagas,por,em} */
@@ -5807,7 +5811,7 @@ const grupoDe = eq => grupos().find(g => (g.equipes || []).includes(eq));
 const meuGrupo = () => ehCoordEq() ? grupoDe(ME.equipeLgnd) : null;
 const quadroId = () => "metatar-" + curTopId() + "-quadro";
 const quadro = () => ((cfgDe(quadroId()) || {}).lista || []).slice().sort((a, b) => (!!a.feito - !!b.feito) || String(a.prazo || "9").localeCompare(String(b.prazo || "9")));
-const quadroLivres = () => { const g = meuGrupo(); return quadro().filter(t => !t.feito && !t.pegou && (!t.para || !g || t.para === g.id)).length; };
+const quadroLivres = () => { const g = meuGrupo(); return ehCoordEq() ? (g ? quadro().filter(t => !t.feito && (t.pegou || {}).grupo === g.id).length : 0) : quadro().filter(t => !t.feito && !t.pegou).length; };
 const podeGrupo = gid => podeEditar() || (ehCoordEq() && (meuGrupo() || {}).id === gid);
 function quadroSalvar(lista, msg) {
   (async () => { try { await api.set("config", quadroId(), { lista }); if (msg) toast(msg); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
@@ -5815,11 +5819,11 @@ function quadroSalvar(lista, msg) {
 function quadroMarcar(id, op, val) {
   const L = quadro(), t = L.find(x => x.id === id); if (!t) return;
   const g = op === "pegar" ? (val || (meuGrupo() || {}).id) : (t.pegou || {}).grupo;
-  if (!g || !podeGrupo(g)) { toast("Só a ADM ou o coordenador do grupo mexem nesta tarefa."); return; }
+  if (!g || !podeGrupo(g) || (op === "pegar" && !podeEditar())) { toast("Só a ADM ou o coordenador do grupo mexem nesta tarefa."); return; }
   const agora = new Date().toISOString(), nome = (grupos().find(x => x.id === g) || {}).nome || "";
   const n = op === "pegar" ? { ...t, ...(ehCoordEq() ? {} : { para: g }), pegou: { grupo: g, por: ME.adm || "", em: agora } } : op === "devolver" ? { ...t, pegou: null, resp: "", feito: false }
     : op === "resp" ? { ...t, resp: val } : { ...t, feito: !t.feito, feitoEm: t.feito ? "" : agora, feitoPor: t.feito ? "" : ME.adm || "" };
-  quadroSalvar(L.map(x => x.id === id ? n : x), op === "pegar" ? `Tarefa com ${nome} 💪` : op === "devolver" ? "Tarefa devolvida para o quadro" : op === "feito" ? (n.feito ? "Feito! 🙌" : "Desmarcada") : "");
+  quadroSalvar(L.map(x => x.id === id ? n : x), op === "pegar" ? `Tarefa com ${nome} 💪` : op === "devolver" ? "Tarefa voltou para as livres" : op === "feito" ? (n.feito ? "Feito! 🙌" : "Desmarcada") : "");
 }
 function quadroForm(id) {
   if (!podeEditar()) { toast("Quem cria as tarefas é a ADM."); return; }
@@ -5828,7 +5832,7 @@ function quadroForm(id) {
     <div class="field full"><label for="q-t">O que fazer</label><input id="q-t" name="titulo" value="${esc(t.titulo || "")}" placeholder="ex.: Visitar 2 igrejas e apresentar o TOP" required></div>
     <div class="field"><label for="q-m">Missão</label><select id="q-m" name="missao" class="sel">${Object.entries(MISSOES).map(([k, [l]]) => `<option value="${k}" ${t.missao === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="field"><label for="q-p">Até quando</label><input id="q-p" name="prazo" type="date" value="${esc(t.prazo || "")}"></div>
-    <div class="field full"><label for="q-g">Para quem</label><select id="q-g" name="para" class="sel"><option value="">Livre: qualquer grupo pode pegar</option>${G.map(g => `<option value="${esc(g.id)}" ${t.para === g.id ? "selected" : ""}>Mandar para ${esc(g.nome)} (${esc((g.equipes || []).join(", "))})</option>`).join("")}</select></div>
+    <div class="field full"><label for="q-g">Para quem</label><select id="q-g" name="para" class="sel"><option value="">Sem grupo por enquanto (só você vê)</option>${G.map(g => `<option value="${esc(g.id)}" ${t.para === g.id ? "selected" : ""}>Mandar para ${esc(g.nome)} (${esc((g.equipes || []).join(", "))})</option>`).join("")}</select></div>
     <div class="field full"><label for="q-o">Detalhes (opcional)</label><input id="q-o" name="obs" value="${esc(t.obs || "")}"></div>
   </div><div class="modal-foot"><div>${id ? `<button class="btn danger" type="button" id="delBtn">Excluir</button>` : ""}</div>
     <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
@@ -5894,8 +5898,7 @@ function quadroLi(t, noGrupo) {
   const leg = g ? S.P.filter(p => p.tipo === "legendario" && (g.equipes || []).includes(p.equipe)).sort((a, b) => a.nome.localeCompare(b.nome)) : [];
   const fmt = d => new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   const acoes = t.feito ? (pode ? `<button class="btn sm" type="button" data-q-feito="${t.id}">Desfazer</button>` : "")
-    : g ? (pode ? `<button class="btn sm primary" type="button" data-q-feito="${t.id}">${ico("check")} Feito</button>${t.para ? "" : `<button class="linkbtn" type="button" data-q-devolver="${t.id}">devolver</button>`}` : "")
-    : ehCoordEq() ? (meu && (!t.para || t.para === meu.id) ? `<button class="btn sm primary" type="button" data-q-pegar="${t.id}">Pegar para ${esc(meu.nome)}</button>` : "")
+    : g ? (pode ? `<button class="btn sm primary" type="button" data-q-feito="${t.id}">${ico("check")} Feito</button>${podeEditar() ? `<button class="linkbtn" type="button" data-q-devolver="${t.id}">tirar do grupo</button>` : ""}` : "")
     : podeEditar() ? `<select class="sel sm" aria-label="Mandar para" data-q-dar="${t.id}"><option value="">Mandar para…</option>${G.map(x => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join("")}</select>` : "";
   return `<div class="li q-li ${t.feito ? "feito" : venc ? "venc" : ""}"><span class="tar-ck">${t.feito ? ico("check") : ""}</span><div class="grow"><b>${esc(t.titulo)}</b>
       <small class="hint"><span class="tag ${m[1]}">${m[0]}</span>${t.prazo ? ` · até ${fmt(t.prazo)}${venc ? " (venceu)" : ""}` : ""}${!noGrupo && g ? ` · <b>${esc(g.nome)}</b>` : ""}${t.resp ? ` · com ${esc(t.resp.split(" ")[0])}` : ""}${t.obs ? " · " + esc(t.obs) : ""}</small>
@@ -5903,13 +5906,13 @@ function quadroLi(t, noGrupo) {
     <div class="actions">${acoes}${podeEditar() ? `<button class="linkbtn" type="button" data-q-ed="${t.id}" aria-label="Editar">${ico("edit")}</button>` : ""}</div></div>`;
 }
 function vQuadro(D) {
-  const L = quadro(), meu = meuGrupo(), f = S.qFiltro || "livres";
-  const livres = L.filter(t => !t.feito && !t.pegou && (!meu || !t.para || t.para === meu.id)), andamento = L.filter(t => !t.feito && t.pegou && (!meu || t.pegou.grupo === meu.id)), feitas = L.filter(t => t.feito && (!meu || (t.pegou || {}).grupo === meu.id));
+  const L = quadro(), meu = meuGrupo(), f = S.qFiltro || (ehCoordEq() ? "andamento" : "livres");
+  const livres = ehCoordEq() ? [] : L.filter(t => !t.feito && !t.pegou), andamento = L.filter(t => !t.feito && t.pegou && (!meu || t.pegou.grupo === meu.id)), feitas = L.filter(t => t.feito && (!meu || (t.pegou || {}).grupo === meu.id));
   const lista = { livres, andamento, feitas }[f] || livres;
-  return `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">${ehCoordEq() ? "Pegue as tarefas que a sua equipe consegue fazer. As que a ADM mandar para vocês já aparecem em Com a gente. Escolha quem faz e marque quando terminar." : "Crie as tarefas. Deixe livre para os coordenadores pegarem, ou mande direto para um grupo: cai na hora no app do coordenador."}</p>
+  return `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">${ehCoordEq() ? "Aqui ficam as tarefas que a ADM passou para a sua equipe. Escolha quem faz e marque quando terminar. As tarefas de todas as equipes aparecem na Agenda, no dia do prazo." : "Crie as tarefas e mande para um grupo: cai na hora no app do coordenador. As livres ficam só com você até escolher o grupo. Todas aparecem na Agenda, no dia do prazo."}</p>
       ${podeEditar() ? `<button class="btn primary" type="button" data-q-novo="1">${ico("plus")} Nova tarefa</button>` : ""}</div>
-    <div class="seg" role="tablist">${[["livres", "Para pegar", livres.length], ["andamento", ehCoordEq() ? "Com a gente" : "Em andamento", andamento.length], ["feitas", "Feitas", feitas.length]].map(([k, l, n]) => `<button type="button" data-q-filtro="${k}" aria-pressed="${f === k}">${l} <small>${n}</small></button>`).join("")}</div>
-    <section class="panel">${lista.length ? `<div class="list">${lista.map(t => quadroLi(t)).join("")}</div>` : `<div class="empty">${f === "livres" ? (podeEditar() ? "Nenhuma tarefa livre. Toque em Nova tarefa para colocar a primeira." : "Nenhuma tarefa para pegar agora.") : f === "andamento" ? "Nada em andamento." : "Nenhuma feita ainda."}</div>`}</section>`;
+    <div class="seg" role="tablist">${[...(ehCoordEq() ? [] : [["livres", "Sem grupo", livres.length]]), ["andamento", ehCoordEq() ? "A fazer" : "Com os grupos", andamento.length], ["feitas", "Feitas", feitas.length]].map(([k, l, n]) => `<button type="button" data-q-filtro="${k}" aria-pressed="${f === k}">${l} <small>${n}</small></button>`).join("")}</div>
+    <section class="panel">${lista.length ? `<div class="list">${lista.map(t => quadroLi(t)).join("")}</div>` : `<div class="empty">${f === "livres" ? "Nenhuma tarefa sem grupo. Toque em Nova tarefa para colocar a primeira." : f === "andamento" ? (ehCoordEq() ? "Nenhuma tarefa para a sua equipe agora." : "Nenhuma tarefa com os grupos.") : "Nenhuma feita ainda."}</div>`}</section>`;
 }
 /* Sala da equipe (só na demo): a equipe trabalha junta num lugar só. Meta da equipe, link de indicação da equipe,
    tarefas com quem faz, eventos e recados. Recados em config sala-<top>-<equipe> {msgs:[{id,txt,por,em}]}. */
@@ -6761,6 +6764,7 @@ document.addEventListener("click", e => {
   if (d.grpEd) { grupoForm(d.grpEd === "novo" ? null : d.grpEd); return; }
   if (d.qNovo || d.qEd) { quadroForm(d.qEd || null); return; }
   if (d.qPegar || d.qDevolver || d.qFeito) { quadroMarcar(d.qPegar || d.qDevolver || d.qFeito, d.qPegar ? "pegar" : d.qDevolver ? "devolver" : "feito", d.qGrupo); return; }
+  if (d.metaTar) { S.metaAba = "quadro"; S.qFiltro = ""; go("meta"); return; }
   if (d.qFiltro) { S.qFiltro = d.qFiltro; render(); return; }
   if (d.sala) { S.salaEq = d.sala; S.metaAba = "grupo"; if (S.view !== "meta") go("meta"); else render(); return; }
   if (d.salaLink) { const l = indLink(d.salaLink), msg = `Equipe ${d.salaLink}: vamos juntos levar mais homens ao ${topName()}! Indique um amigo aqui, leva 1 minuto: ${l}`; window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank", "noopener"); return; }
