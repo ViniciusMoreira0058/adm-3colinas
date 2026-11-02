@@ -5494,7 +5494,12 @@ function vMetaTarefas(D) {
 const ACAO_CAPTAR = ["Apresentação em igreja", "Panfletagem", "Pré-TOP", "Encontro de apresentação"];
 const ACAO_CUIDAR = ["Encontro de legendários", "Culto ou célula", "Confraternização", "Trilha ou treino", "Ação social"];
 const ACAO_TIPOS = [...ACAO_CAPTAR, ...ACAO_CUIDAR, "Outro"];
-const acaoCuidar = a => ACAO_CUIDAR.includes(a.tipo);   // evento com os legendários (cuidar) x divulgação (trazer senderistas)
+const acaoCuidar = a => a.objetivo ? a.objetivo === "cuidar" : ACAO_CUIDAR.includes(a.tipo);
+/* Objetivo do evento: captar (Divulgação), cuidar (Legendários) ou outro com texto livre (a.objetivo, a.objetivoTxt) */
+const acaoObj = a => a.objetivo === "outro" ? { k: "outro", tag: a.objetivoTxt || "Outro", cls: "ev-outro", txt: a.objetivoTxt || "" }
+  : acaoCuidar(a) ? { k: "cuidar", tag: "Legendários", cls: "ev-cuidar", txt: "Cuidar dos legendários: estar junto de quem já passou pelo TOP e fortalecer a irmandade." }
+  : { k: "captar", tag: "Divulgação", cls: "ev-captar", txt: "Trazer senderistas: apresentar o Legendários e levar mais homens para o próximo TOP." };
+const acaoTag = a => { const o = acaoObj(a); return `<span class="tag ${o.cls}">${esc(o.tag)}</span>`; };   // evento com os legendários (cuidar) x divulgação (trazer senderistas)
 const ACAO_LS = "adm3-acao-link";
 const acaoDocMeu = () => "acao-" + curTopId() + "-" + (ME.id || "eu");
 function acoesTodas() { const pre = "acao-" + curTopId() + "-"; return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k }))).sort((a, b) => String(a.data + a.hora).localeCompare(String(b.data + b.hora))); }
@@ -5502,7 +5507,7 @@ function acaoConfirmados(a) {
   if (DEMO) { try { return (JSON.parse(localStorage.getItem(ACAO_LS) || "[]") || []).filter(x => x.acao === a.id); } catch { return []; } }
   return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`acaopres-${curTopId()}-${a.id}-`)).map(([, d]) => d);
 }
-const acaoLink = a => { const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: a.equipe };
+const acaoLink = a => { const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: SALA() && acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, ...(SALA() ? { v: 2, x: a.aberto ? 1 : 0 } : {}) };
   return `${location.origin}${DEMO ? location.pathname.replace(/[^/]*$/, "") + "acao.html" : "/api/convite"}?t=${encodeURIComponent(a.token)}&top=${encodeURIComponent(curTopId())}&a=${encodeURIComponent(a.id)}&i=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(info)))))}${DEMO ? "&demo=1" : ""}`; };
 const acaoQuando = a => { const d = a.data ? new Date(a.data + "T12:00:00") : null; return (d ? d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) : "data a definir") + (a.hora ? " às " + a.hora : ""); };
 function acaoSalvar(doc, item, msg, apagar) {
@@ -5523,6 +5528,9 @@ function acaoForm(a) {
   const novo = !a; a = a || { tipo: ACAO_TIPOS[0], equipe: ehCoordEq() ? ME.equipeLgnd : "", data: "", hora: "19:00" };
   modal(`<h3>${novo ? "Novo evento" : "Editar evento"}</h3><div class="form">
     <div class="field full"><label for="ac-tp">Tipo</label><select id="ac-tp" name="tipo" class="sel"><optgroup label="Trazer senderistas">${ACAO_CAPTAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><optgroup label="Cuidar dos legendários">${ACAO_CUIDAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><option ${a.tipo === "Outro" ? "selected" : ""}>Outro</option></select></div>
+    ${SALA() ? `<div class="field"><label for="ac-ob">Objetivo</label><select id="ac-ob" name="objetivo" class="sel"><option value="">Pelo tipo do evento</option><option value="captar" ${a.objetivo === "captar" ? "selected" : ""}>Divulgação: trazer senderistas</option><option value="cuidar" ${a.objetivo === "cuidar" ? "selected" : ""}>Cuidar dos legendários</option><option value="outro" ${a.objetivo === "outro" ? "selected" : ""}>Outro (escrever)</option></select></div>
+    <div class="field" id="ac-obw" ${a.objetivo === "outro" ? "" : "hidden"}><label for="ac-obt">Qual objetivo?</label><input id="ac-obt" name="objetivoTxt" value="${esc(a.objetivoTxt || "")}" placeholder="ex.: Arrecadar alimentos" maxlength="40"></div>
+    <label class="field full ck-line"><input type="checkbox" name="aberto" ${a.aberto ? "checked" : ""}> Convite aberto: quem ainda não é legendário também pode confirmar</label>` : ""}
     <div class="field full"><label for="ac-ti">Título</label><input id="ac-ti" name="titulo" value="${esc(a.titulo || "")}" placeholder="ex.: Apresentação na Igreja Batista Central" required></div>
     <div class="field"><label for="ac-d">Dia</label><input id="ac-d" name="data" type="date" value="${esc(a.data || "")}" required></div>
     <div class="field"><label for="ac-h">Hora</label><input id="ac-h" name="hora" type="time" value="${esc(a.hora || "")}"></div>
@@ -5541,11 +5549,14 @@ function acaoForm(a) {
     if ($("#evResp")) { const E = fd.getAll("req-eq"), O = fd.getAll("req-o"), Hh = fd.getAll("req-h"), vis = new Set();
       resp = E.map((eq, i) => ({ eq: String(eq), oque: String(O[i] || "").trim(), homens: +Hh[i] || 0 })).filter(x => x.eq && !vis.has(x.eq) && vis.add(x.eq));
       if (!resp.length) { toast("Coloque pelo menos uma equipe."); return; } }
-    const item = { ...a, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: fd.get("tipo"), titulo, data,
+    const obj = SALA() ? { objetivo: String(fd.get("objetivo") || ""), objetivoTxt: fd.get("objetivo") === "outro" ? String(fd.get("objetivoTxt") || "").trim().slice(0, 40) : "", aberto: !!fd.get("aberto") } : {};
+    if (obj.objetivo === "outro" && !obj.objetivoTxt) { toast("Escreva qual é o objetivo."); return; }
+    const item = { ...a, ...obj, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: fd.get("tipo"), titulo, data,
       hora: String(fd.get("hora") || ""), local: String(fd.get("local") || "").trim(), endereco: String(fd.get("endereco") || "").trim(), equipe: resp ? resp[0].eq : String(fd.get("equipe") || ""), vagas: resp ? resp.reduce((n, x) => n + x.homens, 0) : +fd.get("vagas") || 0, ...(resp ? { resp } : {}),
       obs: String(fd.get("obs") || "").trim(), por: a.por || ME.adm || "", em: a.em || new Date().toISOString() };
     closeModal(); acaoSalvar(a.doc || acaoDocMeu(), item, novo ? "Evento criado: agora mande o link e o convite" : "Evento salvo"); });
   const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); acaoSalvar(a.doc, null, "Evento excluído", a.id); };
+  const ob = $("#ac-ob"); if (ob) ob.onchange = () => { $("#ac-obw").hidden = ob.value !== "outro"; if (ob.value === "outro") $("#ac-obt").focus(); };
   const box = $("#evResp"); if (!box) return;
   const tot = () => { const n = [...box.querySelectorAll('[name="req-h"]')].reduce((s, i) => s + (+i.value || 0), 0), q = box.children.length; $("#evTot").textContent = `${q} equipe(s)${n ? ` · ${n} homens` : ""}`; };
   const usadas = () => [...box.querySelectorAll('[name="req-eq"]')].map(x => x.value);
@@ -5554,6 +5565,20 @@ function acaoForm(a) {
   $("#evTodas").onclick = () => { const u = usadas(); equipesUsadas().filter(e => !u.includes(e)).forEach(add); tot(); toast("Todas as equipes no evento. Tire as que não vão."); };
   box.addEventListener("click", e => { const b = e.target.closest("[data-ev-tira]"); if (!b) return; if (box.children.length > 1) b.closest(".ev-resp").remove(); else toast("O evento precisa de pelo menos uma equipe."); tot(); });
   box.addEventListener("input", tot); tot();
+}
+async function acaoXlsx(a) {
+  const C = acaoConfirmados(a), dt = v => v ? new Date(v).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+  try { const X = await carregarXlsx(), wb = X.utils.book_new();
+    const ws = X.utils.aoa_to_sheet([["Nome", "É legendário?", "Nº de legendário", "Área que serve", "Telefone", "Igreja", "Pode contribuir com", "Confirmou em"],
+      ...C.map(x => [x.nome || "", x.leg === false ? "Ainda não" : "Sim", x.num || "", x.equipe || "", x.tel || "", x.igreja || "", x.info || "", dt(x.em)])]);
+    ws["!cols"] = [{ wch: 30 }, { wch: 13 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 45 }, { wch: 14 }];
+    X.utils.book_append_sheet(wb, ws, "Confirmados");
+    const R = acaoResp(a), ev = X.utils.aoa_to_sheet([["Evento", a.titulo], ["Tipo", a.tipo], ["Objetivo", acaoObj(a).tag], ["Quando", acaoQuando(a)], ["Local", [a.local, a.endereco].filter(Boolean).join(" · ")], ["Recado", a.obs || ""],
+      ["Confirmados", C.length], ["Legendários", C.filter(x => x.leg !== false).length], ["Ainda não legendários", C.filter(x => x.leg === false).length], [],
+      ["Equipe", "O que faz", "Homens", "Confirmados da equipe"], ...R.map(x => [x.eq, x.oque || "", x.homens || 0, C.filter(c => c.equipe === x.eq).length])]);
+    ev["!cols"] = [{ wch: 22 }, { wch: 50 }, { wch: 10 }, { wch: 20 }]; X.utils.book_append_sheet(wb, ev, "Evento");
+    X.writeFile(wb, `evento-${a.titulo.replace(/[^\wÀ-ú -]/g, "").slice(0, 40).trim().replace(/\s+/g, "-")}-${a.data}.xlsx`); toast(`Planilha com ${C.length} confirmado(s)`);
+  } catch (e) { toast("Não consegui gerar a planilha. " + (e.message || "")); }
 }
 async function acaoPlanoPdf(a) {
   const R = acaoResp(a).length ? acaoResp(a) : [{ eq: a.equipe, oque: "", homens: a.vagas || 0 }], C0 = acaoConfirmados(a), tot = R.reduce((n, x) => n + (x.homens || 0), 0);
@@ -5565,8 +5590,9 @@ async function acaoPlanoPdf(a) {
     doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.text(l, x + 5, X.y + 6.5, { charSpace: 0.5 });
     doc.setTextColor(255, 255, 255); doc.setFontSize(9.5); doc.text(doc.splitTextToSize(v, cw - 8).slice(0, 2), x + 5, X.y + 11.5); });
   X.y += 26;
-  const missao = acaoCuidar(a) ? "Cuidar dos legendários: estar junto de quem já passou pelo TOP e fortalecer a irmandade." : "Trazer senderistas: apresentar o Legendários e levar mais homens para o próximo TOP.";
+  const missao = acaoObj(a).txt || acaoObj(a).tag;
   doc.setTextColor(255, 210, 170); doc.setFont("helvetica", "italic"); doc.setFontSize(10); let ml = doc.splitTextToSize("Missão: " + missao, W - 28); doc.text(ml, 14, X.y); X.y += ml.length * 4.6 + 2;
+  if (a.aberto) { doc.setTextColor(225, 214, 202); doc.setFont("helvetica", "normal"); doc.text("Convite aberto: pode trazer quem ainda não é legendário.", 14, X.y); X.y += 6.6; }
   if (a.obs) { doc.setTextColor(225, 214, 202); doc.setFont("helvetica", "normal"); ml = doc.splitTextToSize("Recado: " + a.obs, W - 28); doc.text(ml, 14, X.y); X.y += ml.length * 4.6 + 2; }
   X.y += 4; doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("QUEM FAZ O QUÊ", 14, X.y, { charSpace: 1 });
   doc.setDrawColor(...C.LARANJA); doc.setLineWidth(0.3); doc.line(14 + doc.getTextWidth("QUEM FAZ O QUÊ") + 14 * 1 + 4, X.y - 1.2, W - 14, X.y - 1.2); X.y += 6;
@@ -5614,13 +5640,14 @@ function acaoVer(a) {
   const C = acaoConfirmados(a), l = acaoLink(a), R = acaoResp(a), msg = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}${R.length ? "\n\n" + R.map(x => `• ${x.eq}${x.oque ? ": " + x.oque : ""}${x.homens ? ` (${x.homens} homens)` : ""}`).join("\n") : ""}\n\n${R.length ? "Contamos com você!" : `A equipe ${a.equipe} convida você!`} Confirme sua presença: ${l}`, pode = podeEditar() || (ehCoordEq() && a.equipe === ME.equipeLgnd);
   modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${esc(a.tipo)} · ${esc(acaoEquipeTxt(a))} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
     <div class="actions" style="flex-wrap:wrap"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Mandar link no WhatsApp</a>
-      <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button>${SALA() ? `<button class="btn" type="button" id="acPlano">${ico("upload")} PDF do evento</button>` : ""}${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}</div>
+      <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button>${SALA() ? `<button class="btn" type="button" id="acPlano">${ico("upload")} PDF do evento</button>${podeEditar() && !ehCoordEq() ? `<button class="btn" type="button" id="acXls">${ico("upload")} Planilha dos confirmados</button>` : ""}` : ""}${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}</div>
     ${R.length ? `<section class="panel" style="margin-top:6px"><h3>Quem faz o quê <small>${R.reduce((n, x) => n + (x.homens || 0), 0)} homens</small></h3><div class="list">${R.map(x => { const c = C.filter(y => y.equipe === x.eq).length; return `<div class="li ${x.eq === ME.equipeLgnd ? "ev-minha" : ""}"><span class="grow"><b>${esc(x.eq)}</b><small class="hint" style="display:block">${esc(x.oque || "a combinar")}</small></span><span class="chip ${x.homens && c >= x.homens ? "ok" : ""}">${c}/${x.homens || "-"}</span></div>`; }).join("")}</div></section>` : ""}
     <section class="panel" style="margin-top:6px"><h3>Confirmados <small>${C.length}${a.vagas ? " de " + a.vagas : ""}</small></h3>
-      ${C.length ? `<div class="list">${C.map(x => `<div class="li"><span class="grow"><b>${esc(x.nome)}</b> <span class="hint">${esc(x.equipe || "")}</span></span></div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
+      ${C.length ? `<div class="list">${C.map(x => `<div class="li"><span class="grow"><b>${esc(x.nome)}</b> ${x.leg === false ? `<span class="chip wait">ainda não é legendário</span>` : `<span class="hint">${esc(x.equipe || "")}${x.num ? " · nº " + esc(x.num) : ""}</span>`}${x.igreja || x.info ? `<small class="hint" style="display:block">${esc([x.igreja, x.info].filter(Boolean).join(" · "))}</small>` : ""}</span></div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
   $("#acCopiar").onclick = () => copiarTexto(l, "Link copiado");
   $("#acPdf").onclick = () => acaoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
+  const xl = $("#acXls"); if (xl) xl.onclick = () => acaoXlsx(a);
   const pl = $("#acPlano"); if (pl) pl.onclick = () => acaoPlanoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
   const ed = $("#acEd"); if (ed) ed.onclick = () => { closeModal(); acaoForm(a); };
 }
@@ -5643,7 +5670,7 @@ function vAgenda() {
       return `<button class="acao-c ag-tar ${minha ? "minha" : ""} ${t.feito ? "feito" : ""}" type="button" data-meta-tar="1">${dia(t.prazo)}<span class="grow"><b>${esc(t.titulo)} <span class="chip ${t.feito ? "ok" : venc ? "bad" : "wait"}">${t.feito ? "feita" : venc ? "atrasada" : "tarefa"}</span></b><small class="hint"><span class="tag ${m[1]}">${m[0]}</span> prazo · ${g ? esc(g.nome) : "sem grupo"}${t.resp ? " · com " + esc(t.resp.split(" ")[0]) : ""}</small></span></button>`; }
     const a = x.a, c = acaoConfirmados(a).length;
     return `<button class="acao-c ${acaoTemEq(a, ME.equipeLgnd) ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
-      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `<span class="tag ${acaoCuidar(a) ? "ev-cuidar" : "ev-captar"}">${acaoCuidar(a) ? "Legendários" : "Divulgação"}</span> ` : ""}${esc(a.tipo)} · ${esc(acaoEquipeTxt(a))}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
+      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `${acaoTag(a)} ` : ""}${esc(a.tipo)} · ${esc(acaoEquipeTxt(a))}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
       <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
   const meses = []; L.forEach(x => { const m = mes(x.data), g = meses[meses.length - 1]; if (g && g.m === m) g.l.push(x); else meses.push({ m, l: [x] }); });
   const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
@@ -5934,7 +5961,7 @@ function grupoCard(g, D, aberto) {
         ${aberto && pode ? `<div class="actions"><button class="btn sm" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button></div>` : ""}</div></div>
     ${aberto ? `<h4>Tarefas do grupo <small class="hint">${N.T.filter(t => t.feito).length}/${N.T.length} feitas</small></h4>
       ${pend.length ? `<div class="list">${pend.map(t => quadroLi(t, true)).join("")}</div>` : `<p class="hint">Nenhuma tarefa pendente. ${pode ? `<button class="linkbtn" type="button" data-meta-aba="quadro">Pegar uma no quadro ›</button>` : ""}</p>`}
-      <h4>Próximos eventos</h4>${N.prox.length ? `<div class="acao-lista">${N.prox.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint"><span class="tag ${acaoCuidar(a) ? "ev-cuidar" : "ev-captar"}">${acaoCuidar(a) ? "Legendários" : "Divulgação"}</span> ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div>` : `<p class="hint">Nenhum evento marcado.</p>`}`
+      <h4>Próximos eventos</h4>${N.prox.length ? `<div class="acao-lista">${N.prox.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${acaoTag(a)} ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div>` : `<p class="hint">Nenhum evento marcado.</p>`}`
       : `<div class="actions"><button class="btn sm" type="button" data-sala="${esc(g.id)}">Abrir ›</button>${pend.length ? `<span class="hint">${pend.length} tarefa(s) em andamento</span>` : ""}</div>`}
   </section>`;
 }

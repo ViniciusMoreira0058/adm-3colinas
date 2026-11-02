@@ -62,7 +62,11 @@ begin
     'top', t, 'acao', a, 'em', now(),
     'nome',   left(trim(coalesce(c->>'nome', '')), 80),
     'equipe', left(trim(coalesce(c->>'equipe', '')), 40),
-    'tel',    left(trim(coalesce(c->>'tel', '')), 30)));
+    'tel',    left(trim(coalesce(c->>'tel', '')), 30),
+    'leg',    case when c->>'leg' = 'false' then false else true end,
+    'num',    left(regexp_replace(coalesce(c->>'num', ''), '[^0-9A-Za-z./-]', '', 'g'), 12),
+    'igreja', left(trim(coalesce(c->>'igreja', '')), 60),
+    'info',   left(trim(coalesce(c->>'info', '')), 300)));
   return novo;
 end $$;
 revoke all on function public.adm_acao_confirmar(text, text, text, jsonb) from public;
