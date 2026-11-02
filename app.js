@@ -6002,7 +6002,7 @@ function vQuadro(D) {
 }
 /* Sala da equipe (só na demo): a equipe trabalha junta num lugar só. Meta da equipe, link de indicação da equipe,
    tarefas com quem faz, eventos e recados. Recados em config sala-<top>-<equipe> {msgs:[{id,txt,por,em}]}. */
-const SALA = () => DEMO;
+const SALA = () => true;
 const salaId = eq => "sala-" + curTopId() + "-" + norm(eq).replace(/[^a-z0-9]+/g, "-");
 function tarResp(id, nome) {
   const t = tarLista(metaDados()).find(x => x.id === id); if (!t || !podeTar(t)) { toast("Só a equipe " + (t ? t.equipe : "") + " ou a ADM mudam isso."); return; }
