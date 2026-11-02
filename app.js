@@ -1083,7 +1083,7 @@ function vAoVivo() {
 }
 setInterval(() => { if (S.view === "aovivo" && !$("#modalRoot").innerHTML) render(); }, 30000);
 /* Ao vivo 2 (01/11/2026, só DEMO): marcar daqui, contagem na pista, ocorrência rápida, pôr do sol, aviso 10 min antes e últimas marcações */
-const AOVIVO2 = () => DEMO;
+const AOVIVO2 = () => false;   // tirado da demo em 02/11/2026 a pedido do Vinicius (código guardado)
 const OC_RAPIDA = () => true;    // + Ocorrência rápida no Ao vivo: app real desde 01/11/2026
 const POR_DO_SOL = () => true;   // pôr do sol no Ao vivo: app real desde 01/11/2026
 const avAvisoLigado = () => store.get("adm3-av-aviso") === "1";
@@ -1381,7 +1381,7 @@ function vGuia() {
 /* ---------- NFC 3COLINAS: ficha de saúde de cada participante (formulário por link), tag NFC no pescoço e atendimento médico ----------
    Dados em config/saude-<pessoaId> {token, r:{...respostas}, respondidoEm, tagEm, tagPor}. A tag guarda só um link com o código (token),
    nunca os dados: a ficha abre no app para quem está logado. Atendimento vira uma ocorrência (tipo "Atendimento médico") com sinais vitais. */
-const NFC = () => DEMO;
+const NFC = () => false;   // tirado da demo em 02/11/2026 a pedido do Vinicius (código guardado)
 /* Visual 2 (só na demo por enquanto): telas de carregamento com esqueleto, telas vazias com ícone e versão de computador mais larga */
 const D2 = () => true;
 // o que cada tela precisa já ter carregado para aparecer (enquanto não chega, mostra o esqueleto)
@@ -1731,7 +1731,7 @@ var nfcPendente = (new URLSearchParams(location.search).get("nfc") || "");
 /* ---------- Campo (só na demo por enquanto): o que a equipe usa com o TOP rodando ----------
    Chamada por família (config chamada-<top>-<id>), mural rápido (config mural-<top>), escala de turnos (config turnos-<top>),
    entregas no camp (config entregas-<top>), clima na pista (Open-Meteo, sem chave) e ADMs no mapa do Ao vivo (config loc-<top>-<membro>). */
-const CAMPO = () => DEMO;
+const CAMPO = () => false;   // tirado da demo em 02/11/2026 a pedido do Vinicius (código guardado)
 const COM = () => true;   // aba Comunicação: liberada no app real em 31/10/2026 (o resto do Campo segue só na demo)
 const cfgDe = id => (S.cfgDocs || {})[id] || null;
 const campoId = k => `${k}-${curTopId()}`;
@@ -2289,7 +2289,7 @@ document.addEventListener("change", e => { const i = e.target; if (i && i.matche
 document.addEventListener("input", e => { if (e.target && e.target.id === "celQ") { S.celQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $("#celQ"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } } });
 
 /* ---------- TOP completo (só na demo): Check-in + Mochila, Remédios, Emergência, Transporte e Financeiro ---------- */
-const TOP2 = () => DEMO;
+const TOP2 = () => false;   // tirado da demo em 02/11/2026 a pedido do Vinicius (código guardado)
 const TOP2_VIEWS = ["checkin", "remedios", "transporte"];
 const TRANSP = () => true;   // Transporte (ônibus, vistoria, carros, ida/volta) liberado no app real em 01/11/2026; Check-in e Remédios seguem só na demo
 const TOP3 = () => true;   // Financeiro e Emergência: liberados no app real em 31/10/2026
@@ -5242,7 +5242,7 @@ function vPainelCoord() {
 const META = () => true;   // Meta do TOP, Agenda e próximo TOP: liberados no app real em 01/11/2026 (precisa do supabase/indicacoes.sql)
 const META_CURVA = [0, 0, 5, 15, 28, 42, 58, 75, 92, 108, 125, 142, 158, 165];   // acumulado no fim das semanas -13 … 0 (PDF)
 const META_CHECK = [[10, 10], [7, 45], [4, 90], [2, 125]];   // semana antes do TOP, mínimo (para 165)
-const IND_CANAIS = ["Indicação pessoal", "Igreja", "Redes sociais", "Panfletagem"];
+const IND_CANAIS = ["Indicação pessoal", "Igreja", "Redes sociais", "Panfletagem", "Evento"];
 const IND_ST = [{ v: "novo", l: "Sem contato", c: "wait" }, { v: "contatado", l: "Contatado", c: "" }, { v: "interessado", l: "Interessado", c: "ok" }, { v: "nao", l: "Não vai agora", c: "" }];
 const metaCfg = () => cfgDe("meta-" + curTopId()) || {};
 const diaISO = d => d.toISOString().slice(0, 10);
@@ -5275,7 +5275,9 @@ function indDoLink() {
 function indTodas() {
   const pre = "indic-" + curTopId() + "-", L = Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre) && k !== indCfgId()).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k })));
   const ids = new Set(L.map(x => x.id)), fora = new Set((cfgDe(indCfgId()) || {}).apagados || []);
-  return [...L, ...indDoLink().filter(x => !ids.has(x.id) && !fora.has(x.id)).map(x => ({ canal: "Indicação pessoal", status: "novo", ...x, origem: "link", por: "link" }))];
+  const doEvento = M2() ? acoesTodas().flatMap(a => acaoConfirmados(a).filter(x => x.leg === false && x.nome).map(x => ({ id: "ev" + a.id + hashCurto(confKey(x)), nome: x.nome, tel: x.tel || "", equipe: a.equipe || "", canal: "Evento", quem: "",
+    obs: ["Evento: " + a.titulo, x.igreja, x.info].filter(Boolean).join(" · "), status: "novo", em: x.em || (a.data + "T12:00:00"), origem: "evento", por: "evento" }))) : [];
+  return [...L, ...[...indDoLink().map(x => ({ canal: "Indicação pessoal", status: "novo", ...x, origem: "link", por: "link" })), ...doEvento.map(x => ({ ...x, doc: "link" }))].filter(x => !ids.has(x.id) && !fora.has(x.id))];
 }
 function indLinkForm() {
   const abrir = () => { const l = indLink(), msg = `Quer indicar um amigo para o próximo TOP dos Legendários 3 Colinas? Preencha aqui, leva 1 minuto: ${l}`;
@@ -5328,7 +5330,7 @@ function indForm(x) {
 function indSalvar(doc, item, msg, apagar) {
   if (doc === "link") {
     if (apagar) { save(() => api.set("config", indCfgId(), { ...(cfgDe(indCfgId()) || {}), apagados: [...((cfgDe(indCfgId()) || {}).apagados || []), apagar] }), msg); return; }
-    doc = indDocMeu(); const { doc: _d, origem: _o, ...x } = item; item = { ...x, origem: "link" };
+    doc = indDocMeu(); const { doc: _d, origem: _o, ...x } = item; item = { ...x, origem: _o === "evento" ? "evento" : "link" };
   }
   const L = ((S.cfgDocs || {})[doc] || {}).lista || [], id = apagar || item.id;
   const nova = L.filter(y => y.id !== id); if (item) nova.push(item);
@@ -5362,7 +5364,9 @@ function metaCoordCard() {
       <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : `<p class="hint">Sua equipe ainda não tem servidores contados para a meta.</p>`}
     <p class="hint" style="margin:0">Placar geral: <b class="num">${D.inscritos}</b> inscritos de ${D.meta} · meta para hoje ${D.metaHoje}</p>
     <div class="actions"><button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button><button class="btn" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>${mine.length ? `<span class="hint">${mine.length} indicação(ões) da equipe</span>` : ""}</div></section>
-  ${(() => { const T = tarLista(D).filter(t => t.equipe === ME.equipeLgnd && (t.sit === "atrasada" || t.sit === "semana")); return T.length ? `<section class="panel"><h3>Tarefas da equipe nesta semana <small>${T.length}</small><button class="linkbtn" type="button" data-meta-aba="eq">ver todas ›</button></h3><div class="list">${T.map(tarLi).join("")}</div></section>` : ""; })()}
+  ${M2() ? metaFaltamCoord() : ""}
+  ${M2() && "Notification" in window && Notification.permission === "default" ? `<section class="panel"><h3>${ico("bell")} Avisos no celular</h3><p class="hint" style="margin:0 0 8px">Ative para saber na hora quando a ADM mandar uma tarefa, e 2 dias antes de um evento se faltar gente da sua equipe.</p><div class="actions"><button class="btn primary" type="button" data-act="ativar-notif">${ico("bell")} Ativar avisos</button></div></section>` : ""}
+  ${(() => { const T = M2() ? [] : tarLista(D).filter(t => t.equipe === ME.equipeLgnd && (t.sit === "atrasada" || t.sit === "semana")); return T.length ? `<section class="panel"><h3>Tarefas da equipe nesta semana <small>${T.length}</small><button class="linkbtn" type="button" data-meta-aba="eq">ver todas ›</button></h3><div class="list">${T.map(tarLi).join("")}</div></section>` : ""; })()}
   ${(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 3); return A.length ? `<section class="panel"><h3>Próximos eventos <button class="linkbtn" type="button" data-go="agenda">agenda ›</button></h3><div class="acao-lista">${A.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.equipe)} · ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div></section>` : ""; })()}`;
 }
 function vMeta() {
@@ -5402,14 +5406,14 @@ function vMeta() {
   <section class="panel"><h3>${ehCoordEq() ? `Indicações da ${esc(ME.equipeLgnd || "equipe")}` : "Indicações"} <small>${filt.length}</small></h3>
     ${ehCoordEq() ? "" : `<div class="seg" role="group" aria-label="Filtro">${[["todas", "Todas"], ["atras", "Sem contato +48 h"], ["int", "Interessados"], ["insc", "Inscritos"]].map(([k, l]) => `<button type="button" data-ind-f="${k}" aria-pressed="${f === k || (k === "todas" && f === "equipe")}">${l}</button>`).join("")}</div>`}
     ${filt.length ? `<div class="list">${[...filt].sort((a, b) => (indAtrasada(b) - indAtrasada(a)) || String(b.em).localeCompare(String(a.em))).map(x => `<div class="li ind-li">
-      <div class="grow"><b>${esc(x.nome)}</b> ${st(x)}${x.origem === "link" ? ' <span class="tag">pelo link</span>' : ""}<br><small class="hint">${[x.equipe, x.canal, x.quem && "indicado por " + x.quem, haQuanto(x.em)].filter(Boolean).map(esc).join(" · ")}${x.obs ? " · " + esc(x.obs) : ""}</small></div>
+      <div class="grow"><b>${esc(x.nome)}</b> ${st(x)}${x.origem === "link" ? ' <span class="tag">pelo link</span>' : x.origem === "evento" ? ' <span class="tag ev-captar">do evento</span>' : ""}<br><small class="hint">${[x.equipe, x.canal, x.quem && "indicado por " + x.quem, haQuanto(x.em)].filter(Boolean).map(esc).join(" · ")}${x.obs ? " · " + esc(x.obs) : ""}</small></div>
       ${!ehCoordEq() && ed && !indInscrito(x) ? `<div class="actions">${tel(x) ? `<a class="btn sm" href="https://wa.me/${tel(x)}?text=${encodeURIComponent(`Olá ${x.nome.split(" ")[0]}, tudo bem? Aqui é da equipe ADM dos Legendários 3 Colinas. ${x.quem ? x.quem.split(" ")[0] + " indicou você para o próximo TOP" : "Você foi indicado para o próximo TOP"}. Posso te contar como funciona?`)}" target="_blank" rel="noopener" data-ind-zap="${esc(x.doc)}|${esc(x.id)}">${ico("wa")} Chamar</a>` : ""}
         <select class="sel sm" data-ind-st="${esc(x.doc)}|${esc(x.id)}" aria-label="Situação">${IND_ST.map(o => `<option value="${o.v}" ${x.status === o.v ? "selected" : ""}>${o.l}</option>`).join("")}</select>
         <button class="linkbtn" type="button" data-ind-ed="${esc(x.doc)}|${esc(x.id)}" aria-label="Editar">${ico("edit")}</button></div>` : ""}</div>`).join("")}</div>`
     : `<div class="empty">${I.length ? "Nada neste filtro." : "Nenhum nome indicado ainda. Cada servidor indica 5 nomes."}</div>`}
   </section>`;
   const aba = (SALA() ? ["grupo", "quadro", "ind", ...(ehCoordEq() ? [] : ["placar"])] : ["placar", "ind", "eq"]).includes(S.metaAba) ? S.metaAba : SALA() ? "grupo" : "placar";
-  return cab + metaAbas(aba) + (aba === "grupo" ? vGrupos(D) : aba === "quadro" ? vQuadro(D) : aba === "eq" ? vMetaFrentes(D) : aba === "ind" ? metaFaq() + pInd : metaSemana(D) + pPlacar);
+  return cab + metaAbas(aba) + (aba === "grupo" ? vGrupos(D) : aba === "quadro" ? vQuadro(D) : aba === "eq" ? vMetaFrentes(D) : aba === "ind" ? metaFaq() + pInd : M2() ? metaResumo2(D) + pPlacar.split('<section class="panel"><h3>Equipes')[0] : metaSemana(D) + pPlacar);
 }
 document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.qResp) { quadroMarcar(t.dataset.qResp, "resp", t.value); return; } if (t && t.dataset && t.dataset.qDar && t.value) { quadroMarcar(t.dataset.qDar, "pegar", t.value); return; } if (t && t.dataset && t.dataset.salaEq != null) { S.salaEq = t.value; render(); return; } if (t && t.dataset && t.dataset.tarResp) { tarResp(t.dataset.tarResp, t.value); return; } if (t && t.dataset && t.dataset.tselId && S.tarSel) { t.checked ? S.tarSel.add(t.dataset.tselId) : S.tarSel.delete(t.dataset.tselId); render(); return; } if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
 document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[data-ind-zap]"); if (!a) return;
@@ -5646,12 +5650,18 @@ function acaoVer(a) {
       const m = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}\n\n*Equipe ${x.eq}*, precisamos de você${x.homens ? ` (${x.homens} homens)` : ""}${x.oque ? ":\n" + x.oque : "."}\n\nConfirme aqui: ${acaoLink(a, x)}`;
       return `<div class="li ${x.eq === ME.equipeLgnd ? "ev-minha" : ""}"><span class="grow"><b>${esc(x.eq)}</b><small class="hint" style="display:block;white-space:normal">${esc(x.oque || "a combinar")}</small>
         ${pode ? `<span class="actions" style="margin-top:4px"><a class="btn sm" style="color:var(--fg)" href="https://wa.me/?text=${encodeURIComponent(m)}" target="_blank" rel="noopener">${ico("wa")} Link da equipe</a><button class="linkbtn" type="button" data-ev-copia="${i}">copiar</button></span>` : ""}</span><span class="chip ${x.homens && c >= x.homens ? "ok" : ""}">${c}/${x.homens || "-"}</span></div>`; }).join("")}</div></section>` : ""}
+    ${M2() && a.data <= hojeISO() && (podeEditar() || a.por === ME.adm) && C.length + 1 ? `<section class="panel" style="margin-top:6px"><h3>Quem foi de verdade ${a.foram ? `<small>${acaoPresentes(a)} foram</small>` : ""}</h3>
+      <p class="hint" style="margin:0 0 6px">Marque quem apareceu. É isso que conta como presença da equipe no Resumo.</p>
+      ${C.length ? `<div class="list">${C.map(x => `<label class="li ck-line" style="cursor:pointer"><input type="checkbox" class="ev-foi" value="${esc(confKey(x))}" ${!a.foram || a.foram.includes(confKey(x)) ? "checked" : ""}> <span class="grow"><b>${esc(x.nome)}</b> <span class="hint">${esc(x.leg === false ? "convidado" : x.equipe || "")}</span></span></label>`).join("")}</div>` : ""}
+      <div class="actions" style="margin-top:8px"><label class="hint" for="evExtra">Foram sem confirmar:</label><input id="evExtra" type="number" min="0" value="${+a.foramExtra || 0}" style="width:80px"><button class="btn primary sm" type="button" id="evForam">${ico("check")} Salvar presença</button></div></section>` : ""}
     <section class="panel" style="margin-top:6px"><h3>Confirmados <small>${C.length}${a.vagas ? " de " + a.vagas : ""}</small></h3>
       ${C.length ? `<div class="list">${C.map(x => `<div class="li"><span class="grow"><b>${esc(x.nome)}</b> ${x.leg === false ? `<span class="chip wait">ainda não é legendário</span>` : `<span class="hint">${esc(x.equipe || "")}${x.num ? " · nº " + esc(x.num) : ""}</span>`}${x.igreja || x.info ? `<small class="hint" style="display:block">${esc([x.igreja, x.info].filter(Boolean).join(" · "))}</small>` : ""}</span></div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
   $("#acCopiar").onclick = () => copiarTexto(l, "Link copiado");
   $("#acPdf").onclick = () => acaoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
   const xl = $("#acXls"); if (xl) xl.onclick = () => acaoXlsx(a);
+  const fo = $("#evForam"); if (fo) fo.onclick = () => { const foram = [...document.querySelectorAll(".ev-foi:checked")].map(i => i.value), extra = Math.max(0, +$("#evExtra").value || 0);
+    closeModal(); acaoSalvar(a.doc, { ...a, foram, foramExtra: extra, foramEm: new Date().toISOString(), foramPor: ME.adm || "" }, `${foram.length + extra} presença(s) marcada(s)`); };
   document.querySelectorAll("[data-ev-copia]").forEach(b => b.onclick = () => copiarTexto(acaoLink(a, R[+b.dataset.evCopia]), "Link da equipe copiado"));
   const pl = $("#acPlano"); if (pl) pl.onclick = () => acaoPlanoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
   const ed = $("#acEd"); if (ed) ed.onclick = () => { closeModal(); acaoForm(a); };
@@ -5676,7 +5686,8 @@ function vAgenda() {
     const a = x.a, c = acaoConfirmados(a).length;
     return `<button class="acao-c ${acaoTemEq(a, ME.equipeLgnd) ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
       <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `${acaoTag(a)} ` : esc(a.tipo) + " · "}${esc(acaoEquipeTxt(a))}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
-      <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
+      ${M2() && a.data < hoje ? (a.foram ? `<span class="chip ok">${acaoPresentes(a)} foram</span>` : podeEditar() || a.por === ME.adm ? `<span class="chip wait">marcar quem foi</span>` : `<span class="chip">${c} confirmaram</span>`)
+        : `<span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span>`}</button>`; };
   const meses = []; L.forEach(x => { const m = mes(x.data), g = meses[meses.length - 1]; if (g && g.m === m) g.l.push(x); else meses.push({ m, l: [x] }); });
   const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
   return `<div class="head"><div><h2>Agenda</h2><p>Eventos para levar o Legendários a mais homens, e o TOP. Toque num evento para ver quem vai e mandar o link.</p></div>
@@ -5899,9 +5910,10 @@ const quadroId = () => "metatar-" + curTopId() + "-quadro";
 const quadro = () => ((cfgDe(quadroId()) || {}).lista || []).slice().sort((a, b) => (!!a.feito - !!b.feito) || String(a.prazo || "9").localeCompare(String(b.prazo || "9")));
 const quadroLivres = () => { const g = meuGrupo(); return ehCoordEq() ? (g ? quadro().filter(t => !t.feito && (t.pegou || {}).grupo === g.id).length : 0) : quadro().filter(t => !t.feito && !t.pegou).length; };
 const podeGrupo = gid => podeEditar() || (ehCoordEq() && (meuGrupo() || {}).id === gid);
-function quadroSalvar(lista, msg) {
-  (async () => { try { await api.set("config", quadroId(), { lista }); if (msg) toast(msg); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
+function quadroSalvar(lista, msg, avisar) {
+  (async () => { try { await api.set("config", quadroId(), { lista, ...(avisar ? { avisar } : {}) }); if (msg) toast(msg); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
 }
+const quadroAviso = (g, t) => { const G = grupos().find(x => x.id === g); return G ? { grupo: G.nome, equipes: G.equipes || [], titulo: t.titulo, prazo: t.prazo || "", em: new Date().toISOString() } : null; };
 function quadroMarcar(id, op, val) {
   const L = quadro(), t = L.find(x => x.id === id); if (!t) return;
   const g = op === "pegar" ? (val || (meuGrupo() || {}).id) : (t.pegou || {}).grupo;
@@ -5909,7 +5921,7 @@ function quadroMarcar(id, op, val) {
   const agora = new Date().toISOString(), nome = (grupos().find(x => x.id === g) || {}).nome || "";
   const n = op === "pegar" ? { ...t, ...(ehCoordEq() ? {} : { para: g }), pegou: { grupo: g, por: ME.adm || "", em: agora } } : op === "devolver" ? { ...t, pegou: null, resp: "", feito: false }
     : op === "resp" ? { ...t, resp: val } : { ...t, feito: !t.feito, feitoEm: t.feito ? "" : agora, feitoPor: t.feito ? "" : ME.adm || "" };
-  quadroSalvar(L.map(x => x.id === id ? n : x), op === "pegar" ? `Tarefa com ${nome} 💪` : op === "devolver" ? "Tarefa voltou para as livres" : op === "feito" ? (n.feito ? "Feito! 🙌" : "Desmarcada") : "");
+  quadroSalvar(L.map(x => x.id === id ? n : x), op === "pegar" ? `Tarefa com ${nome} 💪` : op === "devolver" ? "Tarefa voltou para as livres" : op === "feito" ? (n.feito ? "Feito! 🙌" : "Desmarcada") : "", op === "pegar" && !ehCoordEq() ? quadroAviso(g, t) : null);
 }
 function quadroForm(id) {
   if (!podeEditar()) { toast("Quem cria as tarefas é a ADM."); return; }
@@ -5924,8 +5936,10 @@ function quadroForm(id) {
     <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
   fd => { const titulo = String(fd.get("titulo") || "").trim(); if (!titulo) return; const para = String(fd.get("para") || "");
     const n = { ...t, id: t.id || "q" + Date.now().toString(36), titulo, missao: fd.get("missao"), prazo: String(fd.get("prazo") || ""), para, obs: String(fd.get("obs") || "").trim(), por: t.por || ME.adm || "", em: t.em || new Date().toISOString() };
-    if (para && !t.pegou) n.pegou = { grupo: para, por: ME.adm || "", em: new Date().toISOString() };   // tarefa direcionada já nasce com o grupo
-    closeModal(); const L = quadro(); quadroSalvar(id ? L.map(x => x.id === id ? n : x) : [...L, n], id ? "Tarefa salva" : "Tarefa no quadro"); });
+    const novoG = para && (!t.pegou || t.pegou.grupo !== para);
+    if (novoG) n.pegou = { grupo: para, por: ME.adm || "", em: new Date().toISOString() };   // tarefa direcionada já nasce com o grupo
+    else if (!para && t.pegou && M2()) n.pegou = null;
+    closeModal(); const L = quadro(); quadroSalvar(id ? L.map(x => x.id === id ? n : x) : [...L, n], id ? "Tarefa salva" : "Tarefa no quadro", novoG ? quadroAviso(para, n) : null); });
   const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); quadroSalvar(quadro().filter(x => x.id !== id), "Tarefa excluída"); };
 }
 function grupoForm(id) {
@@ -5948,7 +5962,7 @@ function grupoNumeros(g, D) {
   const eqs = g.equipes || [], I = indTodas().filter(x => eqs.includes(x.equipe)), E = metaEquipes(D).filter(e => eqs.includes(e.e)), A = acoesTodas().filter(a => eqs.some(e => acaoTemEq(a, e))), hoje = hojeISO();
   const cuidar = A.filter(a => acaoCuidar(a) && a.data < hoje), T = quadro().filter(t => (t.pegou || {}).grupo === g.id);
   return { nomes: I.length, metaNomes: E.reduce((s, e) => s + e.metaNomes, 0), insc: I.filter(indInscrito).length, metaInsc: E.reduce((s, e) => s + e.metaInsc, 0),
-    encontros: cuidar.length, presentes: cuidar.reduce((s, a) => s + acaoConfirmados(a).length, 0), prox: A.filter(a => a.data >= hoje), T, servidores: S.P.filter(p => p.tipo === "legendario" && eqs.includes(p.equipe)).length };
+    encontros: cuidar.length, presentes: cuidar.reduce((s, a) => s + (M2() && a.foram ? acaoPresentes(a) : acaoConfirmados(a).length), 0), prox: A.filter(a => a.data >= hoje), T, servidores: S.P.filter(p => p.tipo === "legendario" && eqs.includes(p.equipe)).length };
 }
 function grupoCard(g, D, aberto) {
   const N = grupoNumeros(g, D), pode = podeGrupo(g.id), pend = N.T.filter(t => !t.feito), temLink = !!(cfgDe(indCfgId()) || {}).token;
@@ -5962,7 +5976,7 @@ function grupoCard(g, D, aberto) {
         ${aberto ? `<div class="actions">${podeIndicar() ? `<button class="btn sm primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${temLink ? (g.equipes || []).filter(e => !ehCoordEq() || e === ME.equipeLgnd).map(e => `<button class="btn sm" type="button" data-sala-link="${esc(e)}">${ico("wa")} Link ${esc(e)}</button>`).join("") : ""}</div>` : ""}</div>
       <div class="grp-box"><span class="tag ev-cuidar">Cuidar dos legendários</span>
         <div class="grp-num"><b class="num">${N.encontros}</b><small>encontro(s) feitos</small></div>
-        <div class="grp-num"><b class="num">${N.presentes}</b><small>presenças confirmadas</small></div>
+        <div class="grp-num"><b class="num">${N.presentes}</b><small>${M2() ? "legendários nos encontros" : "presenças confirmadas"}</small></div>
         ${aberto && pode ? `<div class="actions"><button class="btn sm" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button></div>` : ""}</div></div>
     ${aberto ? `<h4>Tarefas do grupo <small class="hint">${N.T.filter(t => t.feito).length}/${N.T.length} feitas</small></h4>
       ${pend.length ? `<div class="list">${pend.map(t => quadroLi(t, true)).join("")}</div>` : `<p class="hint">Nenhuma tarefa pendente. ${pode ? `<button class="linkbtn" type="button" data-meta-aba="quadro">Pegar uma no quadro ›</button>` : ""}</p>`}
@@ -6003,6 +6017,13 @@ function vQuadro(D) {
 /* Sala da equipe (só na demo): a equipe trabalha junta num lugar só. Meta da equipe, link de indicação da equipe,
    tarefas com quem faz, eventos e recados. Recados em config sala-<top>-<equipe> {msgs:[{id,txt,por,em}]}. */
 const SALA = () => true;
+/* Melhorias 2 (só na demo): sem tarefas antigas/placar semanal, convidado de evento vira indicação, quem foi de verdade, avisos ao coordenador */
+const M2 = () => DEMO;
+const hashCurto = t => { let h = 0; for (const c of String(t)) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+const confKey = x => norm(x.nome || "").trim() + "|" + telLimpo(x.tel || "").slice(-8);
+const acaoPresentes = a => a.foram ? acaoConfirmados(a).filter(x => a.foram.includes(confKey(x))).length + (+a.foramExtra || 0) : null;
+const acaoFaltam = (a, eq) => { const r = acaoResp(a).find(x => x.eq === eq); if (!r || !r.homens) return 0; return Math.max(0, r.homens - acaoConfirmados(a).filter(c => c.equipe === eq).length); };
+const diaMais = n => new Date(Date.now() + n * 864e5).toLocaleDateString("sv");
 const salaId = eq => "sala-" + curTopId() + "-" + norm(eq).replace(/[^a-z0-9]+/g, "-");
 function tarResp(id, nome) {
   const t = tarLista(metaDados()).find(x => x.id === id); if (!t || !podeTar(t)) { toast("Só a equipe " + (t ? t.equipe : "") + " ou a ADM mudam isso."); return; }
@@ -6060,6 +6081,30 @@ function metaSemana(D) {
       ${ev.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}
       ${!at.length && !sem.length && !ev.length ? `<div class="empty">Nada marcado para esta semana.</div>` : ""}
     </div></section>`;
+}
+/* Resumo novo (M2): o que pede atenção agora + as duas missões por grupo */
+function metaResumo2(D) {
+  const hoje = hojeISO(), ate = diaMais(7), Q = quadro().filter(t => !t.feito), at = Q.filter(t => t.prazo && t.prazo < hoje), sem = Q.filter(t => t.prazo && t.prazo >= hoje && t.prazo <= ate);
+  const A = acoesTodas(), prox = A.filter(a => a.data >= hoje && a.data <= ate), marcar = A.filter(a => a.data < hoje && !a.foram && a.data >= diaMais(-30)), G = grupos();
+  const nomeG = t => (G.find(g => g.id === (t.pegou || {}).grupo) || {}).nome || "sem grupo";
+  const faltam = a => acaoResp(a).reduce((n, x) => n + acaoFaltam(a, x.eq), 0);
+  const itens = [
+    ...at.map(t => `<button class="acao-c" type="button" data-meta-aba="quadro"><span class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(nomeG(t))}</small></span><span class="chip bad">atrasada</span></button>`),
+    ...prox.map(a => { const f = faltam(a); return `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${acaoTag(a)} ${esc(acaoQuando(a))}</small></span><span class="chip ${f ? "wait" : "ok"}">${f ? `faltam ${f} homens` : "equipes completas"}</span></button>`; }),
+    ...marcar.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">já aconteceu · ${esc(acaoQuando(a))}</small></span><span class="chip wait">marcar quem foi</span></button>`),
+    ...sem.map(t => `<button class="acao-c" type="button" data-meta-aba="quadro"><span class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(nomeG(t))} · até ${new Date(t.prazo + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</small></span><span class="chip">esta semana</span></button>`)];
+  return `<section class="panel"><h3>Pede atenção agora <small>${itens.length}</small></h3>${itens.length ? `<div class="acao-lista">${itens.join("")}</div>` : `<div class="empty">Tudo em dia nesta semana. 🙌</div>`}</section>
+    <section class="panel"><h3>Grupos <small>as duas missões</small></h3><div class="list">${G.map(g => { const N = grupoNumeros(g, D);
+      return `<button class="li" type="button" data-sala="${esc(g.id)}" style="text-align:left;width:100%;background:none;border:0;color:inherit;font:inherit;cursor:pointer"><span class="grow"><b>${esc(g.nome)}</b><small class="hint" style="display:block">${esc((g.equipes || []).join(" · "))}</small></span>
+        <span class="chip ev-captar" title="Trazer senderistas">${N.insc}/${N.metaInsc || "-"} inscritos</span> <span class="chip" title="Cuidar dos legendários">${N.encontros} encontro(s) · ${N.presentes}</span></button>`; }).join("")}</div></section>`;
+}
+/* Dashboard do coordenador (M2): evento em até 2 dias com a equipe dele faltando homens */
+function metaFaltamCoord() {
+  const eq = ME.equipeLgnd; if (!eq) return "";
+  const L = acoesTodas().filter(a => a.data >= hojeISO() && a.data <= diaMais(2) && acaoFaltam(a, eq) > 0); if (!L.length) return "";
+  return `<section class="panel q-novas"><h3>${ico("flag")} Faltam homens da ${esc(eq)}</h3><div class="list">${L.map(a => { const r = acaoResp(a).find(x => x.eq === eq), f = acaoFaltam(a, eq);
+    const m = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}\n\n*Equipe ${eq}*, precisamos de você${r.homens ? ` (${r.homens} homens)` : ""}${r.oque ? ":\n" + r.oque : "."}\n\nConfirme aqui: ${acaoLink(a, r)}`;
+    return `<div class="li"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint" style="display:block">${esc(acaoQuando(a))} · faltam ${f} de ${r.homens}</small></span><a class="btn sm primary" href="https://wa.me/?text=${encodeURIComponent(m)}" target="_blank" rel="noopener">${ico("wa")} Chamar a equipe</a></div>`; }).join("")}</div></section>`;
 }
 /* Saídas de panfletagem: 1 por equipe por semana, das semanas -9 a -3 (14 no total), viram eventos da Agenda */
 function saidasGerar() {
