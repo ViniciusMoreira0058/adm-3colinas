@@ -1610,6 +1610,14 @@ window.ADM_DEMO.notifs = [
 (function () { const docs = window.ADM_DEMO.docs; if (docs.some(d => d.col === "config" && d.id === "meta-faq")) return;
   docs.push({ col: "config", id: "meta-faq", data: { q0: { txt: "Aguenta sim! O TOP é puxado, mas a equipe de saúde acompanha o tempo todo. Antes, faça a ficha de saúde, caminhe algumas vezes por semana e durma bem na véspera.", por: "Thalisson", em: new Date().toISOString() },
     q1: { txt: "É seguro. A Segurança acompanha cada trecho, tem carro de apoio e equipe médica, e ninguém fica sozinho.", por: "Fábio Henrique Alves", em: new Date().toISOString() } } }); })();
+// quadro de tarefas das equipes (fictício)
+(function () { const docs = window.ADM_DEMO.docs, dia = n => new Date(Date.now() + n * 864e5).toLocaleDateString("sv"), h = n => new Date(Date.now() - n * 36e5).toISOString();
+  docs.push({ col: "config", id: "metatar-top1922-quadro", data: { lista: [
+    { id: "q1", titulo: "Visitar 2 igrejas e apresentar o TOP em 5 minutos", missao: "captar", prazo: dia(10), por: "Vinicius Moreira", em: h(40) },
+    { id: "q2", titulo: "Montar um churrasco com os legendários do último TOP", missao: "cuidar", prazo: dia(20), por: "Vinicius Moreira", em: h(40) },
+    { id: "q3", titulo: "Panfletagem na Feira do Calçado", missao: "captar", prazo: dia(6), por: "Vinicius Moreira", em: h(30), pegou: { grupo: "com", por: "Vinicius Moreira", em: h(20) }, resp: "Marcelo Duarte Lima" },
+    { id: "q4", titulo: "Ligar para os legendários que sumiram depois do TOP", missao: "cuidar", prazo: dia(-2), por: "Vinicius Moreira", em: h(90), pegou: { grupo: "esp", por: "Vinicius Moreira", em: h(80) } },
+    { id: "q5", titulo: "Gravar 1 vídeo de testemunho", missao: "captar", prazo: dia(-5), por: "Vinicius Moreira", em: h(200), pegou: { grupo: "mkt", por: "Vinicius Moreira", em: h(190) }, feito: true, feitoEm: h(100), feitoPor: "Thalisson" }] } }); })();
 // data do TOP na demonstração (para a contagem regressiva do Dashboard)
 (function () {
   const t = window.ADM_DEMO.docs.find(d => d.col === "tops" && d.id === "top1922"); if (!t) return;
@@ -1886,6 +1894,8 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
   ] } });
   D.push({ col: "config", id: "acao-top1922-m-dono", data: { lista: [
     { id: "ac2", tipo: "Panfletagem", titulo: "Panfletagem na Feira do Calçado", data: dia(6), hora: "09:00", local: "Parque de Exposições", endereco: "Av. Dr. Hélio Palermo", equipe: "Eventos", vagas: 12, token: "demoac2tok", por: "Vinicius Moreira", em: new Date().toISOString() },
+    { id: "ac6", tipo: "Confraternização", titulo: "Churrasco dos legendários da Segurança", data: dia(-12), hora: "12:00", local: "Chácara do Marcelo", equipe: "Segurança", vagas: 20, token: "demoac6tok", por: "Vinicius Moreira", em: new Date().toISOString() },
+    { id: "ac7", tipo: "Encontro de legendários", titulo: "Café com os legendários", data: dia(9), hora: "07:30", local: "Padaria Central", equipe: "Hakunas", vagas: 15, token: "demoac7tok", por: "Vinicius Moreira", em: new Date().toISOString() },
     { id: "ac4", tipo: "Apresentação em igreja", titulo: "Culto na Igreja Presbiteriana Renovada", data: dia(-30), hora: "19:00", local: "Igreja Presbiteriana Renovada", equipe: "Voz", vagas: 4, token: "demoac4tok", por: "Vinicius Moreira", em: new Date().toISOString() },
     { id: "ac5", tipo: "Apresentação em igreja", titulo: "Conversa com o pastor da Igreja Quadrangular", data: dia(-40), hora: "20:00", local: "Igreja do Evangelho Quadrangular", equipe: "Diretoria", vagas: 2, token: "demoac5tok", por: "Vinicius Moreira", em: new Date().toISOString() },
     { id: "ac3", tipo: "Pré-TOP", titulo: "Pré-TOP 1922", data: dia(-20), hora: "19:00", local: "Base 3 Colinas", equipe: "Eventos", vagas: 20, token: "demoac3tok", por: "Vinicius Moreira", em: new Date().toISOString() },

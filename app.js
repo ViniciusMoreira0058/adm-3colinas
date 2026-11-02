@@ -5355,7 +5355,9 @@ function metaPlacar() {
 }
 function metaCoordCard() {
   const D = metaDados(), e = metaEquipes(D).find(x => x.e === ME.equipeLgnd), mine = indTodas().filter(x => x.equipe === ME.equipeLgnd);
-  return `<section class="panel meta-coord"><h3>Meta da minha equipe ${SALA() ? `<button class="linkbtn" type="button" data-sala="${esc(ME.equipeLgnd || "")}">sala da equipe ›</button>` : `<button class="linkbtn" type="button" data-go="meta">ver ›</button>`}</h3>
+  const g = SALA() && meuGrupo(), novas = g ? quadro().filter(t => !t.feito && (t.pegou || {}).grupo === g.id && (t.pegou || {}).por !== ME.adm) : [];
+  return `${novas.length ? `<section class="panel q-novas"><h3>${ico("flag")} A ADM mandou para a sua equipe <small>${novas.length}</small> <button class="linkbtn" type="button" data-meta-aba="grupo">ver ›</button></h3><div class="list">${novas.map(t => quadroLi(t, true)).join("")}</div></section>` : ""}
+  <section class="panel meta-coord"><h3>Meta da minha equipe ${SALA() ? `<button class="linkbtn" type="button" data-meta-aba="grupo">minha equipe ›</button>` : `<button class="linkbtn" type="button" data-go="meta">ver ›</button>`}</h3>
     ${e ? `<div class="meta-mini"><div><span class="lbl">Nomes indicados</span><b class="num">${e.nomes}<small> de ${e.metaNomes}</small></b><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div></div>
       <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : `<p class="hint">Sua equipe ainda não tem servidores contados para a meta.</p>`}
     <p class="hint" style="margin:0">Placar geral: <b class="num">${D.inscritos}</b> inscritos de ${D.meta} · meta para hoje ${D.metaHoje}</p>
@@ -5406,10 +5408,10 @@ function vMeta() {
         <button class="linkbtn" type="button" data-ind-ed="${esc(x.doc)}|${esc(x.id)}" aria-label="Editar">${ico("edit")}</button></div>` : ""}</div>`).join("")}</div>`
     : `<div class="empty">${I.length ? "Nada neste filtro." : "Nenhum nome indicado ainda. Cada servidor indica 5 nomes."}</div>`}
   </section>`;
-  const aba = [...(SALA() ? ["sala"] : []), "placar", "ind", "eq"].includes(S.metaAba) ? S.metaAba : SALA() && ehCoordEq() ? "sala" : "placar";
-  return cab + metaAbas(aba) + (aba === "sala" ? vSala(D) : aba === "eq" ? vMetaFrentes(D) : aba === "ind" ? metaFaq() + pInd : metaSemana(D) + pPlacar);
+  const aba = (SALA() ? ["grupo", "quadro", "ind", ...(ehCoordEq() ? [] : ["placar"])] : ["placar", "ind", "eq"]).includes(S.metaAba) ? S.metaAba : SALA() ? "grupo" : "placar";
+  return cab + metaAbas(aba) + (aba === "grupo" ? vGrupos(D) : aba === "quadro" ? vQuadro(D) : aba === "eq" ? vMetaFrentes(D) : aba === "ind" ? metaFaq() + pInd : metaSemana(D) + pPlacar);
 }
-document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.salaEq != null) { S.salaEq = t.value; render(); return; } if (t && t.dataset && t.dataset.tarResp) { tarResp(t.dataset.tarResp, t.value); return; } if (t && t.dataset && t.dataset.tselId && S.tarSel) { t.checked ? S.tarSel.add(t.dataset.tselId) : S.tarSel.delete(t.dataset.tselId); render(); return; } if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
+document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.qResp) { quadroMarcar(t.dataset.qResp, "resp", t.value); return; } if (t && t.dataset && t.dataset.qDar && t.value) { quadroMarcar(t.dataset.qDar, "pegar", t.value); return; } if (t && t.dataset && t.dataset.salaEq != null) { S.salaEq = t.value; render(); return; } if (t && t.dataset && t.dataset.tarResp) { tarResp(t.dataset.tarResp, t.value); return; } if (t && t.dataset && t.dataset.tselId && S.tarSel) { t.checked ? S.tarSel.add(t.dataset.tselId) : S.tarSel.delete(t.dataset.tselId); render(); return; } if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
 document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[data-ind-zap]"); if (!a) return;
   const [doc, id] = a.dataset.indZap.split("|"), x = indTodas().find(y => y.doc === doc && y.id === id); if (x && x.status === "novo") setTimeout(() => indMarcar(doc, id, "contatado"), 300); });
 /* Tarefas das equipes (Estratégia 150): já nascem do PDF; estado em config metatar-<top> {estado:{tid:{feito,n,em,por}}, extras:[], apagadas:[]} */
@@ -5489,7 +5491,10 @@ function vMetaTarefas(D) {
 }
 /* Eventos de divulgação (ida à igreja, panfletagem, pré-TOP…; na tela se chamam "Eventos"): config acao-<top>-<membroId> {lista:[{id,tipo,titulo,data,hora,local,endereco,equipe,obs,token,por,em,resultado}]}.
    Link de presença acao.html (na demo, localStorage "adm3-acao-link"; no real, RPC adm_acao_confirmar). Convite em PDF para os legendários. */
-const ACAO_TIPOS = ["Apresentação em igreja", "Panfletagem", "Pré-TOP", "Encontro de apresentação", "Encontro de legendários", "Culto ou célula", "Outro"];
+const ACAO_CAPTAR = ["Apresentação em igreja", "Panfletagem", "Pré-TOP", "Encontro de apresentação"];
+const ACAO_CUIDAR = ["Encontro de legendários", "Culto ou célula", "Confraternização", "Trilha ou treino", "Ação social"];
+const ACAO_TIPOS = [...ACAO_CAPTAR, ...ACAO_CUIDAR, "Outro"];
+const acaoCuidar = a => ACAO_CUIDAR.includes(a.tipo);   // evento com os legendários (cuidar) x divulgação (trazer senderistas)
 const ACAO_LS = "adm3-acao-link";
 const acaoDocMeu = () => "acao-" + curTopId() + "-" + (ME.id || "eu");
 function acoesTodas() { const pre = "acao-" + curTopId() + "-"; return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k }))).sort((a, b) => String(a.data + a.hora).localeCompare(String(b.data + b.hora))); }
@@ -5509,7 +5514,7 @@ function acaoForm(a) {
   if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }
   const novo = !a; a = a || { tipo: ACAO_TIPOS[0], equipe: ehCoordEq() ? ME.equipeLgnd : "", data: "", hora: "19:00" };
   modal(`<h3>${novo ? "Novo evento" : "Editar evento"}</h3><div class="form">
-    <div class="field full"><label for="ac-tp">Tipo</label><select id="ac-tp" name="tipo" class="sel">${ACAO_TIPOS.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+    <div class="field full"><label for="ac-tp">Tipo</label><select id="ac-tp" name="tipo" class="sel"><optgroup label="Trazer senderistas">${ACAO_CAPTAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><optgroup label="Cuidar dos legendários">${ACAO_CUIDAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><option ${a.tipo === "Outro" ? "selected" : ""}>Outro</option></select></div>
     <div class="field full"><label for="ac-ti">Título</label><input id="ac-ti" name="titulo" value="${esc(a.titulo || "")}" placeholder="ex.: Apresentação na Igreja Batista Central" required></div>
     <div class="field"><label for="ac-d">Dia</label><input id="ac-d" name="data" type="date" value="${esc(a.data || "")}" required></div>
     <div class="field"><label for="ac-h">Hora</label><input id="ac-h" name="hora" type="time" value="${esc(a.hora || "")}"></div>
@@ -5537,7 +5542,7 @@ async function acaoPdf(a) {
   doc.setTextColor(255, 255, 255); doc.setFontSize(27); const tl = doc.splitTextToSize(a.titulo.toUpperCase(), W - 36); doc.text(tl, W / 2, 78, { align: "center", lineHeightFactor: 1.1 });
   let y = 78 + tl.length * 11 + 2;
   doc.setFont("helvetica", "normal"); doc.setFontSize(12.5); doc.setTextColor(220, 210, 200);
-  doc.text(doc.splitTextToSize(`A equipe ${a.equipe} convida os legendários para estar junto nesta ${a.tipo.toLowerCase()} e levar o TOP para mais homens.`, W - 50), W / 2, y, { align: "center" }); y += 16;
+  doc.text(doc.splitTextToSize(acaoCuidar(a) ? `A equipe ${a.equipe} convida os legendários para estarmos juntos de novo: ${a.tipo.toLowerCase()}. Traga sua família e seus irmãos de TOP.` : `A equipe ${a.equipe} convida os legendários para estar junto nesta ${a.tipo.toLowerCase()} e levar o TOP para mais homens.`, W - 50), W / 2, y, { align: "center" }); y += 16;
   const caixa = (lbl, val, yy) => { doc.setFillColor(26, 34, 45); doc.roundedRect(24, yy, W - 48, 21, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(24, yy + 4, 1.6, 13, "F");
     doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text(lbl, 32, yy + 7.5, { charSpace: 0.5 });
     doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.text(doc.splitTextToSize(val, W - 64)[0] || "", 32, yy + 15.5); };
@@ -5580,7 +5585,7 @@ function vAgenda() {
       return `<button class="acao-c ag-top" type="button" data-ag-top="${esc(t.id)}">${dia(t.inicio)}<span class="grow"><b>${esc(t.nome)} <span class="chip acc">TOP</span>${t.id === "previsto" ? ` <span class="chip ${t.confirmado ? "ok" : "wait"}">${t.confirmado ? "data confirmada" : "data prevista"}</span>` : ""}</b><small class="hint">${esc(fmtPeriodo(t))}${t.local ? " · " + esc(t.local) : ""}</small></span>${n != null ? `<span class="chip ok">${n} inscritos</span>` : ""}</button>`; }
     const a = x.a, c = acaoConfirmados(a).length;
     return `<button class="acao-c ${a.equipe === ME.equipeLgnd ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
-      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.tipo)} · ${esc(a.equipe)}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
+      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `<span class="tag ${acaoCuidar(a) ? "ev-cuidar" : "ev-captar"}">${acaoCuidar(a) ? "Legendários" : "Divulgação"}</span> ` : ""}${esc(a.tipo)} · ${esc(a.equipe)}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
       <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
   const grupos = []; L.forEach(x => { const m = mes(x.data), g = grupos[grupos.length - 1]; if (g && g.m === m) g.l.push(x); else grupos.push({ m, l: [x] }); });
   const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
@@ -5792,6 +5797,120 @@ async function agendaPdf() {
     X.y += h + 4; });
   await entregarPdf(doc.output("blob"), `Agenda Legendarios 3 Colinas.pdf`, "Agenda · Legendários 3 Colinas", true);
 }
+/* ===== Equipes trabalhando juntas (só na demo, flag SALA) =====
+   Grupos: a ADM junta ou separa as equipes LGND (config meta-grupos {lista:[{id,nome,equipes,missao}]}; sem nada salvo, começa pelas frentes do PDF).
+   Tarefas: a ADM cria; o coordenador pega para o grupo dele, escolhe quem faz e marca feito.
+   config metatar-<top>-quadro {lista:[{id,titulo,missao:captar|cuidar|outro,prazo,obs,para,pegou:{grupo,por,em},resp,feito,feitoEm,feitoPor,por,em}]} */
+const MISSOES = { captar: ["Trazer senderistas", "ev-captar"], cuidar: ["Cuidar dos legendários", "ev-cuidar"], outro: ["Outra", ""] };
+const grupos = () => { const g = (cfgDe("meta-grupos") || {}).lista; return g && g.length ? g : FRENTES.map(f => ({ id: f.k, nome: f.l, equipes: f.eq, missao: f.m })); };
+const grupoDe = eq => grupos().find(g => (g.equipes || []).includes(eq));
+const meuGrupo = () => ehCoordEq() ? grupoDe(ME.equipeLgnd) : null;
+const quadroId = () => "metatar-" + curTopId() + "-quadro";
+const quadro = () => ((cfgDe(quadroId()) || {}).lista || []).slice().sort((a, b) => (!!a.feito - !!b.feito) || String(a.prazo || "9").localeCompare(String(b.prazo || "9")));
+const quadroLivres = () => { const g = meuGrupo(); return quadro().filter(t => !t.feito && !t.pegou && (!t.para || !g || t.para === g.id)).length; };
+const podeGrupo = gid => podeEditar() || (ehCoordEq() && (meuGrupo() || {}).id === gid);
+function quadroSalvar(lista, msg) {
+  (async () => { try { await api.set("config", quadroId(), { lista }); if (msg) toast(msg); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
+}
+function quadroMarcar(id, op, val) {
+  const L = quadro(), t = L.find(x => x.id === id); if (!t) return;
+  const g = op === "pegar" ? (val || (meuGrupo() || {}).id) : (t.pegou || {}).grupo;
+  if (!g || !podeGrupo(g)) { toast("Só a ADM ou o coordenador do grupo mexem nesta tarefa."); return; }
+  const agora = new Date().toISOString(), nome = (grupos().find(x => x.id === g) || {}).nome || "";
+  const n = op === "pegar" ? { ...t, ...(ehCoordEq() ? {} : { para: g }), pegou: { grupo: g, por: ME.adm || "", em: agora } } : op === "devolver" ? { ...t, pegou: null, resp: "", feito: false }
+    : op === "resp" ? { ...t, resp: val } : { ...t, feito: !t.feito, feitoEm: t.feito ? "" : agora, feitoPor: t.feito ? "" : ME.adm || "" };
+  quadroSalvar(L.map(x => x.id === id ? n : x), op === "pegar" ? `Tarefa com ${nome} 💪` : op === "devolver" ? "Tarefa devolvida para o quadro" : op === "feito" ? (n.feito ? "Feito! 🙌" : "Desmarcada") : "");
+}
+function quadroForm(id) {
+  if (!podeEditar()) { toast("Quem cria as tarefas é a ADM."); return; }
+  const t = quadro().find(x => x.id === id) || { missao: "captar" }, G = grupos();
+  modal(`<h3>${id ? "Editar tarefa" : "Nova tarefa"}</h3><div class="form">
+    <div class="field full"><label for="q-t">O que fazer</label><input id="q-t" name="titulo" value="${esc(t.titulo || "")}" placeholder="ex.: Visitar 2 igrejas e apresentar o TOP" required></div>
+    <div class="field"><label for="q-m">Missão</label><select id="q-m" name="missao" class="sel">${Object.entries(MISSOES).map(([k, [l]]) => `<option value="${k}" ${t.missao === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    <div class="field"><label for="q-p">Até quando</label><input id="q-p" name="prazo" type="date" value="${esc(t.prazo || "")}"></div>
+    <div class="field full"><label for="q-g">Para quem</label><select id="q-g" name="para" class="sel"><option value="">Livre: qualquer grupo pode pegar</option>${G.map(g => `<option value="${esc(g.id)}" ${t.para === g.id ? "selected" : ""}>Mandar para ${esc(g.nome)} (${esc((g.equipes || []).join(", "))})</option>`).join("")}</select></div>
+    <div class="field full"><label for="q-o">Detalhes (opcional)</label><input id="q-o" name="obs" value="${esc(t.obs || "")}"></div>
+  </div><div class="modal-foot"><div>${id ? `<button class="btn danger" type="button" id="delBtn">Excluir</button>` : ""}</div>
+    <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { const titulo = String(fd.get("titulo") || "").trim(); if (!titulo) return; const para = String(fd.get("para") || "");
+    const n = { ...t, id: t.id || "q" + Date.now().toString(36), titulo, missao: fd.get("missao"), prazo: String(fd.get("prazo") || ""), para, obs: String(fd.get("obs") || "").trim(), por: t.por || ME.adm || "", em: t.em || new Date().toISOString() };
+    if (para && !t.pegou) n.pegou = { grupo: para, por: ME.adm || "", em: new Date().toISOString() };   // tarefa direcionada já nasce com o grupo
+    closeModal(); const L = quadro(); quadroSalvar(id ? L.map(x => x.id === id ? n : x) : [...L, n], id ? "Tarefa salva" : "Tarefa no quadro"); });
+  const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); quadroSalvar(quadro().filter(x => x.id !== id), "Tarefa excluída"); };
+}
+function grupoForm(id) {
+  if (!podeEditar()) return;
+  const G = grupos(), g = G.find(x => x.id === id) || { equipes: [] }, usadas = new Set(G.filter(x => x.id !== g.id).flatMap(x => x.equipes || []));
+  const todas = [...new Set([...equipesUsadas(), "Diretoria", "Esposas"])];
+  modal(`<h3>${id ? "Editar grupo" : "Novo grupo"}</h3><p class="hint" style="margin:0">Junte as equipes que vão trabalhar juntas. Cada equipe fica em um grupo só.</p><div class="form">
+    <div class="field full"><label for="g-n">Nome do grupo</label><input id="g-n" name="nome" value="${esc(g.nome || "")}" placeholder="ex.: Comercial 1" required></div>
+    <div class="field full"><span class="lab">Equipes</span><div class="checks">${todas.map(e => `<label><input type="checkbox" name="eq" value="${esc(e)}" ${(g.equipes || []).includes(e) ? "checked" : ""}> ${esc(e)}${usadas.has(e) ? ` <small class="hint">(está em ${esc((G.find(x => (x.equipes || []).includes(e)) || {}).nome || "")})</small>` : ""}</label>`).join("")}</div></div>
+    <div class="field full"><label for="g-m">Missão do grupo (opcional)</label><input id="g-m" name="missao" value="${esc(g.missao || "")}"></div>
+  </div><div class="modal-foot"><div>${id ? `<button class="btn danger" type="button" id="delBtn">Desfazer grupo</button>` : ""}</div>
+    <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => { const nome = String(fd.get("nome") || "").trim(), eqs = fd.getAll("eq").map(String); if (!nome || !eqs.length) { toast("Dê um nome e marque pelo menos uma equipe."); return; }
+    const n = { id: g.id || "g" + Date.now().toString(36), nome, equipes: eqs, missao: String(fd.get("missao") || "").trim() };
+    const L = G.filter(x => x.id !== n.id).map(x => ({ ...x, equipes: (x.equipes || []).filter(e => !eqs.includes(e)) })).filter(x => x.equipes.length);   // equipe sai do grupo antigo
+    closeModal(); save(() => api.set("config", "meta-grupos", { lista: id ? G.map(x => x.id === n.id ? n : L.find(y => y.id === x.id)).filter(Boolean) : [...L, n] }), "Grupos salvos").then(render); });
+  const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar"; return; } closeModal(); save(() => api.set("config", "meta-grupos", { lista: G.filter(x => x.id !== id) }), "Grupo desfeito").then(render); };
+}
+function grupoNumeros(g, D) {
+  const eqs = g.equipes || [], I = indTodas().filter(x => eqs.includes(x.equipe)), E = metaEquipes(D).filter(e => eqs.includes(e.e)), A = acoesTodas().filter(a => eqs.includes(a.equipe)), hoje = hojeISO();
+  const cuidar = A.filter(a => acaoCuidar(a) && a.data < hoje), T = quadro().filter(t => (t.pegou || {}).grupo === g.id);
+  return { nomes: I.length, metaNomes: E.reduce((s, e) => s + e.metaNomes, 0), insc: I.filter(indInscrito).length, metaInsc: E.reduce((s, e) => s + e.metaInsc, 0),
+    encontros: cuidar.length, presentes: cuidar.reduce((s, a) => s + acaoConfirmados(a).length, 0), prox: A.filter(a => a.data >= hoje), T, servidores: S.P.filter(p => p.tipo === "legendario" && eqs.includes(p.equipe)).length };
+}
+function grupoCard(g, D, aberto) {
+  const N = grupoNumeros(g, D), pode = podeGrupo(g.id), pend = N.T.filter(t => !t.feito), temLink = !!(cfgDe(indCfgId()) || {}).token;
+  const bar = (n, m) => `<div class="bar good"><i style="width:${pct(n, m || 1)}%"></i></div>`;
+  return `<section class="panel grp ${aberto ? "meu" : ""}"><div class="grp-cab"><div class="grow"><b class="grp-n">${esc(g.nome)}</b><small class="hint">${esc((g.equipes || []).join(" · "))} · ${N.servidores} legendário(s)</small>${g.missao ? `<small>${esc(g.missao)}</small>` : ""}</div>
+      ${podeEditar() ? `<button class="linkbtn" type="button" data-grp-ed="${esc(g.id)}" aria-label="Editar grupo">${ico("edit")}</button>` : ""}</div>
+    <div class="grp-mis">
+      <div class="grp-box"><span class="tag ev-captar">Trazer senderistas</span>
+        <div class="grp-num"><b class="num">${N.nomes}</b><small>nomes indicados${N.metaNomes ? ` de ${N.metaNomes}` : ""}</small></div>${N.metaNomes ? bar(N.nomes, N.metaNomes) : ""}
+        <div class="grp-num"><b class="num">${N.insc}</b><small>já se inscreveram${N.metaInsc ? ` de ${N.metaInsc}` : ""}</small></div>
+        ${aberto ? `<div class="actions">${podeIndicar() ? `<button class="btn sm primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${temLink ? (g.equipes || []).filter(e => !ehCoordEq() || e === ME.equipeLgnd).map(e => `<button class="btn sm" type="button" data-sala-link="${esc(e)}">${ico("wa")} Link ${esc(e)}</button>`).join("") : ""}</div>` : ""}</div>
+      <div class="grp-box"><span class="tag ev-cuidar">Cuidar dos legendários</span>
+        <div class="grp-num"><b class="num">${N.encontros}</b><small>encontro(s) feitos</small></div>
+        <div class="grp-num"><b class="num">${N.presentes}</b><small>presenças confirmadas</small></div>
+        ${aberto && pode ? `<div class="actions"><button class="btn sm" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button></div>` : ""}</div></div>
+    ${aberto ? `<h4>Tarefas do grupo <small class="hint">${N.T.filter(t => t.feito).length}/${N.T.length} feitas</small></h4>
+      ${pend.length ? `<div class="list">${pend.map(t => quadroLi(t, true)).join("")}</div>` : `<p class="hint">Nenhuma tarefa pendente. ${pode ? `<button class="linkbtn" type="button" data-meta-aba="quadro">Pegar uma no quadro ›</button>` : ""}</p>`}
+      <h4>Próximos eventos</h4>${N.prox.length ? `<div class="acao-lista">${N.prox.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint"><span class="tag ${acaoCuidar(a) ? "ev-cuidar" : "ev-captar"}">${acaoCuidar(a) ? "Legendários" : "Divulgação"}</span> ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div>` : `<p class="hint">Nenhum evento marcado.</p>`}`
+      : `<div class="actions"><button class="btn sm" type="button" data-sala="${esc(g.id)}">Abrir ›</button>${pend.length ? `<span class="hint">${pend.length} tarefa(s) em andamento</span>` : ""}</div>`}
+  </section>`;
+}
+function vGrupos(D) {
+  const G = grupos(), meu = meuGrupo();
+  if (ehCoordEq()) return meu ? grupoCard(meu, D, true) : `<section class="panel"><div class="empty">Sua equipe ainda não está em nenhum grupo. Peça para a ADM organizar.</div></section>`;
+  const aberto = G.find(g => g.id === S.salaEq);
+  return `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Cada grupo junta equipes com duas missões: trazer senderistas e cuidar dos legendários.</p>
+      ${podeEditar() ? `<button class="btn" type="button" data-grp-ed="novo">${ico("plus")} Novo grupo</button>` : ""}</div>
+    ${aberto ? `<div class="actions"><button class="btn ghost sm" type="button" data-sala="">${ico("back")} Todos os grupos</button></div>${grupoCard(aberto, D, true)}` : G.map(g => grupoCard(g, D, false)).join("")}`;
+}
+function quadroLi(t, noGrupo) {
+  const G = grupos(), g = G.find(x => x.id === (t.pegou || {}).grupo), m = MISSOES[t.missao] || MISSOES.outro, meu = meuGrupo();
+  const venc = t.prazo && !t.feito && t.prazo < hojeISO(), pode = g && podeGrupo(g.id);
+  const leg = g ? S.P.filter(p => p.tipo === "legendario" && (g.equipes || []).includes(p.equipe)).sort((a, b) => a.nome.localeCompare(b.nome)) : [];
+  const fmt = d => new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const acoes = t.feito ? (pode ? `<button class="btn sm" type="button" data-q-feito="${t.id}">Desfazer</button>` : "")
+    : g ? (pode ? `<button class="btn sm primary" type="button" data-q-feito="${t.id}">${ico("check")} Feito</button>${t.para ? "" : `<button class="linkbtn" type="button" data-q-devolver="${t.id}">devolver</button>`}` : "")
+    : ehCoordEq() ? (meu && (!t.para || t.para === meu.id) ? `<button class="btn sm primary" type="button" data-q-pegar="${t.id}">Pegar para ${esc(meu.nome)}</button>` : "")
+    : podeEditar() ? `<select class="sel sm" aria-label="Mandar para" data-q-dar="${t.id}"><option value="">Mandar para…</option>${G.map(x => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join("")}</select>` : "";
+  return `<div class="li q-li ${t.feito ? "feito" : venc ? "venc" : ""}"><span class="tar-ck">${t.feito ? ico("check") : ""}</span><div class="grow"><b>${esc(t.titulo)}</b>
+      <small class="hint"><span class="tag ${m[1]}">${m[0]}</span>${t.prazo ? ` · até ${fmt(t.prazo)}${venc ? " (venceu)" : ""}` : ""}${!noGrupo && g ? ` · <b>${esc(g.nome)}</b>` : ""}${t.resp ? ` · com ${esc(t.resp.split(" ")[0])}` : ""}${t.obs ? " · " + esc(t.obs) : ""}</small>
+      ${g && pode && !t.feito && leg.length ? `<select class="sel sm" data-q-resp="${t.id}" aria-label="Quem faz"><option value="">Quem faz?</option>${leg.map(p => `<option ${t.resp === p.nome ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</select>` : ""}</div>
+    <div class="actions">${acoes}${podeEditar() ? `<button class="linkbtn" type="button" data-q-ed="${t.id}" aria-label="Editar">${ico("edit")}</button>` : ""}</div></div>`;
+}
+function vQuadro(D) {
+  const L = quadro(), meu = meuGrupo(), f = S.qFiltro || "livres";
+  const livres = L.filter(t => !t.feito && !t.pegou && (!meu || !t.para || t.para === meu.id)), andamento = L.filter(t => !t.feito && t.pegou && (!meu || t.pegou.grupo === meu.id)), feitas = L.filter(t => t.feito && (!meu || (t.pegou || {}).grupo === meu.id));
+  const lista = { livres, andamento, feitas }[f] || livres;
+  return `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">${ehCoordEq() ? "Pegue as tarefas que a sua equipe consegue fazer. As que a ADM mandar para vocês já aparecem em Com a gente. Escolha quem faz e marque quando terminar." : "Crie as tarefas. Deixe livre para os coordenadores pegarem, ou mande direto para um grupo: cai na hora no app do coordenador."}</p>
+      ${podeEditar() ? `<button class="btn primary" type="button" data-q-novo="1">${ico("plus")} Nova tarefa</button>` : ""}</div>
+    <div class="seg" role="tablist">${[["livres", "Para pegar", livres.length], ["andamento", ehCoordEq() ? "Com a gente" : "Em andamento", andamento.length], ["feitas", "Feitas", feitas.length]].map(([k, l, n]) => `<button type="button" data-q-filtro="${k}" aria-pressed="${f === k}">${l} <small>${n}</small></button>`).join("")}</div>
+    <section class="panel">${lista.length ? `<div class="list">${lista.map(t => quadroLi(t)).join("")}</div>` : `<div class="empty">${f === "livres" ? (podeEditar() ? "Nenhuma tarefa livre. Toque em Nova tarefa para colocar a primeira." : "Nenhuma tarefa para pegar agora.") : f === "andamento" ? "Nada em andamento." : "Nenhuma feita ainda."}</div>`}</section>`;
+}
 /* Sala da equipe (só na demo): a equipe trabalha junta num lugar só. Meta da equipe, link de indicação da equipe,
    tarefas com quem faz, eventos e recados. Recados em config sala-<top>-<equipe> {msgs:[{id,txt,por,em}]}. */
 const SALA = () => DEMO;
@@ -5888,7 +6007,8 @@ function faqForm(i) {
 }
 function metaAbas(aba) {
   const at = tarLista(metaDados()).filter(t => t.sit === "atrasada" && (!ehCoordEq() || t.equipe === ME.equipeLgnd)).length;
-  return `<div class="seg meta-abas" role="tablist">${[...(SALA() ? [["sala", ehCoordEq() ? "Minha equipe" : "Salas"]] : []), ["placar", "Resumo"], ["ind", "Indicações"], ["eq", ehCoordEq() && SALA() ? "Frentes" : "Equipes" + (at ? ` <span class="badge num">${at}</span>` : "")]].map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
+  return `<div class="seg meta-abas" role="tablist">${(SALA() ? [["grupo", ehCoordEq() ? "Minha equipe" : "Equipes"], ["quadro", "Tarefas" + (quadroLivres() ? ` <span class="badge num">${quadroLivres()}</span>` : "")], ["ind", "Indicações"], ...(ehCoordEq() ? [] : [["placar", "Resumo"]])]
+    : [["placar", "Resumo"], ["ind", "Indicações"], ["eq", "Equipes" + (at ? ` <span class="badge num">${at}</span>` : "")]]).map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
 }
 function metaAjustarForm() {
   const D = metaDados();
@@ -6638,7 +6758,11 @@ document.addEventListener("click", e => {
   if (d.tarNovo) { tarForm(); return; }
   if (d.acaoNovo) { acaoForm(); return; }
   if (d.saidasGerar) { saidasGerar(); return; }
-  if (d.sala) { S.salaEq = d.sala; S.metaAba = "sala"; if (S.view !== "meta") go("meta"); else render(); return; }
+  if (d.grpEd) { grupoForm(d.grpEd === "novo" ? null : d.grpEd); return; }
+  if (d.qNovo || d.qEd) { quadroForm(d.qEd || null); return; }
+  if (d.qPegar || d.qDevolver || d.qFeito) { quadroMarcar(d.qPegar || d.qDevolver || d.qFeito, d.qPegar ? "pegar" : d.qDevolver ? "devolver" : "feito", d.qGrupo); return; }
+  if (d.qFiltro) { S.qFiltro = d.qFiltro; render(); return; }
+  if (d.sala) { S.salaEq = d.sala; S.metaAba = "grupo"; if (S.view !== "meta") go("meta"); else render(); return; }
   if (d.salaLink) { const l = indLink(d.salaLink), msg = `Equipe ${d.salaLink}: vamos juntos levar mais homens ao ${topName()}! Indique um amigo aqui, leva 1 minuto: ${l}`; window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank", "noopener"); return; }
   if (d.pdfTar || d.pdfAg) { const b = t; b.disabled = true; (d.pdfTar ? tarefasPdf() : agendaPdf()).catch(e => toast("Não consegui gerar o PDF. " + (e.message || ""))).finally(() => { b.disabled = false; }); return; }
   if (d.tselOn || d.tselSair || d.tselTodas || d.tselFrente || d.tselFeito || d.tselDel || d.tselVolta) { tarSelecao(d, t); return; }
