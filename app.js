@@ -1341,7 +1341,7 @@ function licoesForm() {
 
 /* ---------- Guia "Como usar": o que fazer em cada página, só das páginas que a pessoa vê ---------- */
 const GUIA = {
-  meta: ["Meta do TOP", ["Resumo: o que é desta semana, inscritos contra a meta e os checkpoints.", "Indicações: os nomes de cada equipe, com respostas prontas para as dúvidas.", "Equipes: as frentes do PDF, cada uma com as suas tarefas. Ida a igreja e pré-TOP contam sozinhos pela Agenda."]],
+  meta: ["Meta do TOP", ["Equipes: os grupos de equipes e as duas missões, trazer senderistas e cuidar dos legendários.", "Tarefas: a ADM cria e manda para um grupo; o coordenador escolhe quem faz e marca feita.", "Indicações: os nomes de cada equipe, com respostas prontas para as dúvidas.", "Resumo: o que pede atenção agora e como cada grupo está nas duas missões."]],
   agenda: ["Agenda", ["Todos os eventos de divulgação do Legendários e o TOP, por mês.", "Toque num evento para ver quantos vão, quem vai e mandar o link para mais pessoas confirmarem.", "Qualquer coordenador pode criar um evento em \"Novo evento\"."]],
   painel: ["Visão geral do TOP", ["Mostra quantos dias faltam, quantos estão prontos e o que fazer hoje.", "Toque em qualquer item de \"O que fazer hoje\" para ir direto à tela certa."]],
   participantes: ["Lista dos senderistas", ["Toque no status de atestado ou termo para avançar.", "O lápis abre a ficha completa. Quem mexe por último vira o ADM responsável."]],
@@ -5234,7 +5234,7 @@ function vPainelCoord() {
   <p class="hint">Seu acesso é somente leitura. Dados de saúde, telefones, pendências e pagamentos ficam só com a ADM.</p>`;
 }
 
-/* ---------- Meta do TOP (Estratégia 150), só na DEMO ----------
+/* ---------- Meta do TOP (Estratégia 150) ----------
    A meta nasce sozinha de cada TOP: vagas (padrão 150) + 10% de desistência, espalhada pelas semanas até o TOP na curva do PDF.
    Equipes: nomes e inscritos por indicação divididos pelo nº de servidores (legendários da equipe; sem legendários ainda, usa o TOP anterior).
    Indicações: config indic-<top>-<membroId> {lista:[{id,nome,tel,quem,equipe,canal,status,em,contatoEm,contatoPor,obs}]} (cada um grava o seu; coordenador também).
@@ -5275,8 +5275,8 @@ function indDoLink() {
 function indTodas() {
   const pre = "indic-" + curTopId() + "-", L = Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre) && k !== indCfgId()).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k })));
   const ids = new Set(L.map(x => x.id)), fora = new Set((cfgDe(indCfgId()) || {}).apagados || []);
-  const doEvento = M2() ? acoesTodas().flatMap(a => acaoConfirmados(a).filter(x => x.leg === false && x.nome).map(x => ({ id: "ev" + a.id + hashCurto(confKey(x)), nome: x.nome, tel: x.tel || "", equipe: a.equipe || "", canal: "Evento", quem: "",
-    obs: ["Evento: " + a.titulo, x.igreja, x.info].filter(Boolean).join(" · "), status: "novo", em: x.em || (a.data + "T12:00:00"), origem: "evento", por: "evento" }))) : [];
+  const doEvento = acoesTodas().flatMap(a => acaoConfirmados(a).filter(x => x.leg === false && x.nome).map(x => ({ id: "ev" + a.id + hashCurto(confKey(x)), nome: x.nome, tel: x.tel || "", equipe: a.equipe || "", canal: "Evento", quem: "",
+    obs: ["Evento: " + a.titulo, x.igreja, x.info].filter(Boolean).join(" · "), status: "novo", em: x.em || (a.data + "T12:00:00"), origem: "evento", por: "evento" })));
   return [...L, ...[...indDoLink().map(x => ({ canal: "Indicação pessoal", status: "novo", ...x, origem: "link", por: "link" })), ...doEvento.map(x => ({ ...x, doc: "link" }))].filter(x => !ids.has(x.id) && !fora.has(x.id))];
 }
 function indLinkForm() {
@@ -5341,32 +5341,17 @@ function indMarcar(doc, id, st) {
   const x = doc === "link" ? indTodas().find(y => y.doc === "link" && y.id === id) : (((S.cfgDocs || {})[doc] || {}).lista || []).find(y => y.id === id); if (!x) return;
   indSalvar(doc, { ...x, status: st, contatoEm: st !== "novo" ? (x.contatoEm || new Date().toISOString()) : null, contatoPor: st !== "novo" ? (x.contatoPor || ME.adm || "") : null }, IND_ST.find(o => o.v === st).l);
 }
-function metaPlacar() {
-  const D = metaDados(), E = metaEquipes(D), I = indTodas(), fmt = d => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-  const canais = IND_CANAIS.map(c => { const l = I.filter(x => x.canal === c); return l.length ? `• ${c}: ${l.length} contato(s), ${l.filter(indInscrito).length} inscrito(s) (${Math.round(l.filter(indInscrito).length / l.length * 100)}%)` : ""; }).filter(Boolean);
-  const cp = D.checks.find(c => !c.passou);
-  return [`*Placar ${topName()}* · ${fmt(new Date())}`, ``,
-    `Inscritos: *${D.inscritos}* de ${D.meta} (meta para hoje: ${D.metaHoje})`,
-    `Vagas restantes: ${Math.max(0, D.vagas - D.inscritos)} · faltam ${D.dias ?? "?"} dias para o TOP`,
-    cp ? `Próximo checkpoint: semana ${-cp.w} (${fmt(cp.d)}), mínimo de ${cp.min} inscritos` : "",
-    ``, `*Por canal*`, ...(canais.length ? canais : ["• ainda sem indicações"]),
-    ``, `*Nomes indicados por equipe*`, ...E.filter(e => e.nomes).sort((a, b) => b.nomes / b.metaNomes - a.nomes / a.metaNomes).map(e => `• ${e.e}: ${e.nomes} de ${e.metaNomes}${e.nomes >= e.metaNomes ? " 🏆" : ""}${e.insc ? ` · ${e.insc} inscrito(s)` : ""}`),
-    ``, `*Frentes*`, ...frentesDados(D).map(f => `• ${f.l}: ${f.feitas}/${f.total} tarefas${f.ind.length ? " · " + f.ind.map(i => `${i.l.toLowerCase()} ${i.n}/${i.alvo}`).join(" · ") : ""}${f.atras ? ` · ${f.atras} atrasada(s)` : " ✅"}`),
-    ...(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 4); return A.length ? [``, `*Próximos eventos*`, ...A.map(a => `• ${a.titulo} · ${acaoQuando(a)}`)] : []; })(),
-    ``, `Bora juntos! 💪`].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
-}
 function metaCoordCard() {
   const D = metaDados(), e = metaEquipes(D).find(x => x.e === ME.equipeLgnd), mine = indTodas().filter(x => x.equipe === ME.equipeLgnd);
-  const g = SALA() && meuGrupo(), novas = g ? quadro().filter(t => !t.feito && (t.pegou || {}).grupo === g.id && (t.pegou || {}).por !== ME.adm) : [];
+  const g = meuGrupo(), novas = g ? quadro().filter(t => !t.feito && (t.pegou || {}).grupo === g.id && (t.pegou || {}).por !== ME.adm) : [];
   return `${novas.length ? `<section class="panel q-novas"><h3>${ico("flag")} A ADM mandou para a sua equipe <small>${novas.length}</small> <button class="linkbtn" type="button" data-meta-aba="grupo">ver ›</button></h3><div class="list">${novas.map(t => quadroLi(t, true)).join("")}</div></section>` : ""}
-  <section class="panel meta-coord"><h3>Meta da minha equipe ${SALA() ? `<button class="linkbtn" type="button" data-meta-aba="grupo">minha equipe ›</button>` : `<button class="linkbtn" type="button" data-go="meta">ver ›</button>`}</h3>
+  <section class="panel meta-coord"><h3>Meta da minha equipe <button class="linkbtn" type="button" data-meta-aba="grupo">minha equipe ›</button></h3>
     ${e ? `<div class="meta-mini"><div><span class="lbl">Nomes indicados</span><b class="num">${e.nomes}<small> de ${e.metaNomes}</small></b><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div></div>
       <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : `<p class="hint">Sua equipe ainda não tem servidores contados para a meta.</p>`}
     <p class="hint" style="margin:0">Placar geral: <b class="num">${D.inscritos}</b> inscritos de ${D.meta} · meta para hoje ${D.metaHoje}</p>
     <div class="actions"><button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button><button class="btn" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>${mine.length ? `<span class="hint">${mine.length} indicação(ões) da equipe</span>` : ""}</div></section>
-  ${M2() ? metaFaltamCoord() : ""}
-  ${M2() && "Notification" in window && Notification.permission === "default" ? `<section class="panel"><h3>${ico("bell")} Avisos no celular</h3><p class="hint" style="margin:0 0 8px">Ative para saber na hora quando a ADM mandar uma tarefa, e 2 dias antes de um evento se faltar gente da sua equipe.</p><div class="actions"><button class="btn primary" type="button" data-act="ativar-notif">${ico("bell")} Ativar avisos</button></div></section>` : ""}
-  ${(() => { const T = M2() ? [] : tarLista(D).filter(t => t.equipe === ME.equipeLgnd && (t.sit === "atrasada" || t.sit === "semana")); return T.length ? `<section class="panel"><h3>Tarefas da equipe nesta semana <small>${T.length}</small><button class="linkbtn" type="button" data-meta-aba="eq">ver todas ›</button></h3><div class="list">${T.map(tarLi).join("")}</div></section>` : ""; })()}
+  ${metaFaltamCoord()}
+  ${"Notification" in window && Notification.permission === "default" ? `<section class="panel"><h3>${ico("bell")} Avisos no celular</h3><p class="hint" style="margin:0 0 8px">Ative para saber na hora quando a ADM mandar uma tarefa, e 2 dias antes de um evento se faltar gente da sua equipe.</p><div class="actions"><button class="btn primary" type="button" data-act="ativar-notif">${ico("bell")} Ativar avisos</button></div></section>` : ""}
   ${(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 3); return A.length ? `<section class="panel"><h3>Próximos eventos <button class="linkbtn" type="button" data-go="agenda">agenda ›</button></h3><div class="acao-lista">${A.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.equipe)} · ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div></section>` : ""; })()}`;
 }
 function vMeta() {
@@ -5380,7 +5365,7 @@ function vMeta() {
   const tel = x => waNumber(x.tel);
   const cab = `
   <div class="head"><div><h2>Meta do TOP</h2><p>${esc(topName())}: ${D.vagas} vagas + ${D.desist}% de desistência = <b>${D.meta} inscritos</b> até ${fmt(D.fimD)}. A meta é montada sozinha para cada TOP novo.</p></div>
-    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${podeEditar() ? `<button class="btn" type="button" data-act="ind-link">${ico("route")} Link de indicação</button>` : ""}<button class="btn" type="button" data-go="agenda">${ico("clock")} Agenda</button>${ehCoordEq() || SALA() ? "" : `<button class="btn" type="button" data-act="meta-placar">${ico("wa")} Copiar placar</button>`}${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
+    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${podeEditar() ? `<button class="btn" type="button" data-act="ind-link">${ico("route")} Link de indicação</button>` : ""}<button class="btn" type="button" data-go="agenda">${ico("clock")} Agenda</button>${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
 `;
   const pPlacar = `
   <div class="kpis">
@@ -5395,12 +5380,6 @@ function vMeta() {
     <div class="meta-checks">${D.checks.map(c => { const cls = !c.passou ? "" : D.inscritos >= c.min ? "ok" : "bad";
       return `<div class="mc ${cls}"><span class="lbl">Semana -${c.w} · ${fmt(c.d)}</span><b class="num">mín. ${c.min}</b><small>${!c.passou ? "ainda vem" : cls === "ok" ? "batido ✓" : "abaixo: plano B"}</small></div>`; }).join("")}</div>
   </section>
-  <section class="panel"><h3>Equipes <small>nomes indicados e inscritos por indicação</small></h3>
-    ${E.length ? `<div class="meta-eqs">${[...E].sort((a, b) => b.nomes / b.metaNomes - a.nomes / a.metaNomes).map(e => `<div class="me-row ${ehCoordEq() && e.e === ME.equipeLgnd ? "minha" : ""}">
-      <div class="me-nome"><b>${esc(e.e)}</b>${e.nomes >= e.metaNomes ? ' <span title="Bateu a meta de nomes">🏆</span>' : ""}<small class="hint">${e.n} servidores</small></div>
-      <div class="me-bar"><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div><small class="num">${e.nomes}/${e.metaNomes} nomes</small></div>
-      <div class="me-bar"><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div><small class="num">${e.insc}/${e.metaInsc} inscritos</small></div></div>`).join("")}</div>` : `<div class="empty">Importe a planilha de equipes LGND para dividir a meta entre as equipes.</div>`}
-  </section>
 `;
   const pInd = `
   <section class="panel"><h3>${ehCoordEq() ? `Indicações da ${esc(ME.equipeLgnd || "equipe")}` : "Indicações"} <small>${filt.length}</small></h3>
@@ -5412,13 +5391,13 @@ function vMeta() {
         <button class="linkbtn" type="button" data-ind-ed="${esc(x.doc)}|${esc(x.id)}" aria-label="Editar">${ico("edit")}</button></div>` : ""}</div>`).join("")}</div>`
     : `<div class="empty">${I.length ? "Nada neste filtro." : "Nenhum nome indicado ainda. Cada servidor indica 5 nomes."}</div>`}
   </section>`;
-  const aba = (SALA() ? ["grupo", "quadro", "ind", ...(ehCoordEq() ? [] : ["placar"])] : ["placar", "ind", "eq"]).includes(S.metaAba) ? S.metaAba : SALA() ? "grupo" : "placar";
-  return cab + metaAbas(aba) + (aba === "grupo" ? vGrupos(D) : aba === "quadro" ? vQuadro(D) : aba === "eq" ? vMetaFrentes(D) : aba === "ind" ? metaFaq() + pInd : M2() ? metaResumo2(D) + pPlacar.split('<section class="panel"><h3>Equipes')[0] : metaSemana(D) + pPlacar);
+  const aba = ["grupo", "quadro", "ind", ...(ehCoordEq() ? [] : ["placar"])].includes(S.metaAba) ? S.metaAba : "grupo";
+  return cab + metaAbas(aba) + (aba === "grupo" ? vGrupos(D) : aba === "quadro" ? vQuadro(D) : aba === "ind" ? metaFaq() + pInd : metaResumo2(D) + pPlacar);
 }
-document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.qResp) { quadroMarcar(t.dataset.qResp, "resp", t.value); return; } if (t && t.dataset && t.dataset.qDar && t.value) { quadroMarcar(t.dataset.qDar, "pegar", t.value); return; } if (t && t.dataset && t.dataset.salaEq != null) { S.salaEq = t.value; render(); return; } if (t && t.dataset && t.dataset.tarResp) { tarResp(t.dataset.tarResp, t.value); return; } if (t && t.dataset && t.dataset.tselId && S.tarSel) { t.checked ? S.tarSel.add(t.dataset.tselId) : S.tarSel.delete(t.dataset.tselId); render(); return; } if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
+document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.qResp) { quadroMarcar(t.dataset.qResp, "resp", t.value); return; } if (t && t.dataset && t.dataset.qDar && t.value) { quadroMarcar(t.dataset.qDar, "pegar", t.value); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
 document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[data-ind-zap]"); if (!a) return;
   const [doc, id] = a.dataset.indZap.split("|"), x = indTodas().find(y => y.doc === doc && y.id === id); if (x && x.status === "novo") setTimeout(() => indMarcar(doc, id, "contatado"), 300); });
-/* Tarefas das equipes (Estratégia 150): já nascem do PDF; estado em config metatar-<top> {estado:{tid:{feito,n,em,por}}, extras:[], apagadas:[]} */
+/* Tarefas do PDF Estratégia 150: hoje só servem para o plano de 13 semanas do próximo TOP (prevPlano) */
 const TAR_PDF = [
   ["Diretoria", -12, "Aprovar meta, gastos e o desconto da panfletagem"], ["Diretoria", -10, "Abrir igrejas e conversar com os pastores", 3, "igreja"],
   ["Intercessão", -9, "Adote um nome: cada intercessor ora por 3 convidados e manda mensagem"], ["Intercessão", -8, "Abrir as igrejas dos intercessores", 2, "igreja"],
@@ -5435,64 +5414,6 @@ const TAR_PDF = [
 const TAR_CONT = [[-11, "Diretoria", "Lançamento do TOP"], [-10, "Voz", "Convite aos homens de Franca"], [-9, "Mídia", "Testemunhos do último TOP"], [-8, "Eventos", "Convite para o pré-TOP"],
   [-7, "Eventos", "Pré-TOP ao vivo e bastidores"], [-6, "Hakunas", "Cuidado com você: saúde"], [-6, "Segurança", "Cuidado com você: segurança"], [-5, "Logística", "Bastidores da estrutura"],
   [-5, "Produção", "Bastidores da montagem"], [-4, "Intercessão", "Oração e mensagem de fé"], [-3, "ADM", "Como se inscrever e últimas vagas"], [-2, "Esposas", "Esposas e famílias"], [-1, "ADM", "Reta final e orientações práticas"]];
-const tarId = () => "metatar-" + curTopId();
-const tarDoc = () => cfgDe(tarId()) || {};
-function tarLista(D) {
-  const T = tarDoc(), E = T.estado || {}, fora = new Set(T.apagadas || []), hoje = new Date();
-  const A = acoesTodas().filter(a => a.data < hojeISO()), auto = (k, eq) => k === "igreja" ? new Set(A.filter(a => a.tipo === "Apresentação em igreja" && a.equipe === eq).map(a => norm(a.local || a.titulo))).size
-    : A.filter(a => a.tipo === (k === "pretop" ? "Pré-TOP" : "Encontro de apresentação")).length;   // conta sozinho pelo que já aconteceu na Agenda
-  const base = [...TAR_PDF.map(([equipe, semana, titulo, alvo, ag], i) => ({ id: "p" + i, equipe, semana, titulo, alvo: alvo || 0, tipo: ag ? "auto" : alvo ? "num" : "simples", ag })),
-    ...TAR_CONT.map(([semana, equipe, tema], i) => ({ id: "c" + i, equipe, semana, titulo: "Conteúdo para a Mídia: " + tema, tipo: "conteudo" })), ...(T.extras || [])];
-  return base.filter(t => !fora.has(t.id)).map(t => { const e = E[t.id] || {}, prazo = D.fimD ? new Date(D.fimD - (-t.semana) * 7 * 864e5) : null;
-    const n = t.tipo === "auto" ? Math.min(t.alvo, auto(t.ag, t.equipe)) : Math.min(t.alvo || 1e9, +e.n || 0), feito = t.tipo === "num" || t.tipo === "auto" ? n >= t.alvo : !!e.feito;
-    const sit = feito ? "feito" : prazo && prazo < hoje ? "atrasada" : prazo && prazo - hoje <= 7 * 864e5 ? "semana" : "proxima";
-    return { ...t, ...e, n, feito, prazo, sit }; }).sort((a, b) => a.semana - b.semana || a.equipe.localeCompare(b.equipe));
-}
-const podeTar = t => podeEditar() || (ehCoordEq() && t.equipe === ME.equipeLgnd);
-function tarMarcar(id, op) {
-  const D = metaDados(), t = tarLista(D).find(x => x.id === id); if (!t) return;
-  if (t.tipo === "auto") { toast("Esta tarefa conta sozinha pelos eventos da Agenda."); return; }
-  if (!podeTar(t)) { toast("Só a equipe " + t.equipe + " ou a ADM marcam esta tarefa."); return; }
-  const T = tarDoc(), E = { ...(T.estado || {}) }, a = E[id] || {};
-  E[id] = op === "mais" ? { ...a, n: Math.min(t.alvo, (+a.n || 0) + 1), em: new Date().toISOString(), por: ME.adm || "" } : op === "menos" ? { ...a, n: Math.max(0, (+a.n || 0) - 1) } : { ...a, feito: !a.feito, em: new Date().toISOString(), por: ME.adm || "" };
-  (async () => { try { await api.set("config", tarId(), { ...T, estado: E }); if (op !== "menos" && (E[id].feito || (t.tipo === "num" && E[id].n >= t.alvo))) toast("Feito! 🙌"); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
-}
-function tarForm(t) {
-  if (!podeEditar()) return;
-  const novo = !t; t = t || { equipe: equipesUsadas()[0], semana: -8, tipo: "simples", titulo: "", alvo: 0 };
-  modal(`<h3>${novo ? "Nova tarefa" : "Editar tarefa"}</h3><div class="form">
-    <div class="field full"><label for="tf-t">O que fazer</label><input id="tf-t" name="titulo" value="${esc(t.titulo)}" required></div>
-    <div class="field"><label for="tf-e">Equipe</label><select id="tf-e" name="equipe" class="sel">${[...new Set([...equipesUsadas(), "Diretoria", "Esposas", t.equipe])].map(e => `<option ${t.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select></div>
-    <div class="field"><label for="tf-s">Semana de entrega</label><select id="tf-s" name="semana" class="sel">${Array.from({ length: 14 }, (_, i) => -13 + i).map(w => `<option value="${w}" ${+t.semana === w ? "selected" : ""}>Semana ${w}${w === 0 ? " (do TOP)" : ""}</option>`).join("")}</select></div>
-    <div class="field"><label for="tf-a">Quantidade (opcional)</label><input id="tf-a" name="alvo" type="number" min="0" value="${t.alvo || ""}" placeholder="ex.: 3 igrejas"></div>
-  </div><div class="modal-foot"><div>${novo ? "" : `<button class="btn danger" type="button" id="delBtn">Excluir</button>`}</div>
-    <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
-  fd => { const titulo = String(fd.get("titulo") || "").trim(); if (!titulo) return; const alvo = +fd.get("alvo") || 0, T = tarDoc();
-    const item = { id: t.id && !/^[pc]\d+$/.test(t.id) ? t.id : "x" + Date.now().toString(36), titulo, equipe: fd.get("equipe"), semana: +fd.get("semana"), alvo, tipo: t.tipo === "conteudo" ? "conteudo" : alvo ? "num" : "simples" };
-    const apagadas = [...(T.apagadas || []), ...(t.id && /^[pc]\d+$/.test(t.id) ? [t.id] : [])];   // tarefa do PDF editada vira uma tarefa própria
-    closeModal(); save(() => api.set("config", tarId(), { ...T, apagadas, extras: [...(T.extras || []).filter(x => x.id !== item.id), item] }), novo ? "Tarefa criada" : "Tarefa salva"); });
-  const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); const T = tarDoc();
-    save(() => api.set("config", tarId(), { ...T, apagadas: [...(T.apagadas || []), t.id], extras: (T.extras || []).filter(x => x.id !== t.id) }), "Tarefa excluída"); };
-}
-function tarLi(t) {
-  const fmt = d => d ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "", pode = podeTar(t);
-  const btn = t.tipo === "auto" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b><small class="hint">conta pela Agenda</small></div>` : t.tipo === "num" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b>${pode && !t.feito ? `<button class="btn sm primary" type="button" data-tar-mais="${t.id}">+1</button>` : ""}${pode && t.n ? `<button class="linkbtn" type="button" data-tar-menos="${t.id}" aria-label="Desfazer 1">−</button>` : ""}</div>`
-    : pode ? `<button class="btn sm ${t.feito ? "" : "primary"}" type="button" data-tar-feito="${t.id}">${t.feito ? "Desfazer" : t.tipo === "conteudo" ? "Entregue" : "Feito"}</button>` : t.feito ? `<span class="chip ok">Feito</span>` : "";
-  if (S.tarSel) return `<label class="li tar-li tar-sel ${t.sit}"><input type="checkbox" data-tsel-id="${t.id}" ${S.tarSel.has(t.id) ? "checked" : ""}><div class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)} · semana ${t.semana}${t.feito ? " · feita" : ""}</small></div></label>`;
-  return `<div class="li tar-li ${t.sit}"><span class="tar-ck">${t.feito ? ico("check") : ""}</span><div class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)} · semana ${t.semana} (até ${fmt(t.prazo)})${t.resp ? ` · com ${esc(t.resp.split(" ")[0])}` : ""}${t.feito && t.por ? ` · feito por ${esc(t.por.split(" ")[0])}` : ""}</small>
-    ${t.tipo === "num" || (t.tipo === "auto" && t.alvo > 1) ? `<div class="bar good"><i style="width:${pct(t.n, t.alvo)}%"></i></div>` : ""}</div>${btn}${podeEditar() ? `<button class="linkbtn" type="button" data-tar-ed="${t.id}" aria-label="Editar">${ico("edit")}</button>` : ""}</div>`;
-}
-function vMetaTarefas(D) {
-  const eqF = ehCoordEq() ? ME.equipeLgnd : (S.tarEq || ""), L = tarLista(D).filter(t => !eqF || t.equipe === eqF);
-  const grp = [["atrasada", "Atrasadas"], ["semana", "Desta semana"], ["proxima", "Próximas"], ["feito", "Feitas"]];
-  const eqs = [...new Set(tarLista(D).map(t => t.equipe))];
-  return `${ehCoordEq() ? "" : `<div class="actions" style="justify-content:space-between"><select class="sel" data-tar-eq aria-label="Equipe"><option value="">Todas as equipes</option>${eqs.map(e => `<option ${eqF === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>
-    ${podeEditar() ? `<button class="btn" type="button" data-tar-novo="1">${ico("plus")} Nova tarefa</button>` : ""}</div>`}
-    <div class="kpis"><div class="kpi ${L.some(t => t.sit === "atrasada") ? "alert" : ""}"><span class="lbl">Atrasadas</span><span class="val num">${L.filter(t => t.sit === "atrasada").length}</span></div>
-      <div class="kpi"><span class="lbl">Desta semana</span><span class="val num">${L.filter(t => t.sit === "semana").length}</span></div>
-      <div class="kpi"><span class="lbl">Feitas</span><span class="val num">${L.filter(t => t.feito).length}<small style="font-size:.5em;color:var(--muted)"> / ${L.length}</small></span></div></div>
-    ${grp.map(([k, l]) => { const g = L.filter(t => t.sit === k); return g.length ? `<section class="panel"><h3>${l} <small>${g.length}</small></h3><div class="list">${(k === "feito" ? g.slice(-8) : g).map(tarLi).join("")}</div></section>` : ""; }).join("")}`;
-}
 /* Eventos de divulgação (ida à igreja, panfletagem, pré-TOP…; na tela se chamam "Eventos"): config acao-<top>-<membroId> {lista:[{id,tipo,titulo,data,hora,local,endereco,equipe,obs,token,por,em,resultado}]}.
    Link de presença acao.html (na demo, localStorage "adm3-acao-link"; no real, RPC adm_acao_confirmar). Convite em PDF para os legendários. */
 const ACAO_CAPTAR = ["Apresentação em igreja", "Panfletagem", "Pré-TOP", "Encontro de apresentação"];
@@ -5511,7 +5432,7 @@ function acaoConfirmados(a) {
   if (DEMO) { try { return (JSON.parse(localStorage.getItem(ACAO_LS) || "[]") || []).filter(x => x.acao === a.id); } catch { return []; } }
   return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`acaopres-${curTopId()}-${a.id}-`)).map(([, d]) => d);
 }
-const acaoLink = (a, r) => { const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: r ? r.eq : SALA() && acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, ...(SALA() ? { v: 2, x: a.aberto && !r ? 1 : 0 } : {}), ...(r ? { fe: r.eq, m: String(r.oque || "").slice(0, 160), n: r.homens || 0 } : {}) };
+const acaoLink = (a, r) => { const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: r ? r.eq : acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, v: 2, x: a.aberto && !r ? 1 : 0, ...(r ? { fe: r.eq, m: String(r.oque || "").slice(0, 160), n: r.homens || 0 } : {}) };
   return `${location.origin}${DEMO ? location.pathname.replace(/[^/]*$/, "") + "acao.html" : "/api/convite"}?t=${encodeURIComponent(a.token)}&top=${encodeURIComponent(curTopId())}&a=${encodeURIComponent(a.id)}&i=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(info)))))}${DEMO ? "&demo=1" : ""}`; };
 const acaoQuando = a => { const d = a.data ? new Date(a.data + "T12:00:00") : null; return (d ? d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) : "data a definir") + (a.hora ? " às " + a.hora : ""); };
 function acaoSalvar(doc, item, msg, apagar) {
@@ -5519,7 +5440,7 @@ function acaoSalvar(doc, item, msg, apagar) {
   const L = ((S.cfgDocs || {})[doc] || {}).lista || [], id = apagar || item.id, nova = L.filter(y => y.id !== id); if (item) { const { doc: _d, ...x } = item; nova.push(x); }
   (async () => { try { await api.set("config", doc, { lista: nova }); if (msg) toast(msg); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
 }
-/* Equipes responsáveis no evento (SALA/demo): a.resp = [{eq, oque, homens}]. "Todas as equipes" põe uma linha por equipe. */
+/* Equipes responsáveis no evento: a.resp = [{eq, oque, homens}]. "Todas as equipes" põe uma linha por equipe. */
 const acaoEqLista = () => [...new Set([...equipesUsadas(), "Diretoria", "Esposas"])];
 const acaoResp = a => (a.resp || []).filter(x => x && x.eq);
 const acaoEquipeTxt = a => { const R = acaoResp(a); return !R.length ? a.equipe : R.length >= equipesUsadas().length ? "Todas as equipes" : R.length > 2 ? `${R.length} equipes` : R.map(x => x.eq).join(" e "); };
@@ -5531,16 +5452,15 @@ function acaoForm(a) {
   if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }
   const novo = !a; a = a || { tipo: ACAO_TIPOS[0], equipe: ehCoordEq() ? ME.equipeLgnd : "", data: "", hora: "19:00" };
   modal(`<h3>${novo ? "Novo evento" : "Editar evento"}</h3><div class="form">
-    ${SALA() ? "" : `<div class="field full"><label for="ac-tp">Tipo</label><select id="ac-tp" name="tipo" class="sel"><optgroup label="Trazer senderistas">${ACAO_CAPTAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><optgroup label="Cuidar dos legendários">${ACAO_CUIDAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><option ${a.tipo === "Outro" ? "selected" : ""}>Outro</option></select></div>`}
-    ${SALA() ? `<div class="field"><label for="ac-ob">Objetivo</label><select id="ac-ob" name="objetivo" class="sel">${[["captar", "Divulgação: trazer senderistas"], ["cuidar", "Cuidar dos legendários"], ["outro", "Outro (escrever)"]].map(([k, l]) => `<option value="${k}" ${acaoObj(a).k === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    <div class="field"><label for="ac-ob">Objetivo</label><select id="ac-ob" name="objetivo" class="sel">${[["captar", "Divulgação: trazer senderistas"], ["cuidar", "Cuidar dos legendários"], ["outro", "Outro (escrever)"]].map(([k, l]) => `<option value="${k}" ${acaoObj(a).k === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="field" id="ac-obw" ${acaoObj(a).k === "outro" ? "" : "hidden"}><label for="ac-obt">Qual objetivo?</label><input id="ac-obt" name="objetivoTxt" value="${esc(a.objetivoTxt || "")}" placeholder="ex.: Arrecadar alimentos" maxlength="40"></div>
-    <label class="field full ck-line"><input type="checkbox" name="aberto" ${a.aberto ? "checked" : ""}> Convite aberto: quem ainda não é legendário também pode confirmar</label>` : ""}
+    <label class="field full ck-line"><input type="checkbox" name="aberto" ${a.aberto ? "checked" : ""}> Convite aberto: quem ainda não é legendário também pode confirmar</label>
     <div class="field full"><label for="ac-ti">Título</label><input id="ac-ti" name="titulo" value="${esc(a.titulo || "")}" placeholder="ex.: Apresentação na Igreja Batista Central" required></div>
     <div class="field"><label for="ac-d">Dia</label><input id="ac-d" name="data" type="date" value="${esc(a.data || "")}" required></div>
     <div class="field"><label for="ac-h">Hora</label><input id="ac-h" name="hora" type="time" value="${esc(a.hora || "")}"></div>
     <div class="field full"><label for="ac-l">Local</label><input id="ac-l" name="local" value="${esc(a.local || "")}" placeholder="ex.: Igreja Batista Central"></div>
     <div class="field full"><label for="ac-en">Endereço</label><input id="ac-en" name="endereco" value="${esc(a.endereco || "")}" placeholder="Rua, número, bairro"></div>
-    ${SALA() && !ehCoordEq() ? `<div class="field full"><label>Equipes responsáveis</label><p class="hint" style="margin:0 0 6px">Para cada equipe: o que ela faz no evento e quantos homens precisa.</p>
+    ${!ehCoordEq() ? `<div class="field full"><label>Equipes responsáveis</label><p class="hint" style="margin:0 0 6px">Para cada equipe: o que ela faz no evento e quantos homens precisa.</p>
       <div id="evResp">${(acaoResp(a).length ? acaoResp(a) : [{ eq: a.equipe || acaoEqLista()[0] }]).map(acaoRespLinha).join("")}</div>
       <div class="actions"><button class="btn sm" type="button" id="evMais">${ico("plus")} Adicionar equipe</button><button class="btn sm" type="button" id="evTodas">Todas as equipes</button><span class="hint" id="evTot"></span></div></div>`
     : `<div class="field"><label for="ac-eq">Equipe</label>${ehCoordEq() ? `<input id="ac-eq" name="equipe" value="${esc(a.equipe)}" readonly>` : `<select id="ac-eq" name="equipe" class="sel">${acaoEqLista().map(e => `<option ${a.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>`}</div>
@@ -5553,9 +5473,9 @@ function acaoForm(a) {
     if ($("#evResp")) { const E = fd.getAll("req-eq"), O = fd.getAll("req-o"), Hh = fd.getAll("req-h"), vis = new Set();
       resp = E.map((eq, i) => ({ eq: String(eq), oque: String(O[i] || "").trim(), homens: +Hh[i] || 0 })).filter(x => x.eq && !vis.has(x.eq) && vis.add(x.eq));
       if (!resp.length) { toast("Coloque pelo menos uma equipe."); return; } }
-    const obj = SALA() ? { objetivo: String(fd.get("objetivo") || ""), objetivoTxt: fd.get("objetivo") === "outro" ? String(fd.get("objetivoTxt") || "").trim().slice(0, 40) : "", aberto: !!fd.get("aberto") } : {};
+    const obj = { objetivo: String(fd.get("objetivo") || ""), objetivoTxt: fd.get("objetivo") === "outro" ? String(fd.get("objetivoTxt") || "").trim().slice(0, 40) : "", aberto: !!fd.get("aberto") };
     if (obj.objetivo === "outro" && !obj.objetivoTxt) { toast("Escreva qual é o objetivo."); return; }
-    const item = { ...a, ...obj, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: SALA() ? (a.tipo && a.objetivo === obj.objetivo ? a.tipo : obj.objetivo === "cuidar" ? "Encontro de legendários" : obj.objetivo === "outro" ? "Outro" : "Encontro de apresentação") : fd.get("tipo"), titulo, data,
+    const item = { ...a, ...obj, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: a.tipo && a.objetivo === obj.objetivo ? a.tipo : obj.objetivo === "cuidar" ? "Encontro de legendários" : obj.objetivo === "outro" ? "Outro" : "Encontro de apresentação", titulo, data,
       hora: String(fd.get("hora") || ""), local: String(fd.get("local") || "").trim(), endereco: String(fd.get("endereco") || "").trim(), equipe: resp ? resp[0].eq : String(fd.get("equipe") || ""), vagas: resp ? resp.reduce((n, x) => n + x.homens, 0) : +fd.get("vagas") || 0, ...(resp ? { resp } : {}),
       obs: String(fd.get("obs") || "").trim(), por: a.por || ME.adm || "", em: a.em || new Date().toISOString() };
     closeModal(); acaoSalvar(a.doc || acaoDocMeu(), item, novo ? "Evento criado: agora mande o link e o convite" : "Evento salvo"); });
@@ -5625,7 +5545,7 @@ async function acaoPdf(a) {
   doc.setTextColor(255, 255, 255); doc.setFontSize(27); const tl = doc.splitTextToSize(a.titulo.toUpperCase(), W - 36); doc.text(tl, W / 2, 78, { align: "center", lineHeightFactor: 1.1 });
   let y = 78 + tl.length * 11 + 2;
   doc.setFont("helvetica", "normal"); doc.setFontSize(12.5); doc.setTextColor(220, 210, 200);
-  doc.text(doc.splitTextToSize(acaoCuidar(a) ? `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estarmos juntos de novo${SALA() ? "" : ": " + a.tipo.toLowerCase()}. Traga sua família e seus irmãos de TOP.` : `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estar junto ${SALA() ? "neste evento" : "nesta " + a.tipo.toLowerCase()} e levar o TOP para mais homens.`, W - 50), W / 2, y, { align: "center" }); y += 16;
+  doc.text(doc.splitTextToSize(acaoCuidar(a) ? `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estarmos juntos de novo. Traga sua família e seus irmãos de TOP.` : `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estar junto neste evento e levar o TOP para mais homens.`, W - 50), W / 2, y, { align: "center" }); y += 16;
   const caixa = (lbl, val, yy) => { doc.setFillColor(26, 34, 45); doc.roundedRect(24, yy, W - 48, 21, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(24, yy + 4, 1.6, 13, "F");
     doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text(lbl, 32, yy + 7.5, { charSpace: 0.5 });
     doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.text(doc.splitTextToSize(val, W - 64)[0] || "", 32, yy + 15.5); };
@@ -5643,14 +5563,14 @@ async function acaoPdf(a) {
 }
 function acaoVer(a) {
   const C = acaoConfirmados(a), l = acaoLink(a), R = acaoResp(a), msg = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}${R.length ? "\n\n" + R.map(x => `• ${x.eq}${x.oque ? ": " + x.oque : ""}${x.homens ? ` (${x.homens} homens)` : ""}`).join("\n") : ""}\n\n${R.length ? "Contamos com você!" : `A equipe ${a.equipe} convida você!`} Confirme sua presença: ${l}`, pode = podeEditar() || (ehCoordEq() && a.equipe === ME.equipeLgnd);
-  modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${SALA() ? acaoTag(a) : esc(a.tipo)} · ${esc(acaoEquipeTxt(a))} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
+  modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${acaoTag(a)} · ${esc(acaoEquipeTxt(a))} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
     <div class="actions" style="flex-wrap:wrap"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Mandar link no WhatsApp</a>
-      <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button>${SALA() ? `<button class="btn" type="button" id="acPlano">${ico("upload")} PDF do evento</button>${podeEditar() && !ehCoordEq() ? `<button class="btn" type="button" id="acXls">${ico("upload")} Planilha dos confirmados</button>` : ""}` : ""}${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}</div>
+      <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button><button class="btn" type="button" id="acPlano">${ico("upload")} PDF do evento</button>${podeEditar() && !ehCoordEq() ? `<button class="btn" type="button" id="acXls">${ico("upload")} Planilha dos confirmados</button>` : ""}${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}</div>
     ${R.length ? `<section class="panel" style="margin-top:6px"><h3>O que precisamos das equipes <small>${R.reduce((n, x) => n + (x.homens || 0), 0)} homens</small></h3><p class="hint" style="margin:0 0 6px">Cada equipe tem o seu link: mande para os servos daquela área. Quem confirmar já entra na equipe certa.</p><div class="list">${R.map((x, i) => { const c = C.filter(y => y.equipe === x.eq).length, pode = podeEditar() || x.eq === ME.equipeLgnd;
       const m = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}\n\n*Equipe ${x.eq}*, precisamos de você${x.homens ? ` (${x.homens} homens)` : ""}${x.oque ? ":\n" + x.oque : "."}\n\nConfirme aqui: ${acaoLink(a, x)}`;
       return `<div class="li ${x.eq === ME.equipeLgnd ? "ev-minha" : ""}"><span class="grow"><b>${esc(x.eq)}</b><small class="hint" style="display:block;white-space:normal">${esc(x.oque || "a combinar")}</small>
         ${pode ? `<span class="actions" style="margin-top:4px"><a class="btn sm" style="color:var(--fg)" href="https://wa.me/?text=${encodeURIComponent(m)}" target="_blank" rel="noopener">${ico("wa")} Link da equipe</a><button class="linkbtn" type="button" data-ev-copia="${i}">copiar</button></span>` : ""}</span><span class="chip ${x.homens && c >= x.homens ? "ok" : ""}">${c}/${x.homens || "-"}</span></div>`; }).join("")}</div></section>` : ""}
-    ${M2() && a.data <= hojeISO() && (podeEditar() || a.por === ME.adm) && C.length + 1 ? `<section class="panel" style="margin-top:6px"><h3>Quem foi de verdade ${a.foram ? `<small>${acaoPresentes(a)} foram</small>` : ""}</h3>
+    ${a.data <= hojeISO() && (podeEditar() || a.por === ME.adm) ? `<section class="panel" style="margin-top:6px"><h3>Quem foi de verdade ${a.foram ? `<small>${acaoPresentes(a)} foram</small>` : ""}</h3>
       <p class="hint" style="margin:0 0 6px">Marque quem apareceu. É isso que conta como presença da equipe no Resumo.</p>
       ${C.length ? `<div class="list">${C.map(x => `<label class="li ck-line" style="cursor:pointer"><input type="checkbox" class="ev-foi" value="${esc(confKey(x))}" ${!a.foram || a.foram.includes(confKey(x)) ? "checked" : ""}> <span class="grow"><b>${esc(x.nome)}</b> <span class="hint">${esc(x.leg === false ? "convidado" : x.equipe || "")}</span></span></label>`).join("")}</div>` : ""}
       <div class="actions" style="margin-top:8px"><label class="hint" for="evExtra">Foram sem confirmar:</label><input id="evExtra" type="number" min="0" value="${+a.foramExtra || 0}" style="width:80px"><button class="btn primary sm" type="button" id="evForam">${ico("check")} Salvar presença</button></div></section>` : ""}
@@ -5672,8 +5592,8 @@ function vAgenda() {
   const hoje = hojeISO(), M = [];
   acoesTodas().forEach(a => M.push({ k: "ev", data: a.data, fim: a.data, a }));
   agTops().forEach(t => M.push({ k: "top", data: t.inicio, fim: t.fim || t.inicio, t }));
-  const GR = SALA() ? grupos() : [];
-  if (SALA()) quadro().filter(t => t.prazo && (t.pegou || podeEditar())).forEach(t => M.push({ k: "tar", data: t.prazo, fim: t.feito ? t.prazo : (t.prazo < hoje ? hoje : t.prazo), t }));
+  const GR = grupos();
+  quadro().filter(t => t.prazo && (t.pegou || podeEditar())).forEach(t => M.push({ k: "tar", data: t.prazo, fim: t.feito ? t.prazo : (t.prazo < hoje ? hoje : t.prazo), t }));
   M.sort((x, y) => String(x.data + (x.a ? x.a.hora : "")).localeCompare(String(y.data + (y.a ? y.a.hora : ""))));
   const prox = M.filter(x => x.fim >= hoje), pass = M.filter(x => x.fim < hoje).reverse(), L = S.agPass ? pass : prox;
   const mes = d => { const t = new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }); return t[0].toUpperCase() + t.slice(1); };
@@ -5685,8 +5605,8 @@ function vAgenda() {
       return `<button class="acao-c ag-tar ${minha ? "minha" : ""} ${t.feito ? "feito" : ""}" type="button" data-meta-tar="1">${dia(t.prazo)}<span class="grow"><b>${esc(t.titulo)} <span class="chip ${t.feito ? "ok" : venc ? "bad" : "wait"}">${t.feito ? "feita" : venc ? "atrasada" : "tarefa"}</span></b><small class="hint"><span class="tag ${m[1]}">${m[0]}</span> prazo · ${g ? esc(g.nome) : "sem grupo"}${t.resp ? " · com " + esc(t.resp.split(" ")[0]) : ""}</small></span></button>`; }
     const a = x.a, c = acaoConfirmados(a).length;
     return `<button class="acao-c ${acaoTemEq(a, ME.equipeLgnd) ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
-      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `${acaoTag(a)} ` : esc(a.tipo) + " · "}${esc(acaoEquipeTxt(a))}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
-      ${M2() && a.data < hoje ? (a.foram ? `<span class="chip ok">${acaoPresentes(a)} foram</span>` : podeEditar() || a.por === ME.adm ? `<span class="chip wait">marcar quem foi</span>` : `<span class="chip">${c} confirmaram</span>`)
+      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${acaoTag(a)} ${esc(acaoEquipeTxt(a))}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
+      ${a.data < hoje ? (a.foram ? `<span class="chip ok">${acaoPresentes(a)} foram</span>` : podeEditar() || a.por === ME.adm ? `<span class="chip wait">marcar quem foi</span>` : `<span class="chip">${c} confirmaram</span>`)
         : `<span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span>`}</button>`; };
   const meses = []; L.forEach(x => { const m = mes(x.data), g = meses[meses.length - 1]; if (g && g.m === m) g.l.push(x); else meses.push({ m, l: [x] }); });
   const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
@@ -5760,59 +5680,6 @@ const FRENTES = [
   { k: "com", l: "Comercial", eq: ["Segurança", "Hakunas", "Voz", "Eventos"], sub: "Equipe 1: Segurança e Hakunas · Equipe 2: Voz e Eventos", m: "Rua, igrejas e pré-TOP; tirar dúvidas e virar interesse em inscrição" },
   { k: "mkt", l: "Marketing", eq: ["Mídia"], m: "Redes sociais, vídeos e a arte de tudo" },
   { k: "apoio", l: "Apoio", eq: ["Esposas"], m: "Esposas de legendários cuidam das famílias; coordenadores cobram os 5 nomes por servidor" }];
-function frentesDados(D) {
-  const T = tarLista(D), I = indTodas(), A = acoesTodas(), hoje = hojeISO(), passou = a => a.data < hoje;
-  const igrejas = new Set(A.filter(a => passou(a) && a.tipo === "Apresentação em igreja").map(a => norm(a.local || a.titulo))).size;
-  const ind = { esp: [{ l: "Igrejas visitadas", n: igrejas, alvo: 8 }],
-    adm: I.length ? [{ l: "Indicações com contato em dia", n: I.filter(x => !indAtrasada(x)).length, alvo: I.length }] : [],
-    com: [{ l: "Saídas de panfletagem", n: A.filter(a => passou(a) && a.tipo === "Panfletagem").length, alvo: 14 }, { l: "Formulários da panfletagem", n: I.filter(x => x.canal === "Panfletagem").length, alvo: 150 }],
-    mkt: [{ l: "Inscritos pelas redes", n: I.filter(x => x.canal === "Redes sociais" && indInscrito(x)).length, alvo: 15 }] };
-  const usadas = new Set(FRENTES.flatMap(f => f.eq));
-  return FRENTES.map(f => { const eqs = f.k === "apoio" ? [...f.eq, ...new Set(T.map(t => t.equipe).filter(e => !usadas.has(e)))] : f.eq, L = T.filter(t => eqs.includes(t.equipe));
-    return { ...f, eqs, L, total: L.length, feitas: L.filter(t => t.feito).length, atras: L.filter(t => t.sit === "atrasada").length, ind: ind[f.k] || [] }; }).filter(f => f.total || f.ind.length);
-}
-function vMetaFrentes(D) {
-  const F = frentesDados(D), meu = ehCoordEq() ? ME.equipeLgnd : "", temSaidas = acoesTodas().some(a => /^Panfletagem · Equipe/.test(a.titulo || ""));
-  const ord = meu ? [...F].sort((a, b) => b.eqs.includes(meu) - a.eqs.includes(meu)) : F;
-  const card = f => { const minha = meu && f.eqs.includes(meu), L = minha ? f.L.filter(t => t.equipe === meu) : f.L, pend = L.filter(t => !t.feito), ja = L.filter(t => t.feito);
-    const agora = pend.filter(t => t.sit !== "proxima"), depois = pend.filter(t => t.sit === "proxima");
-    if (S.tarSel) return `<section class="panel frente-sel"><div class="actions" style="justify-content:space-between"><b>${esc(f.l)}</b><button class="btn sm" type="button" data-tsel-frente="${f.k}">${f.L.every(t => S.tarSel.has(t.id)) ? "Desmarcar" : "Selecionar"} as ${f.L.length}</button></div><div class="list">${f.L.map(tarLi).join("")}</div></section>`;
-    return `<details class="panel frente ${f.atras ? "atras" : ""}" ${minha || (!meu && f.atras) ? "open" : ""}><summary><div class="grow"><b>${esc(f.l)}${minha ? ' <span class="chip acc">sua equipe</span>' : ""}</b><small class="hint">${esc(f.sub || f.eqs.join(", "))}</small><small>${esc(f.m)}</small></div>
-      <div class="fr-st"><b class="num">${f.feitas}/${f.total}</b><small>${f.atras ? `<span class="chip bad">${f.atras} atrasada(s)</span>` : "tarefas"}</small></div></summary>
-      ${f.ind.length ? `<div class="fr-ind">${f.ind.map(i => `<div><small class="hint">${esc(i.l)}</small><b class="num">${i.n}<small>/${i.alvo}</small></b><div class="bar good"><i style="width:${pct(i.n, i.alvo)}%"></i></div></div>`).join("")}</div>` : ""}
-      ${SALA() && !ehCoordEq() ? `<div class="actions">${f.eqs.map(x => `<button class="btn sm" type="button" data-sala="${esc(x)}">Sala ${esc(x)}</button>`).join("")}</div>` : ""}
-      ${f.k === "com" && podeEditar() && !temSaidas ? `<div class="actions"><button class="btn" type="button" data-saidas-gerar="1">${ico("clock")} Marcar as 14 saídas de panfletagem na Agenda</button></div>` : ""}
-      ${agora.length ? `<h4>Agora</h4><div class="list">${agora.map(tarLi).join("")}</div>` : `<p class="hint">${pend.length ? "Nada para esta semana." : "Tudo feito 🙌"}</p>`}
-      ${depois.length ? `<h4>Depois <small class="hint">${depois.length}</small></h4><div class="list">${depois.map(tarLi).join("")}</div>` : ""}
-      ${ja.length ? `<h4>Feitas <small class="hint">${ja.length}</small></h4><div class="list">${ja.slice(-6).map(tarLi).join("")}</div>` : ""}</details>`; };
-  const sel = S.tarSel, todas = F.flatMap(f => f.L), nS = sel ? sel.size : 0;
-  const barra = !podeEditar() ? "" : sel ? `<div class="tar-barra"><b>${nS} selecionada(s)</b><div class="actions">
-      <button class="btn sm" type="button" data-tsel-todas="1">${nS === todas.length ? "Desmarcar todas" : `Selecionar todas (${todas.length})`}</button>
-      <button class="btn sm" type="button" data-tsel-feito="1" ${nS ? "" : "disabled"}>${ico("check")} Marcar feitas</button>
-      <button class="btn sm danger" type="button" data-tsel-del="1" ${nS ? "" : "disabled"}>${ico("trash")} Excluir</button>
-      <button class="btn sm ghost" type="button" data-tsel-sair="1">Cancelar</button></div></div>`
-    : `<div class="actions"><button class="btn" type="button" data-tsel-on="1">${ico("check")} Selecionar</button><button class="btn" type="button" data-pdf-tar="1">${ico("upload")} PDF das tarefas</button>${(tarDoc().apagadas || []).length ? `<button class="btn ghost" type="button" data-tsel-volta="1">Trazer de volta as tarefas do PDF (${(tarDoc().apagadas || []).length})</button>` : ""}</div>`;
-  return `${barra}${podeEditar() && !sel ? `<div class="actions" style="justify-content:space-between"><p class="hint" style="margin:0">Cada frente junta equipes numa missão. Toque para abrir. Ida a igreja, pré-TOP e encontro contam sozinhos quando o evento acontece na Agenda.</p><button class="btn" type="button" data-tar-novo="1">${ico("plus")} Nova tarefa</button></div>` : ""}
-    ${ord.map(card).join("")}`;
-}
-/* Resumo: o que é desta semana, num lugar só */
-function tarSelecao(d, btn) {
-  if (!podeEditar()) { toast("Seu acesso é somente leitura."); return; }
-  if (d.tselOn) { S.tarSel = new Set(); render(); return; }
-  if (d.tselSair) { S.tarSel = null; render(); return; }
-  const D = metaDados(), F = frentesDados(D), todas = F.flatMap(f => f.L), sel = S.tarSel || new Set();
-  if (d.tselTodas) { S.tarSel = sel.size === todas.length ? new Set() : new Set(todas.map(t => t.id)); render(); return; }
-  if (d.tselFrente) { const f = F.find(x => x.k === d.tselFrente); if (f) { const tudo = f.L.every(t => sel.has(t.id)); f.L.forEach(t => tudo ? sel.delete(t.id) : sel.add(t.id)); } S.tarSel = sel; render(); return; }
-  const T = tarDoc();
-  if (d.tselVolta) { S.tarSel = null; save(() => api.set("config", tarId(), { ...T, apagadas: [] }), "Tarefas do PDF de volta").then(render); return; }
-  if (!sel.size) return;
-  if (d.tselFeito) { const E = { ...(T.estado || {}) }, agora = new Date().toISOString(); let n = 0;
-    todas.filter(t => sel.has(t.id) && t.tipo !== "auto" && !t.feito).forEach(t => { E[t.id] = { ...(E[t.id] || {}), ...(t.tipo === "num" ? { n: t.alvo } : { feito: true }), em: agora, por: ME.adm || "" }; n++; });
-    S.tarSel = null; save(() => api.set("config", tarId(), { ...T, estado: E }), `${n} tarefa(s) marcada(s) como feitas`).then(render); return; }
-  if (d.tselDel) { if (btn.dataset.ok !== "1") { btn.dataset.ok = "1"; btn.textContent = `Confirmar: excluir ${sel.size}`; return; }
-    const ids = [...sel], doPdf = ids.filter(id => /^[pc]\d+$/.test(id));
-    S.tarSel = null; save(() => api.set("config", tarId(), { ...T, apagadas: [...new Set([...(T.apagadas || []), ...doPdf])], extras: (T.extras || []).filter(x => !sel.has(x.id)) }), `${ids.length} tarefa(s) excluída(s)`).then(render); }
-}
 /* PDFs da Meta: fundo azul-marinho com a montanha, faixa laranja e rodapé em todas as páginas */
 async function pdfBase(titulo, sub) {
   const jsPDF = await carregarPdf(), C = PDF_COR, [logo, fundo] = await Promise.all([imagemDataUrl("assets/logo.png"), imagemDataUrl("assets/bg.jpg")]);
@@ -5833,39 +5700,6 @@ async function pdfBase(titulo, sub) {
   ctx.cabe = h => { if (ctx.y + h > H - 22) { doc.addPage(); fundoPag(false); ctx.y = 16; return false; } return true; };
   return ctx;
 }
-async function tarefasPdf() {
-  const D = metaDados(), F = frentesDados(D), fmt = d => d ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
-  const tot = F.reduce((a, f) => a + f.total, 0), feitas = F.reduce((a, f) => a + f.feitas, 0), atras = F.reduce((a, f) => a + f.atras, 0);
-  const X = await pdfBase("Tarefas das equipes", `${topName()} · meta de ${D.meta} inscritos · ${feitas} de ${tot} tarefas feitas${atras ? ` · ${atras} atrasada(s)` : ""} · ${new Date().toLocaleDateString("pt-BR")}`), { doc, C, W } = X;
-  const ST = { feito: ["FEITA", C.VERDE], atrasada: ["ATRASADA", C.VERMELHO], semana: ["ESTA SEMANA", [214, 150, 20]], proxima: ["PRÓXIMA", [120, 130, 145]] };
-  F.forEach(f => {
-    X.cabe(34);
-    doc.setFillColor(...C.LARANJA); doc.roundedRect(14, X.y, W - 28, 13, 2.5, 2.5, "F");
-    doc.setTextColor(26, 12, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text(f.l.toUpperCase(), 19, X.y + 8.6, { charSpace: 0.5 });
-    doc.setFontSize(10); doc.text(`${f.feitas}/${f.total} feitas`, W - 19, X.y + 8.6, { align: "right" }); X.y += 18;
-    doc.setTextColor(255, 210, 170); doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.text(f.sub || f.eqs.join(" · "), 16, X.y);
-    doc.setTextColor(215, 205, 195); doc.setFont("helvetica", "italic"); const ml = doc.splitTextToSize(f.m, W - 32); doc.text(ml, 16, X.y + 5); X.y += 5 + ml.length * 4.4;
-    if (f.ind.length) { const w = (W - 28 - (f.ind.length - 1) * 4) / f.ind.length; X.cabe(16);
-      f.ind.forEach((i, k) => { const x = 14 + k * (w + 4); doc.setFillColor(26, 34, 45); doc.roundedRect(x, X.y, w, 13, 2, 2, "F");
-        doc.setTextColor(170, 160, 150); doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.text(i.l.toUpperCase(), x + 3, X.y + 4.5);
-        doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text(`${i.n} / ${i.alvo}`, x + 3, X.y + 10.5);
-        doc.setFillColor(60, 70, 85); doc.rect(x + w - 26, X.y + 8.5, 22, 1.6, "F"); doc.setFillColor(...C.LARANJA); doc.rect(x + w - 26, X.y + 8.5, 22 * Math.min(1, i.n / (i.alvo || 1)), 1.6, "F"); });
-      X.y += 17; }
-    f.eqs.forEach(eq => { const L = f.L.filter(t => t.equipe === eq); if (!L.length) return;
-      X.cabe(14); doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.text(eq.toUpperCase(), 16, X.y + 4, { charSpace: 0.4 });
-      doc.setDrawColor(70, 60, 55); doc.setLineWidth(0.2); doc.line(16 + doc.getTextWidth(eq.toUpperCase()) + 4, X.y + 3, W - 14, X.y + 3); X.y += 8;
-      L.forEach(t => { doc.setFont("helvetica", "normal"); doc.setFontSize(10); const tl = doc.splitTextToSize(t.titulo, W - 86), h = 4 + tl.length * 4.4 + 4;
-        X.cabe(h); const [lab, cor] = ST[t.sit] || ST.proxima;
-        doc.setDrawColor(...(t.feito ? C.VERDE : [150, 140, 130])); doc.setLineWidth(0.4); doc.roundedRect(17, X.y + 1, 4, 4, 0.8, 0.8, t.feito ? "FD" : "S");
-        if (t.feito) { doc.setFillColor(...C.VERDE); doc.roundedRect(17, X.y + 1, 4, 4, 0.8, 0.8, "F"); doc.setDrawColor(255, 255, 255); doc.setLineWidth(0.5); doc.line(17.8, X.y + 3.1, 18.8, X.y + 4.1); doc.line(18.8, X.y + 4.1, 20.4, X.y + 2); }
-        doc.setTextColor(...(t.feito ? [170, 165, 160] : [255, 255, 255])); doc.text(tl, 25, X.y + 4.2);
-        doc.setFontSize(8.2); doc.setTextColor(165, 155, 145); doc.text(`Semana ${t.semana} · até ${fmt(t.prazo)}${t.tipo === "num" || t.tipo === "auto" ? ` · ${t.n} de ${t.alvo}` : ""}${t.tipo === "auto" ? " (pela Agenda)" : ""}${t.feito && t.por ? ` · ${t.por.split(" ")[0]}` : ""}`, 25, X.y + 4.2 + tl.length * 4.4);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); const lw = doc.getTextWidth(lab) + 6; doc.setFillColor(...cor); doc.roundedRect(W - 16 - lw, X.y + 0.6, lw, 5.4, 2.7, 2.7, "F"); doc.setTextColor(255, 255, 255); doc.text(lab, W - 16 - lw / 2, X.y + 4.3, { align: "center" });
-        X.y += h; doc.setDrawColor(40, 48, 60); doc.setLineWidth(0.15); doc.line(25, X.y - 1.5, W - 16, X.y - 1.5); });
-      X.y += 3; });
-    X.y += 6; });
-  await entregarPdf(doc.output("blob"), `Tarefas das equipes - ${topName()}.pdf`, `Tarefas das equipes · ${topName()}`, true);
-}
 async function agendaPdf() {
   const hoje = hojeISO(), M = [];
   acoesTodas().filter(a => a.data >= hoje).forEach(a => M.push({ data: a.data, a }));
@@ -5881,7 +5715,7 @@ async function agendaPdf() {
     const top = !!x.t, a = x.a || {}, titulo = top ? x.t.nome + (x.t.id === "previsto" ? (x.t.confirmado ? " · data confirmada" : " · data prevista") : "") : a.titulo;
     doc.setFont("helvetica", "bold"); doc.setFontSize(12.5); const tl = doc.splitTextToSize(titulo, W - 70);
     const linhas = top ? [`${fmtPeriodo(x.t)}${x.t.local ? " · " + x.t.local : ""}`, x.t.linkInsc ? "Inscrições abertas: toque para se inscrever" : ""] :
-      [`${SALA() ? acaoObj(a).tag : a.tipo} · ${acaoEquipeTxt(a)}`, `${a.hora ? a.hora + " · " : ""}${[a.local, a.endereco].filter(Boolean).join(" · ") || "local a definir"}`, a.obs || ""];
+      [`${acaoObj(a).tag} · ${acaoEquipeTxt(a)}`, `${a.hora ? a.hora + " · " : ""}${[a.local, a.endereco].filter(Boolean).join(" · ") || "local a definir"}`, a.obs || ""];
     const L = linhas.filter(Boolean), h = Math.max(26, 8 + tl.length * 5.4 + L.length * 4.6 + (top ? 2 : 8));
     X.cabe(h + 4);
     if (top) { doc.setFillColor(...C.LARANJA); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); } else { doc.setFillColor(24, 32, 43); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(14, X.y + 4, 1.4, h - 8, "F"); }
@@ -5898,9 +5732,9 @@ async function agendaPdf() {
     X.y += h + 4; });
   await entregarPdf(doc.output("blob"), `Agenda Legendarios 3 Colinas.pdf`, "Agenda · Legendários 3 Colinas", true);
 }
-/* ===== Equipes trabalhando juntas (só na demo, flag SALA) =====
+/* ===== Equipes trabalhando juntas (no app real desde 02/11/2026) =====
    Grupos: a ADM junta ou separa as equipes LGND (config meta-grupos {lista:[{id,nome,equipes,missao}]}; sem nada salvo, começa pelas frentes do PDF).
-   Tarefas: a ADM cria; o coordenador pega para o grupo dele, escolhe quem faz e marca feito.
+   Tarefas: a ADM cria e manda para um grupo; o coordenador escolhe quem faz e marca feito.
    config metatar-<top>-quadro {lista:[{id,titulo,missao:captar|cuidar|outro,prazo,obs,para,pegou:{grupo,por,em},resp,feito,feitoEm,feitoPor,por,em}]} */
 const MISSOES = { captar: ["Trazer senderistas", "ev-captar"], cuidar: ["Cuidar dos legendários", "ev-cuidar"], outro: ["Outra", ""] };
 const grupos = () => { const g = (cfgDe("meta-grupos") || {}).lista; return g && g.length ? g : FRENTES.map(f => ({ id: f.k, nome: f.l, equipes: f.eq, missao: f.m })); };
@@ -5938,7 +5772,7 @@ function quadroForm(id) {
     const n = { ...t, id: t.id || "q" + Date.now().toString(36), titulo, missao: fd.get("missao"), prazo: String(fd.get("prazo") || ""), para, obs: String(fd.get("obs") || "").trim(), por: t.por || ME.adm || "", em: t.em || new Date().toISOString() };
     const novoG = para && (!t.pegou || t.pegou.grupo !== para);
     if (novoG) n.pegou = { grupo: para, por: ME.adm || "", em: new Date().toISOString() };   // tarefa direcionada já nasce com o grupo
-    else if (!para && t.pegou && M2()) n.pegou = null;
+    else if (!para && t.pegou) n.pegou = null;
     closeModal(); const L = quadro(); quadroSalvar(id ? L.map(x => x.id === id ? n : x) : [...L, n], id ? "Tarefa salva" : "Tarefa no quadro", novoG ? quadroAviso(para, n) : null); });
   const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); quadroSalvar(quadro().filter(x => x.id !== id), "Tarefa excluída"); };
 }
@@ -5962,7 +5796,7 @@ function grupoNumeros(g, D) {
   const eqs = g.equipes || [], I = indTodas().filter(x => eqs.includes(x.equipe)), E = metaEquipes(D).filter(e => eqs.includes(e.e)), A = acoesTodas().filter(a => eqs.some(e => acaoTemEq(a, e))), hoje = hojeISO();
   const cuidar = A.filter(a => acaoCuidar(a) && a.data < hoje), T = quadro().filter(t => (t.pegou || {}).grupo === g.id);
   return { nomes: I.length, metaNomes: E.reduce((s, e) => s + e.metaNomes, 0), insc: I.filter(indInscrito).length, metaInsc: E.reduce((s, e) => s + e.metaInsc, 0),
-    encontros: cuidar.length, presentes: cuidar.reduce((s, a) => s + (M2() && a.foram ? acaoPresentes(a) : acaoConfirmados(a).length), 0), prox: A.filter(a => a.data >= hoje), T, servidores: S.P.filter(p => p.tipo === "legendario" && eqs.includes(p.equipe)).length };
+    encontros: cuidar.length, presentes: cuidar.reduce((s, a) => s + (a.foram ? acaoPresentes(a) : acaoConfirmados(a).length), 0), prox: A.filter(a => a.data >= hoje), T, servidores: S.P.filter(p => p.tipo === "legendario" && eqs.includes(p.equipe)).length };
 }
 function grupoCard(g, D, aberto) {
   const N = grupoNumeros(g, D), pode = podeGrupo(g.id), pend = N.T.filter(t => !t.feito), temLink = !!(cfgDe(indCfgId()) || {}).token;
@@ -5976,7 +5810,7 @@ function grupoCard(g, D, aberto) {
         ${aberto ? `<div class="actions">${podeIndicar() ? `<button class="btn sm primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${temLink ? (g.equipes || []).filter(e => !ehCoordEq() || e === ME.equipeLgnd).map(e => `<button class="btn sm" type="button" data-sala-link="${esc(e)}">${ico("wa")} Link ${esc(e)}</button>`).join("") : ""}</div>` : ""}</div>
       <div class="grp-box"><span class="tag ev-cuidar">Cuidar dos legendários</span>
         <div class="grp-num"><b class="num">${N.encontros}</b><small>encontro(s) feitos</small></div>
-        <div class="grp-num"><b class="num">${N.presentes}</b><small>${M2() ? "legendários nos encontros" : "presenças confirmadas"}</small></div>
+        <div class="grp-num"><b class="num">${N.presentes}</b><small>legendários nos encontros</small></div>
         ${aberto && pode ? `<div class="actions"><button class="btn sm" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button></div>` : ""}</div></div>
     ${aberto ? `<h4>Tarefas do grupo <small class="hint">${N.T.filter(t => t.feito).length}/${N.T.length} feitas</small></h4>
       ${pend.length ? `<div class="list">${pend.map(t => quadroLi(t, true)).join("")}</div>` : `<p class="hint">Nenhuma tarefa pendente. ${pode ? `<button class="linkbtn" type="button" data-meta-aba="quadro">Pegar uma no quadro ›</button>` : ""}</p>`}
@@ -6014,75 +5848,13 @@ function vQuadro(D) {
     <div class="seg" role="tablist">${[...(ehCoordEq() ? [] : [["livres", "Sem grupo", livres.length]]), ["andamento", ehCoordEq() ? "A fazer" : "Com os grupos", andamento.length], ["feitas", "Feitas", feitas.length]].map(([k, l, n]) => `<button type="button" data-q-filtro="${k}" aria-pressed="${f === k}">${l} <small>${n}</small></button>`).join("")}</div>
     <section class="panel">${lista.length ? `<div class="list">${lista.map(t => quadroLi(t)).join("")}</div>` : `<div class="empty">${f === "livres" ? "Nenhuma tarefa sem grupo. Toque em Nova tarefa para colocar a primeira." : f === "andamento" ? (ehCoordEq() ? "Nenhuma tarefa para a sua equipe agora." : "Nenhuma tarefa com os grupos.") : "Nenhuma feita ainda."}</div>`}</section>`;
 }
-/* Sala da equipe (só na demo): a equipe trabalha junta num lugar só. Meta da equipe, link de indicação da equipe,
-   tarefas com quem faz, eventos e recados. Recados em config sala-<top>-<equipe> {msgs:[{id,txt,por,em}]}. */
-const SALA = () => true;
-/* Melhorias 2 (só na demo): sem tarefas antigas/placar semanal, convidado de evento vira indicação, quem foi de verdade, avisos ao coordenador */
-const M2 = () => true;
+/* Resumo, convidado de evento vira indicação, quem foi de verdade e avisos ao coordenador (app real desde 02/11/2026): convidado de evento vira indicação, quem foi de verdade, avisos ao coordenador */
 const hashCurto = t => { let h = 0; for (const c of String(t)) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
 const confKey = x => norm(x.nome || "").trim() + "|" + telLimpo(x.tel || "").slice(-8);
 const acaoPresentes = a => a.foram ? acaoConfirmados(a).filter(x => a.foram.includes(confKey(x))).length + (+a.foramExtra || 0) : null;
 const acaoFaltam = (a, eq) => { const r = acaoResp(a).find(x => x.eq === eq); if (!r || !r.homens) return 0; return Math.max(0, r.homens - acaoConfirmados(a).filter(c => c.equipe === eq).length); };
 const diaMais = n => new Date(Date.now() + n * 864e5).toLocaleDateString("sv");
-const salaId = eq => "sala-" + curTopId() + "-" + norm(eq).replace(/[^a-z0-9]+/g, "-");
-function tarResp(id, nome) {
-  const t = tarLista(metaDados()).find(x => x.id === id); if (!t || !podeTar(t)) { toast("Só a equipe " + (t ? t.equipe : "") + " ou a ADM mudam isso."); return; }
-  const T = tarDoc(), E = { ...(T.estado || {}) }; E[id] = { ...(E[id] || {}), resp: nome };
-  (async () => { try { await api.set("config", tarId(), { ...T, estado: E }); toast(nome ? `${nome.split(" ")[0]} ficou com essa tarefa` : "Tarefa sem responsável"); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
-}
-function salaRecado(eq, txt) {
-  txt = String(txt || "").trim(); if (!txt) return;
-  const id = salaId(eq), d = cfgDe(id) || {}, msgs = [...(d.msgs || []), { id: "m" + Date.now().toString(36), txt: txt.slice(0, 500), por: ME.adm || "", em: new Date().toISOString() }].slice(-60);
-  (async () => { try { await api.set("config", id, { equipe: eq, msgs }); } catch (e) { toast("Não foi possível enviar. " + erroAmigavel(e)); } render(); })();
-}
-function vSala(D) {
-  const eqs = [...new Set([...metaEquipes(D).map(e => e.e), ...FRENTES.flatMap(f => f.eq)])].filter(Boolean);
-  const eq = ehCoordEq() ? ME.equipeLgnd : (S.salaEq && eqs.includes(S.salaEq) ? S.salaEq : eqs[0]);
-  if (!eq) return `<section class="panel"><div class="empty">Importe as equipes LGND para abrir as salas.</div></section>`;
-  const e = metaEquipes(D).find(x => x.e === eq), fr = FRENTES.find(f => f.eq.includes(eq)), pode = podeEditar() || (ehCoordEq() && ME.equipeLgnd === eq);
-  const leg = S.P.filter(p => p.tipo === "legendario" && p.equipe === eq).sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || a.nome.localeCompare(b.nome));
-  const lider = leg.filter(p => FUNC_ORDEM(p.funcao) < 2).map(p => p.nome.split(" ").slice(0, 2).join(" "));
-  const I = indTodas().filter(x => x.equipe === eq), T = tarLista(D).filter(t => t.equipe === eq), pend = T.filter(t => !t.feito), feitas = T.filter(t => t.feito);
-  const A = acoesTodas().filter(a => a.equipe === eq && a.data >= hojeISO()), msgs = ((cfgDe(salaId(eq)) || {}).msgs || []).slice(-15).reverse();
-  const temLink = !!(cfgDe(indCfgId()) || {}).token, st = x => { const p = indInscrito(x); return p ? `<span class="chip ok">Inscrito ✓</span>` : `<span class="chip ${indAtrasada(x) ? "bad" : (IND_ST.find(y => y.v === x.status) || IND_ST[0]).c}">${indAtrasada(x) ? "Sem contato +48 h" : (IND_ST.find(y => y.v === x.status) || IND_ST[0]).l}</span>`; };
-  const resp = t => pode && !t.feito && t.tipo !== "auto" ? `<select class="sel sm" data-tar-resp="${t.id}" aria-label="Quem faz"><option value="">Quem faz?</option>${leg.map(p => `<option ${t.resp === p.nome ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</select>` : "";
-  return `${ehCoordEq() ? "" : `<div class="actions"><select class="sel" data-sala-eq aria-label="Equipe">${eqs.map(x => `<option ${x === eq ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>`}
-  <section class="panel sala-cab"><div class="grow"><span class="lbl">${fr ? "Frente " + esc(fr.l) : "Equipe"}</span><h3 style="margin:2px 0">${esc(eq)}</h3>
-      <small class="hint">${leg.length} servidor(es)${lider.length ? " · coordenação: " + esc(lider.join(", ")) : ""}</small>${fr ? `<small class="hint">Missão: ${esc(fr.m)}</small>` : ""}</div>
-    ${e ? `<div class="meta-mini"><div><span class="lbl">Nomes que a equipe indicou</span><b class="num">${e.nomes}<small> de ${e.metaNomes}</small></b><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div></div>
-      <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : ""}
-    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}
-      ${temLink ? `<button class="btn" type="button" data-sala-link="${esc(eq)}">${ico("wa")} Link da equipe para o grupo</button>` : `<span class="hint">${podeEditar() ? "Gere o Link de indicação no alto da página para liberar o link da equipe." : "A ADM ainda vai gerar o link de indicação."}</span>`}
-      ${pode ? `<button class="btn" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}</div></section>
-  <section class="panel"><h3>Recados da equipe <small>${msgs.length}</small></h3>
-    ${pode ? `<form class="sala-msg" data-sala-form="${esc(eq)}"><input name="txt" maxlength="500" placeholder="Escreva para a equipe: combinados, quem vai em qual evento, ideias…" aria-label="Recado"><button class="btn primary" type="submit">Enviar</button></form>` : ""}
-    ${msgs.length ? `<div class="list">${msgs.map(m => `<div class="li sala-li"><div class="grow"><b>${esc((m.por || "").split(" ")[0] || "Equipe")}</b> <small class="hint">${esc(haQuanto(m.em))}</small><br>${esc(m.txt)}</div></div>`).join("")}</div>` : `<div class="empty">Nenhum recado ainda. Combinem aqui o que a equipe vai fazer nesta semana.</div>`}</section>
-  <section class="panel"><h3>O que a equipe precisa fazer <small>${feitas.length}/${T.length} feitas</small></h3>
-    ${pend.length ? `<div class="list">${pend.map(t => `<div class="sala-tar">${tarLi(t)}${resp(t)}</div>`).join("")}</div>` : `<div class="empty">Tudo feito 🙌</div>`}
-    ${feitas.length ? `<details><summary class="hint">Ver as ${feitas.length} feitas</summary><div class="list">${feitas.map(tarLi).join("")}</div></details>` : ""}</section>
-  <section class="panel"><h3>Próximos eventos da equipe <small>${A.length}</small> <button class="linkbtn" type="button" data-go="agenda">agenda ›</button></h3>
-    ${A.length ? `<div class="acao-lista">${A.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div>` : `<div class="empty">Nenhum evento marcado. Que tal uma ida a uma igreja?</div>`}</section>
-  <section class="panel"><h3>Nomes indicados pela equipe <small>${I.length}</small></h3>
-    ${I.length ? `<div class="list">${[...I].sort((a, b) => String(b.em).localeCompare(String(a.em))).map(x => `<div class="li ind-li"><div class="grow"><b>${esc(x.nome)}</b> ${st(x)}<br><small class="hint">${[x.quem && "por " + x.quem, haQuanto(x.em)].filter(Boolean).map(esc).join(" · ")}</small></div></div>`).join("")}</div>` : `<div class="empty">Ninguém indicado ainda. Cada servidor indica 5 nomes.</div>`}</section>`;
-}
-document.addEventListener("submit", e => { const f = e.target; if (!f || !f.dataset || f.dataset.salaForm == null) return; e.preventDefault();
-  const eq = f.dataset.salaForm; if (!(podeEditar() || (ehCoordEq() && ME.equipeLgnd === eq))) { toast("Só a equipe " + eq + " e a ADM escrevem aqui."); return; }
-  salaRecado(eq, f.txt.value); });
-function metaSemana(D) {
-  const T = tarLista(D).filter(t => !ehCoordEq() || t.equipe === ME.equipeLgnd), at = T.filter(t => t.sit === "atrasada"), sem = T.filter(t => t.sit === "semana");
-  const hoje = hojeISO(), ate = new Date(Date.now() + 7 * 864e5).toLocaleDateString("sv"), ev = acoesTodas().filter(a => a.data >= hoje && a.data <= ate);
-  const cp = D.checks.find(c => !c.passou), PB = { 10: "Reunião extra com os coordenadores e reforço dos convites pessoais", 7: "Segundo encontro de apresentação antes das Lives de Consagração", 4: "Mais igrejas, impulsionar os posts e a Direção revê a meta", 2: "Chamar um por um os indecisos e a Direção decide o número final" };
-  const bx = D.checks.filter(c => c.passou && D.inscritos < c.min).pop();
-  return `<section class="panel meta-sem"><h3>Esta semana${D.semana != null ? ` <small>semana ${D.semana}</small>` : ""}</h3>
-    ${bx ? `<p class="chk-alerta">Abaixo do mínimo da semana -${bx.w} (${bx.min}). Plano B: ${PB[bx.w] || "reunir os coordenadores"}.</p>` : cp ? `<p class="hint" style="margin:0">Próximo checkpoint: semana -${cp.w}, mínimo de ${cp.min} inscritos.</p>` : ""}
-    <div class="acao-lista">
-      ${at.length ? `<button class="acao-c" type="button" data-meta-aba="eq"><span class="grow"><b>${at.length} tarefa(s) atrasada(s)</b><small class="hint">${esc([...new Set(at.map(t => t.equipe))].join(", "))}</small></span><span class="chip bad">ver</span></button>` : ""}
-      ${sem.slice(0, 5).map(t => `<div class="acao-c" style="cursor:default"><span class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)}</small></span></div>`).join("")}
-      ${ev.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}
-      ${!at.length && !sem.length && !ev.length ? `<div class="empty">Nada marcado para esta semana.</div>` : ""}
-    </div></section>`;
-}
-/* Resumo novo (M2): o que pede atenção agora + as duas missões por grupo */
+/* Resumo: o que pede atenção agora + as duas missões por grupo */
 function metaResumo2(D) {
   const hoje = hojeISO(), ate = diaMais(7), Q = quadro().filter(t => !t.feito), at = Q.filter(t => t.prazo && t.prazo < hoje), sem = Q.filter(t => t.prazo && t.prazo >= hoje && t.prazo <= ate);
   const A = acoesTodas(), prox = A.filter(a => a.data >= hoje && a.data <= ate), marcar = A.filter(a => a.data < hoje && !a.foram && a.data >= diaMais(-30)), G = grupos();
@@ -6098,23 +5870,13 @@ function metaResumo2(D) {
       return `<button class="li" type="button" data-sala="${esc(g.id)}" style="text-align:left;width:100%;background:none;border:0;color:inherit;font:inherit;cursor:pointer"><span class="grow"><b>${esc(g.nome)}</b><small class="hint" style="display:block">${esc((g.equipes || []).join(" · "))}</small></span>
         <span class="chip ev-captar" title="Trazer senderistas">${N.insc}/${N.metaInsc || "-"} inscritos</span> <span class="chip" title="Cuidar dos legendários">${N.encontros} encontro(s) · ${N.presentes}</span></button>`; }).join("")}</div></section>`;
 }
-/* Dashboard do coordenador (M2): evento em até 2 dias com a equipe dele faltando homens */
+/* Dashboard do coordenador: evento em até 2 dias com a equipe dele faltando homens */
 function metaFaltamCoord() {
   const eq = ME.equipeLgnd; if (!eq) return "";
   const L = acoesTodas().filter(a => a.data >= hojeISO() && a.data <= diaMais(2) && acaoFaltam(a, eq) > 0); if (!L.length) return "";
   return `<section class="panel q-novas"><h3>${ico("flag")} Faltam homens da ${esc(eq)}</h3><div class="list">${L.map(a => { const r = acaoResp(a).find(x => x.eq === eq), f = acaoFaltam(a, eq);
     const m = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}\n\n*Equipe ${eq}*, precisamos de você${r.homens ? ` (${r.homens} homens)` : ""}${r.oque ? ":\n" + r.oque : "."}\n\nConfirme aqui: ${acaoLink(a, r)}`;
     return `<div class="li"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint" style="display:block">${esc(acaoQuando(a))} · faltam ${f} de ${r.homens}</small></span><a class="btn sm primary" href="https://wa.me/?text=${encodeURIComponent(m)}" target="_blank" rel="noopener">${ico("wa")} Chamar a equipe</a></div>`; }).join("")}</div></section>`;
-}
-/* Saídas de panfletagem: 1 por equipe por semana, das semanas -9 a -3 (14 no total), viram eventos da Agenda */
-function saidasGerar() {
-  const D = metaDados(); if (!D.fimD) return;
-  const L = []; for (let w = -9; w <= -3; w++) { const d = new Date(+D.fimD + w * 7 * 864e5); d.setDate(d.getDate() - ((d.getDay() + 1) % 7));   // sábado da semana
-    const data = d.toLocaleDateString("sv");
-    [["Equipe 1 (Segurança e Hakunas)", "Segurança", "09:00"], ["Equipe 2 (Voz e Eventos)", "Voz", "15:00"]].forEach(([n, eq, h], j) => L.push({ id: "pf" + (w + 9) + j + Date.now().toString(36), tipo: "Panfletagem", titulo: "Panfletagem · " + n, data, hora: h, local: "a definir", endereco: "", equipe: eq, vagas: 6,
-      obs: "Panfleto oficial, abordagem sem insistência. A Mídia acompanha para gravar.", token: Math.random().toString(36).slice(2, 10), por: ME.adm || "", em: new Date().toISOString() })); }
-  const doc = acaoDocMeu(), atual = ((S.cfgDocs || {})[doc] || {}).lista || [];
-  (async () => { try { await api.set("config", doc, { lista: [...atual, ...L] }); toast("14 saídas marcadas na Agenda. Ajuste o local de cada uma."); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
 }
 /* Respostas prontas: as perguntas do PDF, quem responde e o texto aprovado. config meta-faq {q0:{txt,por,em}} */
 const FAQ = [["Será que eu aguento?", "Hakunas", "Como é o preparo e o cuidado com a saúde, e o que fazer antes"], ["É seguro?", "Segurança", "Como a equipe cuida de quem sobe"],
@@ -6140,9 +5902,7 @@ function faqForm(i) {
     (async () => { try { await api.set("config", "meta-faq", F); toast("Resposta salva"); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })(); });
 }
 function metaAbas(aba) {
-  const at = tarLista(metaDados()).filter(t => t.sit === "atrasada" && (!ehCoordEq() || t.equipe === ME.equipeLgnd)).length;
-  return `<div class="seg meta-abas" role="tablist">${(SALA() ? [["grupo", ehCoordEq() ? "Minha equipe" : "Equipes"], ["quadro", "Tarefas" + (quadroLivres() ? ` <span class="badge num">${quadroLivres()}</span>` : "")], ["ind", "Indicações"], ...(ehCoordEq() ? [] : [["placar", "Resumo"]])]
-    : [["placar", "Resumo"], ["ind", "Indicações"], ["eq", "Equipes" + (at ? ` <span class="badge num">${at}</span>` : "")]]).map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
+  return `<div class="seg meta-abas" role="tablist">${[["grupo", ehCoordEq() ? "Minha equipe" : "Equipes"], ["quadro", "Tarefas" + (quadroLivres() ? ` <span class="badge num">${quadroLivres()}</span>` : "")], ["ind", "Indicações"], ...(ehCoordEq() ? [] : [["placar", "Resumo"]])].map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
 }
 function metaAjustarForm() {
   const D = metaDados();
@@ -6885,13 +6645,7 @@ document.addEventListener("click", e => {
   if (t.id === "notifBtn") { pedirNotificacao(); return; }
   if (d.indNovo) { indForm(); return; }   // coordenador também indica nomes
   if (d.metaAba) { S.metaAba = d.metaAba; if (S.view !== "meta") go("meta"); else render(); return; }
-  if (d.tarFeito) { tarMarcar(d.tarFeito, "feito"); return; }
-  if (d.tarMais) { tarMarcar(d.tarMais, "mais"); return; }
-  if (d.tarMenos) { tarMarcar(d.tarMenos, "menos"); return; }
-  if (d.tarEd) { const t = tarLista(metaDados()).find(x => x.id === d.tarEd); if (t) tarForm(t); return; }
-  if (d.tarNovo) { tarForm(); return; }
   if (d.acaoNovo) { acaoForm(); return; }
-  if (d.saidasGerar) { saidasGerar(); return; }
   if (d.grpEd) { grupoForm(d.grpEd === "novo" ? null : d.grpEd); return; }
   if (d.qNovo || d.qEd) { quadroForm(d.qEd || null); return; }
   if (d.qPegar || d.qDevolver || d.qFeito) { quadroMarcar(d.qPegar || d.qDevolver || d.qFeito, d.qPegar ? "pegar" : d.qDevolver ? "devolver" : "feito", d.qGrupo); return; }
@@ -6899,8 +6653,7 @@ document.addEventListener("click", e => {
   if (d.qFiltro) { S.qFiltro = d.qFiltro; render(); return; }
   if (d.sala) { S.salaEq = d.sala; S.metaAba = "grupo"; if (S.view !== "meta") go("meta"); else render(); return; }
   if (d.salaLink) { const l = indLink(d.salaLink), msg = `Equipe ${d.salaLink}: vamos juntos levar mais homens ao ${topName()}! Indique um amigo aqui, leva 1 minuto: ${l}`; window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank", "noopener"); return; }
-  if (d.pdfTar || d.pdfAg) { const b = t; b.disabled = true; (d.pdfTar ? tarefasPdf() : agendaPdf()).catch(e => toast("Não consegui gerar o PDF. " + (e.message || ""))).finally(() => { b.disabled = false; }); return; }
-  if (d.tselOn || d.tselSair || d.tselTodas || d.tselFrente || d.tselFeito || d.tselDel || d.tselVolta) { tarSelecao(d, t); return; }
+  if (d.pdfAg) { const b = t; b.disabled = true; agendaPdf().catch(e => toast("Não consegui gerar o PDF. " + (e.message || ""))).finally(() => { b.disabled = false; }); return; }
   if (d.faqEd) { faqForm(+d.faqEd); return; }
   if (d.faqCopiar) { const q = FAQ[+d.faqCopiar], r = faqDoc()["q" + d.faqCopiar]; if (r) copiarTexto(r.txt, "Resposta copiada"); return; }
   if (d.agTop === "previsto") { prevVer(); return; }
@@ -7023,7 +6776,6 @@ document.addEventListener("click", e => {
   if (d.act === "fam-importar") { famImportarForm(); return; }
   if (d.act === "meta-ajustar") { metaAjustarForm(); return; }
   if (d.act === "ind-link") { indLinkForm(); return; }
-  if (d.act === "meta-placar") { copiarTexto(metaPlacar(), "Placar copiado: cole no grupo da Direção e dos Coordenadores"); return; }
   if (d.indF) { S.indF = d.indF; render(); return; }
   if (d.indEd) { const [doc, id] = d.indEd.split("|"); const x = indTodas().find(y => y.doc === doc && y.id === id); if (x) indForm(x); return; }
   if (d.act === "mp-novo") { S.mpPick = true; render(); return; }
