@@ -5510,6 +5510,14 @@ function acaoSalvar(doc, item, msg, apagar) {
   const L = ((S.cfgDocs || {})[doc] || {}).lista || [], id = apagar || item.id, nova = L.filter(y => y.id !== id); if (item) { const { doc: _d, ...x } = item; nova.push(x); }
   (async () => { try { await api.set("config", doc, { lista: nova }); if (msg) toast(msg); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
 }
+/* Equipes responsáveis no evento (SALA/demo): a.resp = [{eq, oque, homens}]. "Todas as equipes" põe uma linha por equipe. */
+const acaoEqLista = () => [...new Set([...equipesUsadas(), "Diretoria", "Esposas"])];
+const acaoResp = a => (a.resp || []).filter(x => x && x.eq);
+const acaoEquipeTxt = a => { const R = acaoResp(a); return !R.length ? a.equipe : R.length >= equipesUsadas().length ? "Todas as equipes" : R.length > 2 ? `${R.length} equipes` : R.map(x => x.eq).join(" e "); };
+const acaoTemEq = (a, eq) => a.equipe === eq || acaoResp(a).some(x => x.eq === eq);
+const acaoRespLinha = (x, i) => `<div class="ev-resp" data-i="${i}"><select name="req-eq" class="sel" aria-label="Equipe">${acaoEqLista().map(e => `<option ${x.eq === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>
+    <input name="req-o" value="${esc(x.oque || "")}" placeholder="o que essa equipe faz" aria-label="O que faz"><input name="req-h" type="number" min="0" value="${x.homens || ""}" placeholder="homens" title="Quantos homens" aria-label="Homens" class="ev-h">
+    <button class="linkbtn" type="button" data-ev-tira aria-label="Tirar equipe">${ico("x")}</button></div>`;
 function acaoForm(a) {
   if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }
   const novo = !a; a = a || { tipo: ACAO_TIPOS[0], equipe: ehCoordEq() ? ME.equipeLgnd : "", data: "", hora: "19:00" };
@@ -5520,17 +5528,61 @@ function acaoForm(a) {
     <div class="field"><label for="ac-h">Hora</label><input id="ac-h" name="hora" type="time" value="${esc(a.hora || "")}"></div>
     <div class="field full"><label for="ac-l">Local</label><input id="ac-l" name="local" value="${esc(a.local || "")}" placeholder="ex.: Igreja Batista Central"></div>
     <div class="field full"><label for="ac-en">Endereço</label><input id="ac-en" name="endereco" value="${esc(a.endereco || "")}" placeholder="Rua, número, bairro"></div>
-    <div class="field"><label for="ac-eq">Equipe</label>${ehCoordEq() ? `<input id="ac-eq" name="equipe" value="${esc(a.equipe)}" readonly>` : `<select id="ac-eq" name="equipe" class="sel">${[...new Set([...equipesUsadas(), "Diretoria", "Esposas"])].map(e => `<option ${a.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>`}</div>
-    <div class="field"><label for="ac-v">Legendários precisos</label><input id="ac-v" name="vagas" type="number" min="0" value="${a.vagas || ""}" placeholder="ex.: 6"></div>
+    ${SALA() && !ehCoordEq() ? `<div class="field full"><label>Equipes responsáveis</label><p class="hint" style="margin:0 0 6px">Para cada equipe: o que ela faz no evento e quantos homens precisa.</p>
+      <div id="evResp">${(acaoResp(a).length ? acaoResp(a) : [{ eq: a.equipe || acaoEqLista()[0] }]).map(acaoRespLinha).join("")}</div>
+      <div class="actions"><button class="btn sm" type="button" id="evMais">${ico("plus")} Adicionar equipe</button><button class="btn sm" type="button" id="evTodas">Todas as equipes</button><span class="hint" id="evTot"></span></div></div>`
+    : `<div class="field"><label for="ac-eq">Equipe</label>${ehCoordEq() ? `<input id="ac-eq" name="equipe" value="${esc(a.equipe)}" readonly>` : `<select id="ac-eq" name="equipe" class="sel">${acaoEqLista().map(e => `<option ${a.equipe === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>`}</div>
+    <div class="field"><label for="ac-v">Legendários precisos</label><input id="ac-v" name="vagas" type="number" min="0" value="${a.vagas || ""}" placeholder="ex.: 6"></div>`}
     <div class="field full"><label for="ac-o">Recado para quem for (opcional)</label><input id="ac-o" name="obs" value="${esc(a.obs || "")}" placeholder="ex.: ir de camiseta da Base, chegar 30 min antes"></div>
   </div><div class="modal-foot"><div>${novo ? "" : `<button class="btn danger" type="button" id="delBtn">Excluir</button>`}</div>
     <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
   fd => { const titulo = String(fd.get("titulo") || "").trim(), data = String(fd.get("data") || ""); if (!titulo || !data) { toast("Coloque o título e o dia."); return; }
+    let resp = null;
+    if ($("#evResp")) { const E = fd.getAll("req-eq"), O = fd.getAll("req-o"), Hh = fd.getAll("req-h"), vis = new Set();
+      resp = E.map((eq, i) => ({ eq: String(eq), oque: String(O[i] || "").trim(), homens: +Hh[i] || 0 })).filter(x => x.eq && !vis.has(x.eq) && vis.add(x.eq));
+      if (!resp.length) { toast("Coloque pelo menos uma equipe."); return; } }
     const item = { ...a, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: fd.get("tipo"), titulo, data,
-      hora: String(fd.get("hora") || ""), local: String(fd.get("local") || "").trim(), endereco: String(fd.get("endereco") || "").trim(), equipe: String(fd.get("equipe") || ""), vagas: +fd.get("vagas") || 0,
+      hora: String(fd.get("hora") || ""), local: String(fd.get("local") || "").trim(), endereco: String(fd.get("endereco") || "").trim(), equipe: resp ? resp[0].eq : String(fd.get("equipe") || ""), vagas: resp ? resp.reduce((n, x) => n + x.homens, 0) : +fd.get("vagas") || 0, ...(resp ? { resp } : {}),
       obs: String(fd.get("obs") || "").trim(), por: a.por || ME.adm || "", em: a.em || new Date().toISOString() };
     closeModal(); acaoSalvar(a.doc || acaoDocMeu(), item, novo ? "Evento criado: agora mande o link e o convite" : "Evento salvo"); });
   const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); acaoSalvar(a.doc, null, "Evento excluído", a.id); };
+  const box = $("#evResp"); if (!box) return;
+  const tot = () => { const n = [...box.querySelectorAll('[name="req-h"]')].reduce((s, i) => s + (+i.value || 0), 0), q = box.children.length; $("#evTot").textContent = `${q} equipe(s)${n ? ` · ${n} homens` : ""}`; };
+  const usadas = () => [...box.querySelectorAll('[name="req-eq"]')].map(x => x.value);
+  const add = eq => { const d = document.createElement("div"); d.innerHTML = acaoRespLinha({ eq }, box.children.length); box.appendChild(d.firstElementChild); };
+  $("#evMais").onclick = () => { add(acaoEqLista().find(e => !usadas().includes(e)) || acaoEqLista()[0]); tot(); };
+  $("#evTodas").onclick = () => { const u = usadas(); equipesUsadas().filter(e => !u.includes(e)).forEach(add); tot(); toast("Todas as equipes no evento. Tire as que não vão."); };
+  box.addEventListener("click", e => { const b = e.target.closest("[data-ev-tira]"); if (!b) return; if (box.children.length > 1) b.closest(".ev-resp").remove(); else toast("O evento precisa de pelo menos uma equipe."); tot(); });
+  box.addEventListener("input", tot); tot();
+}
+async function acaoPlanoPdf(a) {
+  const R = acaoResp(a).length ? acaoResp(a) : [{ eq: a.equipe, oque: "", homens: a.vagas || 0 }], C0 = acaoConfirmados(a), tot = R.reduce((n, x) => n + (x.homens || 0), 0);
+  const X = await pdfBase("Plano do evento", `${a.tipo} · ${acaoEquipeTxt(a)} · ${topName()}`), { doc, C, W } = X;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.setTextColor(255, 255, 255); const tl = doc.splitTextToSize(a.titulo, W - 28); doc.text(tl, 14, X.y); X.y += tl.length * 7 + 3;
+  const caixas = [["QUANDO", acaoQuando(a)], ["ONDE", [a.local, a.endereco].filter(Boolean).join(" · ") || "a definir"], ["EQUIPES", `${R.length} · ${tot} homens`]];
+  const cw = (W - 28 - 8) / 3; X.cabe(24);
+  caixas.forEach(([l, v], k) => { const x = 14 + k * (cw + 4); doc.setFillColor(26, 34, 45); doc.roundedRect(x, X.y, cw, 20, 2.5, 2.5, "F"); doc.setFillColor(...C.LARANJA); doc.rect(x, X.y + 4, 1.3, 12, "F");
+    doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.text(l, x + 5, X.y + 6.5, { charSpace: 0.5 });
+    doc.setTextColor(255, 255, 255); doc.setFontSize(9.5); doc.text(doc.splitTextToSize(v, cw - 8).slice(0, 2), x + 5, X.y + 11.5); });
+  X.y += 26;
+  const missao = acaoCuidar(a) ? "Cuidar dos legendários: estar junto de quem já passou pelo TOP e fortalecer a irmandade." : "Trazer senderistas: apresentar o Legendários e levar mais homens para o próximo TOP.";
+  doc.setTextColor(255, 210, 170); doc.setFont("helvetica", "italic"); doc.setFontSize(10); let ml = doc.splitTextToSize("Missão: " + missao, W - 28); doc.text(ml, 14, X.y); X.y += ml.length * 4.6 + 2;
+  if (a.obs) { doc.setTextColor(225, 214, 202); doc.setFont("helvetica", "normal"); ml = doc.splitTextToSize("Recado: " + a.obs, W - 28); doc.text(ml, 14, X.y); X.y += ml.length * 4.6 + 2; }
+  X.y += 4; doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("QUEM FAZ O QUÊ", 14, X.y, { charSpace: 1 });
+  doc.setDrawColor(...C.LARANJA); doc.setLineWidth(0.3); doc.line(14 + doc.getTextWidth("QUEM FAZ O QUÊ") + 14 * 1 + 4, X.y - 1.2, W - 14, X.y - 1.2); X.y += 6;
+  R.forEach(x => {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); const ol = doc.splitTextToSize(x.oque || "a combinar com a ADM", W - 80), conf = C0.filter(c => c.equipe === x.eq).length, h = Math.max(20, 12 + ol.length * 4.8);
+    X.cabe(h + 3); doc.setFillColor(24, 32, 43); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(14, X.y + 4, 1.4, h - 8, "F");
+    doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(11.5); doc.text(x.eq.toUpperCase(), 20, X.y + 7.5, { charSpace: 0.4 });
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.text(ol, 20, X.y + 13.5);
+    doc.setFillColor(...C.LARANJA); doc.roundedRect(W - 50, X.y + 4, 32, 12, 2, 2, "F"); doc.setTextColor(26, 12, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text(String(x.homens || "-"), W - 34, X.y + 11.3, { align: "center" });
+    doc.setFontSize(6.5); doc.text("HOMENS", W - 34, X.y + 14.6, { align: "center" });
+    if (conf) { doc.setTextColor(170, 200, 170); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(`${conf} confirmado(s)`, W - 34, X.y + h - 2.5, { align: "center" }); }
+    X.y += h + 3; });
+  X.cabe(16); doc.setFillColor(...C.LARANJA); doc.roundedRect(14, X.y + 2, W - 28, 12, 3, 3, "F"); doc.setTextColor(26, 12, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(11.5);
+  doc.text(`TOTAL: ${tot} HOMENS EM ${R.length} EQUIPE(S)`, W / 2, X.y + 9.6, { align: "center" }); doc.link(14, X.y + 2, W - 28, 12, { url: acaoLink(a) }); X.y += 18;
+  doc.setTextColor(190, 180, 170); doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.text("Toque na faixa laranja para confirmar presença.", W / 2, X.y, { align: "center" });
+  await entregarPdf(doc.output("blob"), `Evento - ${a.titulo.replace(/[^\wÀ-ú -]/g, "").slice(0, 50)}.pdf`, `Evento: ${a.titulo}`, true);
 }
 async function acaoPdf(a) {
   const jsPDF = await carregarPdf(), C = PDF_COR, [logo, fundo] = await Promise.all([imagemDataUrl("assets/logo.png"), imagemDataUrl("assets/bg.jpg")]);
@@ -5542,7 +5594,7 @@ async function acaoPdf(a) {
   doc.setTextColor(255, 255, 255); doc.setFontSize(27); const tl = doc.splitTextToSize(a.titulo.toUpperCase(), W - 36); doc.text(tl, W / 2, 78, { align: "center", lineHeightFactor: 1.1 });
   let y = 78 + tl.length * 11 + 2;
   doc.setFont("helvetica", "normal"); doc.setFontSize(12.5); doc.setTextColor(220, 210, 200);
-  doc.text(doc.splitTextToSize(acaoCuidar(a) ? `A equipe ${a.equipe} convida os legendários para estarmos juntos de novo: ${a.tipo.toLowerCase()}. Traga sua família e seus irmãos de TOP.` : `A equipe ${a.equipe} convida os legendários para estar junto nesta ${a.tipo.toLowerCase()} e levar o TOP para mais homens.`, W - 50), W / 2, y, { align: "center" }); y += 16;
+  doc.text(doc.splitTextToSize(acaoCuidar(a) ? `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estarmos juntos de novo: ${a.tipo.toLowerCase()}. Traga sua família e seus irmãos de TOP.` : `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estar junto nesta ${a.tipo.toLowerCase()} e levar o TOP para mais homens.`, W - 50), W / 2, y, { align: "center" }); y += 16;
   const caixa = (lbl, val, yy) => { doc.setFillColor(26, 34, 45); doc.roundedRect(24, yy, W - 48, 21, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(24, yy + 4, 1.6, 13, "F");
     doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text(lbl, 32, yy + 7.5, { charSpace: 0.5 });
     doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.text(doc.splitTextToSize(val, W - 64)[0] || "", 32, yy + 15.5); };
@@ -5555,19 +5607,21 @@ async function acaoPdf(a) {
   doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.text("Toque aqui ou use o link enviado no grupo", W / 2, y + 23, { align: "center" });
   doc.link(24, y + 4, W - 48, 30, { url: acaoLink(a) });
   if (a.endereco || a.local) { doc.setTextColor(180, 170, 160); doc.setFontSize(10); doc.setTextColor(255, 170, 110); doc.textWithLink("Abrir no mapa", W / 2 - 12, y + 44, { url: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([a.local, a.endereco, "Franca SP"].filter(Boolean).join(", ")) }); }
-  doc.setTextColor(140, 130, 120); doc.setFontSize(8.5); doc.text(`${topName()} · Equipe ${a.equipe}${a.por ? " · " + a.por : ""}`, W / 2, H - 12, { align: "center" });
+  doc.setTextColor(140, 130, 120); doc.setFontSize(8.5); doc.text(`${topName()} · ${acaoEquipeTxt(a)}${a.por ? " · " + a.por : ""}`, W / 2, H - 12, { align: "center" });
   await entregarPdf(doc.output("blob"), `Convite - ${a.titulo.replace(/[^\wÀ-ú -]/g, "").slice(0, 50)}.pdf`, `Convite: ${a.titulo}`, true);
 }
 function acaoVer(a) {
-  const C = acaoConfirmados(a), l = acaoLink(a), msg = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}\n\nA equipe ${a.equipe} convida você! Confirme sua presença: ${l}`, pode = podeEditar() || (ehCoordEq() && a.equipe === ME.equipeLgnd);
-  modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${esc(a.tipo)} · ${esc(a.equipe)} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
+  const C = acaoConfirmados(a), l = acaoLink(a), R = acaoResp(a), msg = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}${R.length ? "\n\n" + R.map(x => `• ${x.eq}${x.oque ? ": " + x.oque : ""}${x.homens ? ` (${x.homens} homens)` : ""}`).join("\n") : ""}\n\n${R.length ? "Contamos com você!" : `A equipe ${a.equipe} convida você!`} Confirme sua presença: ${l}`, pode = podeEditar() || (ehCoordEq() && a.equipe === ME.equipeLgnd);
+  modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${esc(a.tipo)} · ${esc(acaoEquipeTxt(a))} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
     <div class="actions" style="flex-wrap:wrap"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Mandar link no WhatsApp</a>
-      <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button>${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}</div>
+      <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button>${SALA() ? `<button class="btn" type="button" id="acPlano">${ico("upload")} PDF do evento</button>` : ""}${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}</div>
+    ${R.length ? `<section class="panel" style="margin-top:6px"><h3>Quem faz o quê <small>${R.reduce((n, x) => n + (x.homens || 0), 0)} homens</small></h3><div class="list">${R.map(x => { const c = C.filter(y => y.equipe === x.eq).length; return `<div class="li ${x.eq === ME.equipeLgnd ? "ev-minha" : ""}"><span class="grow"><b>${esc(x.eq)}</b><small class="hint" style="display:block">${esc(x.oque || "a combinar")}</small></span><span class="chip ${x.homens && c >= x.homens ? "ok" : ""}">${c}/${x.homens || "-"}</span></div>`; }).join("")}</div></section>` : ""}
     <section class="panel" style="margin-top:6px"><h3>Confirmados <small>${C.length}${a.vagas ? " de " + a.vagas : ""}</small></h3>
       ${C.length ? `<div class="list">${C.map(x => `<div class="li"><span class="grow"><b>${esc(x.nome)}</b> <span class="hint">${esc(x.equipe || "")}</span></span></div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
   $("#acCopiar").onclick = () => copiarTexto(l, "Link copiado");
   $("#acPdf").onclick = () => acaoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
+  const pl = $("#acPlano"); if (pl) pl.onclick = () => acaoPlanoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
   const ed = $("#acEd"); if (ed) ed.onclick = () => { closeModal(); acaoForm(a); };
 }
 /* Agenda: eventos de divulgação + os TOPs, por mês. Toque no evento: quantos vão, quem vai e o link de presença. */
@@ -5588,8 +5642,8 @@ function vAgenda() {
     if (x.k === "tar") { const t = x.t, g = GR.find(y => y.id === (t.pegou || {}).grupo), m = MISSOES[t.missao] || MISSOES.outro, venc = !t.feito && t.prazo < hoje, minha = g && meuGrupo() && g.id === meuGrupo().id;
       return `<button class="acao-c ag-tar ${minha ? "minha" : ""} ${t.feito ? "feito" : ""}" type="button" data-meta-tar="1">${dia(t.prazo)}<span class="grow"><b>${esc(t.titulo)} <span class="chip ${t.feito ? "ok" : venc ? "bad" : "wait"}">${t.feito ? "feita" : venc ? "atrasada" : "tarefa"}</span></b><small class="hint"><span class="tag ${m[1]}">${m[0]}</span> prazo · ${g ? esc(g.nome) : "sem grupo"}${t.resp ? " · com " + esc(t.resp.split(" ")[0]) : ""}</small></span></button>`; }
     const a = x.a, c = acaoConfirmados(a).length;
-    return `<button class="acao-c ${a.equipe === ME.equipeLgnd ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
-      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `<span class="tag ${acaoCuidar(a) ? "ev-cuidar" : "ev-captar"}">${acaoCuidar(a) ? "Legendários" : "Divulgação"}</span> ` : ""}${esc(a.tipo)} · ${esc(a.equipe)}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
+    return `<button class="acao-c ${acaoTemEq(a, ME.equipeLgnd) ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
+      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `<span class="tag ${acaoCuidar(a) ? "ev-cuidar" : "ev-captar"}">${acaoCuidar(a) ? "Legendários" : "Divulgação"}</span> ` : ""}${esc(a.tipo)} · ${esc(acaoEquipeTxt(a))}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
       <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
   const meses = []; L.forEach(x => { const m = mes(x.data), g = meses[meses.length - 1]; if (g && g.m === m) g.l.push(x); else meses.push({ m, l: [x] }); });
   const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
@@ -5784,7 +5838,7 @@ async function agendaPdf() {
     const top = !!x.t, a = x.a || {}, titulo = top ? x.t.nome + (x.t.id === "previsto" ? (x.t.confirmado ? " · data confirmada" : " · data prevista") : "") : a.titulo;
     doc.setFont("helvetica", "bold"); doc.setFontSize(12.5); const tl = doc.splitTextToSize(titulo, W - 70);
     const linhas = top ? [`${fmtPeriodo(x.t)}${x.t.local ? " · " + x.t.local : ""}`, x.t.linkInsc ? "Inscrições abertas: toque para se inscrever" : ""] :
-      [`${a.tipo} · Equipe ${a.equipe}`, `${a.hora ? a.hora + " · " : ""}${[a.local, a.endereco].filter(Boolean).join(" · ") || "local a definir"}`, a.obs || ""];
+      [`${a.tipo} · ${acaoEquipeTxt(a)}`, `${a.hora ? a.hora + " · " : ""}${[a.local, a.endereco].filter(Boolean).join(" · ") || "local a definir"}`, a.obs || ""];
     const L = linhas.filter(Boolean), h = Math.max(26, 8 + tl.length * 5.4 + L.length * 4.6 + (top ? 2 : 8));
     X.cabe(h + 4);
     if (top) { doc.setFillColor(...C.LARANJA); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); } else { doc.setFillColor(24, 32, 43); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(14, X.y + 4, 1.4, h - 8, "F"); }
@@ -5859,7 +5913,7 @@ function grupoForm(id) {
   const del = $("#delBtn"); if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar"; return; } closeModal(); save(() => api.set("config", "meta-grupos", { lista: G.filter(x => x.id !== id) }), "Grupo desfeito").then(render); };
 }
 function grupoNumeros(g, D) {
-  const eqs = g.equipes || [], I = indTodas().filter(x => eqs.includes(x.equipe)), E = metaEquipes(D).filter(e => eqs.includes(e.e)), A = acoesTodas().filter(a => eqs.includes(a.equipe)), hoje = hojeISO();
+  const eqs = g.equipes || [], I = indTodas().filter(x => eqs.includes(x.equipe)), E = metaEquipes(D).filter(e => eqs.includes(e.e)), A = acoesTodas().filter(a => eqs.some(e => acaoTemEq(a, e))), hoje = hojeISO();
   const cuidar = A.filter(a => acaoCuidar(a) && a.data < hoje), T = quadro().filter(t => (t.pegou || {}).grupo === g.id);
   return { nomes: I.length, metaNomes: E.reduce((s, e) => s + e.metaNomes, 0), insc: I.filter(indInscrito).length, metaInsc: E.reduce((s, e) => s + e.metaInsc, 0),
     encontros: cuidar.length, presentes: cuidar.reduce((s, a) => s + acaoConfirmados(a).length, 0), prox: A.filter(a => a.data >= hoje), T, servidores: S.P.filter(p => p.tipo === "legendario" && eqs.includes(p.equipe)).length };
