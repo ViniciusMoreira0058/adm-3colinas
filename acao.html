@@ -2,6 +2,7 @@
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex"><meta name="theme-color" content="#090d13">
 <title>Confirmar presença · TOP 3 Colinas</title>
+<meta property="og:title" content="Convite · Legendários 3 Colinas"><meta property="og:description" content="Toque para confirmar sua presença"><meta property="og:image" content="https://adm-3colinas.vercel.app/assets/convite-og.jpg">
 <style>
 :root{--bg:#090d13;--card:#121821;--card2:#1a222d;--fg:#fff6ee;--muted:#a59d94;--line:#283240;--accent:#ff7a1a;--red:#ef4444}
 *{box-sizing:border-box}[hidden]{display:none!important}
@@ -52,7 +53,7 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
 (function () {
   const URL_SB = "https://jgoewqyfihdzpurlvaxe.supabase.co", KEY_SB = "sb_publishable_QBxqFv2T9W-4-XTj_OSVEA_d1olCthu";   // chave pública (anon): só consegue chamar adm_acao_confirmar
   const EQUIPES = ["ADM", "Logística", "Mídia", "Segurança", "Voz", "Hakunas", "Intercessão", "Eventos", "Produção", "Base", "Coordenação"];
-  const $ = s => document.querySelector(s), f = $("#f"), q = new URLSearchParams(location.search), demo = q.has("demo"), token = q.get("t") || "", top = q.get("top") || "", acao = q.get("a") || "";
+  const $ = s => document.querySelector(s), f = $("#f"), q = new URLSearchParams(location.search.replace(/&amp;/g, "&")), demo = q.has("demo"), token = q.get("t") || "", top = q.get("top") || "", acao = q.get("a") || "";
   const esc = s => String(s || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   $("#aviso").hidden = !demo;
   if (!token || !acao) { $("#semLink").hidden = false; f.hidden = true; return; }
