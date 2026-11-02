@@ -6018,7 +6018,7 @@ function vQuadro(D) {
    tarefas com quem faz, eventos e recados. Recados em config sala-<top>-<equipe> {msgs:[{id,txt,por,em}]}. */
 const SALA = () => true;
 /* Melhorias 2 (só na demo): sem tarefas antigas/placar semanal, convidado de evento vira indicação, quem foi de verdade, avisos ao coordenador */
-const M2 = () => DEMO;
+const M2 = () => true;
 const hashCurto = t => { let h = 0; for (const c of String(t)) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
 const confKey = x => norm(x.nome || "").trim() + "|" + telLimpo(x.tel || "").slice(-8);
 const acaoPresentes = a => a.foram ? acaoConfirmados(a).filter(x => a.foram.includes(confKey(x))).length + (+a.foramExtra || 0) : null;
