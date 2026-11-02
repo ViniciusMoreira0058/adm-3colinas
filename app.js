@@ -5527,9 +5527,9 @@ function acaoForm(a) {
   if (!podeIndicar()) { toast("Seu acesso é somente leitura."); return; }
   const novo = !a; a = a || { tipo: ACAO_TIPOS[0], equipe: ehCoordEq() ? ME.equipeLgnd : "", data: "", hora: "19:00" };
   modal(`<h3>${novo ? "Novo evento" : "Editar evento"}</h3><div class="form">
-    <div class="field full"><label for="ac-tp">Tipo</label><select id="ac-tp" name="tipo" class="sel"><optgroup label="Trazer senderistas">${ACAO_CAPTAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><optgroup label="Cuidar dos legendários">${ACAO_CUIDAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><option ${a.tipo === "Outro" ? "selected" : ""}>Outro</option></select></div>
-    ${SALA() ? `<div class="field"><label for="ac-ob">Objetivo</label><select id="ac-ob" name="objetivo" class="sel"><option value="">Pelo tipo do evento</option><option value="captar" ${a.objetivo === "captar" ? "selected" : ""}>Divulgação: trazer senderistas</option><option value="cuidar" ${a.objetivo === "cuidar" ? "selected" : ""}>Cuidar dos legendários</option><option value="outro" ${a.objetivo === "outro" ? "selected" : ""}>Outro (escrever)</option></select></div>
-    <div class="field" id="ac-obw" ${a.objetivo === "outro" ? "" : "hidden"}><label for="ac-obt">Qual objetivo?</label><input id="ac-obt" name="objetivoTxt" value="${esc(a.objetivoTxt || "")}" placeholder="ex.: Arrecadar alimentos" maxlength="40"></div>
+    ${SALA() ? "" : `<div class="field full"><label for="ac-tp">Tipo</label><select id="ac-tp" name="tipo" class="sel"><optgroup label="Trazer senderistas">${ACAO_CAPTAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><optgroup label="Cuidar dos legendários">${ACAO_CUIDAR.map(t => `<option ${a.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</optgroup><option ${a.tipo === "Outro" ? "selected" : ""}>Outro</option></select></div>`}
+    ${SALA() ? `<div class="field"><label for="ac-ob">Objetivo</label><select id="ac-ob" name="objetivo" class="sel">${[["captar", "Divulgação: trazer senderistas"], ["cuidar", "Cuidar dos legendários"], ["outro", "Outro (escrever)"]].map(([k, l]) => `<option value="${k}" ${acaoObj(a).k === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    <div class="field" id="ac-obw" ${acaoObj(a).k === "outro" ? "" : "hidden"}><label for="ac-obt">Qual objetivo?</label><input id="ac-obt" name="objetivoTxt" value="${esc(a.objetivoTxt || "")}" placeholder="ex.: Arrecadar alimentos" maxlength="40"></div>
     <label class="field full ck-line"><input type="checkbox" name="aberto" ${a.aberto ? "checked" : ""}> Convite aberto: quem ainda não é legendário também pode confirmar</label>` : ""}
     <div class="field full"><label for="ac-ti">Título</label><input id="ac-ti" name="titulo" value="${esc(a.titulo || "")}" placeholder="ex.: Apresentação na Igreja Batista Central" required></div>
     <div class="field"><label for="ac-d">Dia</label><input id="ac-d" name="data" type="date" value="${esc(a.data || "")}" required></div>
@@ -5551,7 +5551,7 @@ function acaoForm(a) {
       if (!resp.length) { toast("Coloque pelo menos uma equipe."); return; } }
     const obj = SALA() ? { objetivo: String(fd.get("objetivo") || ""), objetivoTxt: fd.get("objetivo") === "outro" ? String(fd.get("objetivoTxt") || "").trim().slice(0, 40) : "", aberto: !!fd.get("aberto") } : {};
     if (obj.objetivo === "outro" && !obj.objetivoTxt) { toast("Escreva qual é o objetivo."); return; }
-    const item = { ...a, ...obj, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: fd.get("tipo"), titulo, data,
+    const item = { ...a, ...obj, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: SALA() ? (a.tipo && a.objetivo === obj.objetivo ? a.tipo : obj.objetivo === "cuidar" ? "Encontro de legendários" : obj.objetivo === "outro" ? "Outro" : "Encontro de apresentação") : fd.get("tipo"), titulo, data,
       hora: String(fd.get("hora") || ""), local: String(fd.get("local") || "").trim(), endereco: String(fd.get("endereco") || "").trim(), equipe: resp ? resp[0].eq : String(fd.get("equipe") || ""), vagas: resp ? resp.reduce((n, x) => n + x.homens, 0) : +fd.get("vagas") || 0, ...(resp ? { resp } : {}),
       obs: String(fd.get("obs") || "").trim(), por: a.por || ME.adm || "", em: a.em || new Date().toISOString() };
     closeModal(); acaoSalvar(a.doc || acaoDocMeu(), item, novo ? "Evento criado: agora mande o link e o convite" : "Evento salvo"); });
@@ -5573,7 +5573,7 @@ async function acaoXlsx(a) {
       ...C.map(x => [x.nome || "", x.leg === false ? "Ainda não" : "Sim", x.num || "", x.equipe || "", x.tel || "", x.igreja || "", x.info || "", dt(x.em)])]);
     ws["!cols"] = [{ wch: 30 }, { wch: 13 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 45 }, { wch: 14 }];
     X.utils.book_append_sheet(wb, ws, "Confirmados");
-    const R = acaoResp(a), ev = X.utils.aoa_to_sheet([["Evento", a.titulo], ["Tipo", a.tipo], ["Objetivo", acaoObj(a).tag], ["Quando", acaoQuando(a)], ["Local", [a.local, a.endereco].filter(Boolean).join(" · ")], ["Recado", a.obs || ""],
+    const R = acaoResp(a), ev = X.utils.aoa_to_sheet([["Evento", a.titulo], ["Objetivo", acaoObj(a).tag], ["Quando", acaoQuando(a)], ["Local", [a.local, a.endereco].filter(Boolean).join(" · ")], ["Recado", a.obs || ""],
       ["Confirmados", C.length], ["Legendários", C.filter(x => x.leg !== false).length], ["Ainda não legendários", C.filter(x => x.leg === false).length], [],
       ["Equipe", "O que faz", "Homens", "Confirmados da equipe"], ...R.map(x => [x.eq, x.oque || "", x.homens || 0, C.filter(c => c.equipe === x.eq).length])]);
     ev["!cols"] = [{ wch: 22 }, { wch: 50 }, { wch: 10 }, { wch: 20 }]; X.utils.book_append_sheet(wb, ev, "Evento");
@@ -5582,7 +5582,7 @@ async function acaoXlsx(a) {
 }
 async function acaoPlanoPdf(a) {
   const R = acaoResp(a).length ? acaoResp(a) : [{ eq: a.equipe, oque: "", homens: a.vagas || 0 }], C0 = acaoConfirmados(a), tot = R.reduce((n, x) => n + (x.homens || 0), 0);
-  const X = await pdfBase("Plano do evento", `${a.tipo} · ${acaoEquipeTxt(a)} · ${topName()}`), { doc, C, W } = X;
+  const X = await pdfBase("Plano do evento", `${acaoObj(a).tag} · ${acaoEquipeTxt(a)} · ${topName()}`), { doc, C, W } = X;
   doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.setTextColor(255, 255, 255); const tl = doc.splitTextToSize(a.titulo, W - 28); doc.text(tl, 14, X.y); X.y += tl.length * 7 + 3;
   const caixas = [["QUANDO", acaoQuando(a)], ["ONDE", [a.local, a.endereco].filter(Boolean).join(" · ") || "a definir"], ["EQUIPES", `${R.length} · ${tot} homens`]];
   const cw = (W - 28 - 8) / 3; X.cabe(24);
@@ -5620,7 +5620,7 @@ async function acaoPdf(a) {
   doc.setTextColor(255, 255, 255); doc.setFontSize(27); const tl = doc.splitTextToSize(a.titulo.toUpperCase(), W - 36); doc.text(tl, W / 2, 78, { align: "center", lineHeightFactor: 1.1 });
   let y = 78 + tl.length * 11 + 2;
   doc.setFont("helvetica", "normal"); doc.setFontSize(12.5); doc.setTextColor(220, 210, 200);
-  doc.text(doc.splitTextToSize(acaoCuidar(a) ? `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estarmos juntos de novo: ${a.tipo.toLowerCase()}. Traga sua família e seus irmãos de TOP.` : `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estar junto nesta ${a.tipo.toLowerCase()} e levar o TOP para mais homens.`, W - 50), W / 2, y, { align: "center" }); y += 16;
+  doc.text(doc.splitTextToSize(acaoCuidar(a) ? `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estarmos juntos de novo${SALA() ? "" : ": " + a.tipo.toLowerCase()}. Traga sua família e seus irmãos de TOP.` : `${acaoResp(a).length > 1 ? "A Base 3 Colinas" : "A equipe " + acaoEquipeTxt(a)} convida os legendários para estar junto ${SALA() ? "neste evento" : "nesta " + a.tipo.toLowerCase()} e levar o TOP para mais homens.`, W - 50), W / 2, y, { align: "center" }); y += 16;
   const caixa = (lbl, val, yy) => { doc.setFillColor(26, 34, 45); doc.roundedRect(24, yy, W - 48, 21, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(24, yy + 4, 1.6, 13, "F");
     doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text(lbl, 32, yy + 7.5, { charSpace: 0.5 });
     doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.text(doc.splitTextToSize(val, W - 64)[0] || "", 32, yy + 15.5); };
@@ -5638,7 +5638,7 @@ async function acaoPdf(a) {
 }
 function acaoVer(a) {
   const C = acaoConfirmados(a), l = acaoLink(a), R = acaoResp(a), msg = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}${R.length ? "\n\n" + R.map(x => `• ${x.eq}${x.oque ? ": " + x.oque : ""}${x.homens ? ` (${x.homens} homens)` : ""}`).join("\n") : ""}\n\n${R.length ? "Contamos com você!" : `A equipe ${a.equipe} convida você!`} Confirme sua presença: ${l}`, pode = podeEditar() || (ehCoordEq() && a.equipe === ME.equipeLgnd);
-  modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${esc(a.tipo)} · ${esc(acaoEquipeTxt(a))} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
+  modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${SALA() ? acaoTag(a) : esc(a.tipo)} · ${esc(acaoEquipeTxt(a))} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
     <div class="actions" style="flex-wrap:wrap"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Mandar link no WhatsApp</a>
       <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button>${SALA() ? `<button class="btn" type="button" id="acPlano">${ico("upload")} PDF do evento</button>${podeEditar() && !ehCoordEq() ? `<button class="btn" type="button" id="acXls">${ico("upload")} Planilha dos confirmados</button>` : ""}` : ""}${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}</div>
     ${R.length ? `<section class="panel" style="margin-top:6px"><h3>Quem faz o quê <small>${R.reduce((n, x) => n + (x.homens || 0), 0)} homens</small></h3><div class="list">${R.map(x => { const c = C.filter(y => y.equipe === x.eq).length; return `<div class="li ${x.eq === ME.equipeLgnd ? "ev-minha" : ""}"><span class="grow"><b>${esc(x.eq)}</b><small class="hint" style="display:block">${esc(x.oque || "a combinar")}</small></span><span class="chip ${x.homens && c >= x.homens ? "ok" : ""}">${c}/${x.homens || "-"}</span></div>`; }).join("")}</div></section>` : ""}
@@ -5670,7 +5670,7 @@ function vAgenda() {
       return `<button class="acao-c ag-tar ${minha ? "minha" : ""} ${t.feito ? "feito" : ""}" type="button" data-meta-tar="1">${dia(t.prazo)}<span class="grow"><b>${esc(t.titulo)} <span class="chip ${t.feito ? "ok" : venc ? "bad" : "wait"}">${t.feito ? "feita" : venc ? "atrasada" : "tarefa"}</span></b><small class="hint"><span class="tag ${m[1]}">${m[0]}</span> prazo · ${g ? esc(g.nome) : "sem grupo"}${t.resp ? " · com " + esc(t.resp.split(" ")[0]) : ""}</small></span></button>`; }
     const a = x.a, c = acaoConfirmados(a).length;
     return `<button class="acao-c ${acaoTemEq(a, ME.equipeLgnd) ? "minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}">${dia(a.data)}
-      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `${acaoTag(a)} ` : ""}${esc(a.tipo)} · ${esc(acaoEquipeTxt(a))}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
+      <span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${SALA() ? `${acaoTag(a)} ` : esc(a.tipo) + " · "}${esc(acaoEquipeTxt(a))}${a.hora ? " · " + esc(a.hora) : ""}${a.local ? " · " + esc(a.local) : ""}</small></span>
       <span class="chip ${a.vagas && c >= a.vagas ? "ok" : ""}">${c}${a.vagas ? "/" + a.vagas : ""} vão</span></button>`; };
   const meses = []; L.forEach(x => { const m = mes(x.data), g = meses[meses.length - 1]; if (g && g.m === m) g.l.push(x); else meses.push({ m, l: [x] }); });
   const nEv = prox.filter(x => x.k === "ev").length, nVao = prox.filter(x => x.k === "ev").reduce((s, x) => s + acaoConfirmados(x.a).length, 0);
@@ -5865,7 +5865,7 @@ async function agendaPdf() {
     const top = !!x.t, a = x.a || {}, titulo = top ? x.t.nome + (x.t.id === "previsto" ? (x.t.confirmado ? " · data confirmada" : " · data prevista") : "") : a.titulo;
     doc.setFont("helvetica", "bold"); doc.setFontSize(12.5); const tl = doc.splitTextToSize(titulo, W - 70);
     const linhas = top ? [`${fmtPeriodo(x.t)}${x.t.local ? " · " + x.t.local : ""}`, x.t.linkInsc ? "Inscrições abertas: toque para se inscrever" : ""] :
-      [`${a.tipo} · ${acaoEquipeTxt(a)}`, `${a.hora ? a.hora + " · " : ""}${[a.local, a.endereco].filter(Boolean).join(" · ") || "local a definir"}`, a.obs || ""];
+      [`${SALA() ? acaoObj(a).tag : a.tipo} · ${acaoEquipeTxt(a)}`, `${a.hora ? a.hora + " · " : ""}${[a.local, a.endereco].filter(Boolean).join(" · ") || "local a definir"}`, a.obs || ""];
     const L = linhas.filter(Boolean), h = Math.max(26, 8 + tl.length * 5.4 + L.length * 4.6 + (top ? 2 : 8));
     X.cabe(h + 4);
     if (top) { doc.setFillColor(...C.LARANJA); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); } else { doc.setFillColor(24, 32, 43); doc.roundedRect(14, X.y, W - 28, h, 3, 3, "F"); doc.setFillColor(...C.LARANJA); doc.rect(14, X.y + 4, 1.4, h - 8, "F"); }
