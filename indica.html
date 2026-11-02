@@ -62,6 +62,7 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
   if (!token) { $("#semLink").hidden = false; f.hidden = true; return; }
   EQUIPES.forEach(e => { const o = document.createElement("option"); o.textContent = e; $("#eq").appendChild(o); });
   try { const eu = JSON.parse(localStorage.getItem("adm3-indic-eu") || "{}"); if (eu.quem) $("#quem").value = eu.quem; if (eu.eq) $("#eq").value = eu.eq; } catch (x) {}
+  const eqLink = q.get("eq"); if (eqLink && EQUIPES.includes(eqLink)) { $("#eq").value = eqLink; $("#eq").disabled = true; }   // link da equipe: a área já vem marcada
   const esc = s => String(s).replace(/[<>&"]/g, "");
   f.addEventListener("submit", e => {
     e.preventDefault(); const err = $("#err"), falta = [], v = id => $("#" + id).value.trim();

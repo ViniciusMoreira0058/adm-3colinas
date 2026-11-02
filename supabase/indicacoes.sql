@@ -83,7 +83,7 @@ as $$
       or p_id like 'cronoplano-%' or p_id like 'pista-vivo-%' or p_id like 'consag-%'
       or p_id like 'meta-%' or p_id like 'metatar-%' or p_id like 'indlink-%'
       or (p_id like 'indic-%' and p_id not like 'indic-cfg-%')
-      or p_id like 'acao-%' or p_id like 'acaopres-%'
+      or p_id like 'acao-%' or p_id like 'acaopres-%' or p_id like 'sala-%'
 $$;
 
 create or replace function public.adm_coord_meta_meu(p_col text, p_id text)
@@ -92,7 +92,7 @@ as $$
 declare m public.adm_membros := public.adm_eu();
 begin
   return m.id is not null and m.perfil = 'coord' and p_col = 'config'
-     and (p_id = 'meta-faq' or p_id like 'metatar-%'
+     and (p_id = 'meta-faq' or p_id like 'metatar-%' or p_id like 'sala-%'
           or (p_id like 'indic-%-' || m.id::text and p_id not like 'indic-cfg-%')
           or (p_id like 'acao-%-' || m.id::text and p_id not like 'acaopres-%'));
 end $$;

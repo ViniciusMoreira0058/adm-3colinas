@@ -5267,7 +5267,7 @@ function metaDados() {
 // indicações pelo link público (indica.html): config indlink-<top>-<id> (na demo, localStorage "adm3-indic-link"). Quando a ADM mexe nela, vira item da lista dela (mesmo id).
 const IND_LS = "adm3-indic-link";
 const indCfgId = () => "indic-cfg-" + curTopId();
-const indLink = () => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}indica.html?t=${encodeURIComponent((cfgDe(indCfgId()) || {}).token || "")}&top=${encodeURIComponent(curTopId())}${DEMO ? "&demo=1" : ""}`;
+const indLink = eq => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}indica.html?t=${encodeURIComponent((cfgDe(indCfgId()) || {}).token || "")}&top=${encodeURIComponent(curTopId())}${eq ? "&eq=" + encodeURIComponent(eq) : ""}${DEMO ? "&demo=1" : ""}`;
 function indDoLink() {
   if (DEMO) { try { return (JSON.parse(localStorage.getItem(IND_LS) || "[]") || []).filter(x => x && x.id && (x.top || curTopId()) === curTopId()).map(x => ({ ...x, doc: "link" })); } catch { return []; } }
   return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`indlink-${curTopId()}-`)).map(([k, d]) => ({ ...d, id: k, doc: "link" }));
@@ -5355,7 +5355,7 @@ function metaPlacar() {
 }
 function metaCoordCard() {
   const D = metaDados(), e = metaEquipes(D).find(x => x.e === ME.equipeLgnd), mine = indTodas().filter(x => x.equipe === ME.equipeLgnd);
-  return `<section class="panel meta-coord"><h3>Meta da minha equipe <button class="linkbtn" type="button" data-go="meta">ver ›</button></h3>
+  return `<section class="panel meta-coord"><h3>Meta da minha equipe ${SALA() ? `<button class="linkbtn" type="button" data-sala="${esc(ME.equipeLgnd || "")}">sala da equipe ›</button>` : `<button class="linkbtn" type="button" data-go="meta">ver ›</button>`}</h3>
     ${e ? `<div class="meta-mini"><div><span class="lbl">Nomes indicados</span><b class="num">${e.nomes}<small> de ${e.metaNomes}</small></b><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div></div>
       <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : `<p class="hint">Sua equipe ainda não tem servidores contados para a meta.</p>`}
     <p class="hint" style="margin:0">Placar geral: <b class="num">${D.inscritos}</b> inscritos de ${D.meta} · meta para hoje ${D.metaHoje}</p>
@@ -5374,7 +5374,7 @@ function vMeta() {
   const tel = x => waNumber(x.tel);
   const cab = `
   <div class="head"><div><h2>Meta do TOP</h2><p>${esc(topName())}: ${D.vagas} vagas + ${D.desist}% de desistência = <b>${D.meta} inscritos</b> até ${fmt(D.fimD)}. A meta é montada sozinha para cada TOP novo.</p></div>
-    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${podeEditar() ? `<button class="btn" type="button" data-act="ind-link">${ico("route")} Link de indicação</button>` : ""}<button class="btn" type="button" data-go="agenda">${ico("clock")} Agenda</button>${ehCoordEq() ? "" : `<button class="btn" type="button" data-act="meta-placar">${ico("wa")} Copiar placar</button>`}${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
+    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}${podeEditar() ? `<button class="btn" type="button" data-act="ind-link">${ico("route")} Link de indicação</button>` : ""}<button class="btn" type="button" data-go="agenda">${ico("clock")} Agenda</button>${ehCoordEq() || SALA() ? "" : `<button class="btn" type="button" data-act="meta-placar">${ico("wa")} Copiar placar</button>`}${S.isOwner ? `<button class="btn" type="button" data-act="meta-ajustar">${ico("edit")} Ajustar meta</button>` : ""}</div></div>
 `;
   const pPlacar = `
   <div class="kpis">
@@ -5406,10 +5406,10 @@ function vMeta() {
         <button class="linkbtn" type="button" data-ind-ed="${esc(x.doc)}|${esc(x.id)}" aria-label="Editar">${ico("edit")}</button></div>` : ""}</div>`).join("")}</div>`
     : `<div class="empty">${I.length ? "Nada neste filtro." : "Nenhum nome indicado ainda. Cada servidor indica 5 nomes."}</div>`}
   </section>`;
-  const aba = ["placar", "ind", "eq"].includes(S.metaAba) ? S.metaAba : "placar";
-  return cab + metaAbas(aba) + (aba === "eq" ? vMetaFrentes(D) : aba === "ind" ? metaFaq() + pInd : metaSemana(D) + pPlacar);
+  const aba = [...(SALA() ? ["sala"] : []), "placar", "ind", "eq"].includes(S.metaAba) ? S.metaAba : SALA() && ehCoordEq() ? "sala" : "placar";
+  return cab + metaAbas(aba) + (aba === "sala" ? vSala(D) : aba === "eq" ? vMetaFrentes(D) : aba === "ind" ? metaFaq() + pInd : metaSemana(D) + pPlacar);
 }
-document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.tselId && S.tarSel) { t.checked ? S.tarSel.add(t.dataset.tselId) : S.tarSel.delete(t.dataset.tselId); render(); return; } if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
+document.addEventListener("change", e => { const t = e.target; if (t && t.dataset && t.dataset.salaEq != null) { S.salaEq = t.value; render(); return; } if (t && t.dataset && t.dataset.tarResp) { tarResp(t.dataset.tarResp, t.value); return; } if (t && t.dataset && t.dataset.tselId && S.tarSel) { t.checked ? S.tarSel.add(t.dataset.tselId) : S.tarSel.delete(t.dataset.tselId); render(); return; } if (t && t.dataset && t.dataset.tarEq != null) { S.tarEq = t.value; render(); return; } if (t && t.dataset && t.dataset.indSt) { const [doc, id] = t.dataset.indSt.split("|"); indMarcar(doc, id, t.value); } });
 document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[data-ind-zap]"); if (!a) return;
   const [doc, id] = a.dataset.indZap.split("|"), x = indTodas().find(y => y.doc === doc && y.id === id); if (x && x.status === "novo") setTimeout(() => indMarcar(doc, id, "contatado"), 300); });
 /* Tarefas das equipes (Estratégia 150): já nascem do PDF; estado em config metatar-<top> {estado:{tid:{feito,n,em,por}}, extras:[], apagadas:[]} */
@@ -5473,7 +5473,7 @@ function tarLi(t) {
   const btn = t.tipo === "auto" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b><small class="hint">conta pela Agenda</small></div>` : t.tipo === "num" ? `<div class="tar-num"><b class="num">${t.n}/${t.alvo}</b>${pode && !t.feito ? `<button class="btn sm primary" type="button" data-tar-mais="${t.id}">+1</button>` : ""}${pode && t.n ? `<button class="linkbtn" type="button" data-tar-menos="${t.id}" aria-label="Desfazer 1">−</button>` : ""}</div>`
     : pode ? `<button class="btn sm ${t.feito ? "" : "primary"}" type="button" data-tar-feito="${t.id}">${t.feito ? "Desfazer" : t.tipo === "conteudo" ? "Entregue" : "Feito"}</button>` : t.feito ? `<span class="chip ok">Feito</span>` : "";
   if (S.tarSel) return `<label class="li tar-li tar-sel ${t.sit}"><input type="checkbox" data-tsel-id="${t.id}" ${S.tarSel.has(t.id) ? "checked" : ""}><div class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)} · semana ${t.semana}${t.feito ? " · feita" : ""}</small></div></label>`;
-  return `<div class="li tar-li ${t.sit}"><span class="tar-ck">${t.feito ? ico("check") : ""}</span><div class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)} · semana ${t.semana} (até ${fmt(t.prazo)})${t.feito && t.por ? ` · feito por ${esc(t.por.split(" ")[0])}` : ""}</small>
+  return `<div class="li tar-li ${t.sit}"><span class="tar-ck">${t.feito ? ico("check") : ""}</span><div class="grow"><b>${esc(t.titulo)}</b><small class="hint">${esc(t.equipe)} · semana ${t.semana} (até ${fmt(t.prazo)})${t.resp ? ` · com ${esc(t.resp.split(" ")[0])}` : ""}${t.feito && t.por ? ` · feito por ${esc(t.por.split(" ")[0])}` : ""}</small>
     ${t.tipo === "num" || (t.tipo === "auto" && t.alvo > 1) ? `<div class="bar good"><i style="width:${pct(t.n, t.alvo)}%"></i></div>` : ""}</div>${btn}${podeEditar() ? `<button class="linkbtn" type="button" data-tar-ed="${t.id}" aria-label="Editar">${ico("edit")}</button>` : ""}</div>`;
 }
 function vMetaTarefas(D) {
@@ -5674,6 +5674,7 @@ function vMetaFrentes(D) {
     return `<details class="panel frente ${f.atras ? "atras" : ""}" ${minha || (!meu && f.atras) ? "open" : ""}><summary><div class="grow"><b>${esc(f.l)}${minha ? ' <span class="chip acc">sua equipe</span>' : ""}</b><small class="hint">${esc(f.sub || f.eqs.join(", "))}</small><small>${esc(f.m)}</small></div>
       <div class="fr-st"><b class="num">${f.feitas}/${f.total}</b><small>${f.atras ? `<span class="chip bad">${f.atras} atrasada(s)</span>` : "tarefas"}</small></div></summary>
       ${f.ind.length ? `<div class="fr-ind">${f.ind.map(i => `<div><small class="hint">${esc(i.l)}</small><b class="num">${i.n}<small>/${i.alvo}</small></b><div class="bar good"><i style="width:${pct(i.n, i.alvo)}%"></i></div></div>`).join("")}</div>` : ""}
+      ${SALA() && !ehCoordEq() ? `<div class="actions">${f.eqs.map(x => `<button class="btn sm" type="button" data-sala="${esc(x)}">Sala ${esc(x)}</button>`).join("")}</div>` : ""}
       ${f.k === "com" && podeEditar() && !temSaidas ? `<div class="actions"><button class="btn" type="button" data-saidas-gerar="1">${ico("clock")} Marcar as 14 saídas de panfletagem na Agenda</button></div>` : ""}
       ${agora.length ? `<h4>Agora</h4><div class="list">${agora.map(tarLi).join("")}</div>` : `<p class="hint">${pend.length ? "Nada para esta semana." : "Tudo feito 🙌"}</p>`}
       ${depois.length ? `<h4>Depois <small class="hint">${depois.length}</small></h4><div class="list">${depois.map(tarLi).join("")}</div>` : ""}
@@ -5791,6 +5792,53 @@ async function agendaPdf() {
     X.y += h + 4; });
   await entregarPdf(doc.output("blob"), `Agenda Legendarios 3 Colinas.pdf`, "Agenda · Legendários 3 Colinas", true);
 }
+/* Sala da equipe (só na demo): a equipe trabalha junta num lugar só. Meta da equipe, link de indicação da equipe,
+   tarefas com quem faz, eventos e recados. Recados em config sala-<top>-<equipe> {msgs:[{id,txt,por,em}]}. */
+const SALA = () => DEMO;
+const salaId = eq => "sala-" + curTopId() + "-" + norm(eq).replace(/[^a-z0-9]+/g, "-");
+function tarResp(id, nome) {
+  const t = tarLista(metaDados()).find(x => x.id === id); if (!t || !podeTar(t)) { toast("Só a equipe " + (t ? t.equipe : "") + " ou a ADM mudam isso."); return; }
+  const T = tarDoc(), E = { ...(T.estado || {}) }; E[id] = { ...(E[id] || {}), resp: nome };
+  (async () => { try { await api.set("config", tarId(), { ...T, estado: E }); toast(nome ? `${nome.split(" ")[0]} ficou com essa tarefa` : "Tarefa sem responsável"); } catch (e) { toast("Não foi possível salvar. " + erroAmigavel(e)); } render(); })();
+}
+function salaRecado(eq, txt) {
+  txt = String(txt || "").trim(); if (!txt) return;
+  const id = salaId(eq), d = cfgDe(id) || {}, msgs = [...(d.msgs || []), { id: "m" + Date.now().toString(36), txt: txt.slice(0, 500), por: ME.adm || "", em: new Date().toISOString() }].slice(-60);
+  (async () => { try { await api.set("config", id, { equipe: eq, msgs }); } catch (e) { toast("Não foi possível enviar. " + erroAmigavel(e)); } render(); })();
+}
+function vSala(D) {
+  const eqs = [...new Set([...metaEquipes(D).map(e => e.e), ...FRENTES.flatMap(f => f.eq)])].filter(Boolean);
+  const eq = ehCoordEq() ? ME.equipeLgnd : (S.salaEq && eqs.includes(S.salaEq) ? S.salaEq : eqs[0]);
+  if (!eq) return `<section class="panel"><div class="empty">Importe as equipes LGND para abrir as salas.</div></section>`;
+  const e = metaEquipes(D).find(x => x.e === eq), fr = FRENTES.find(f => f.eq.includes(eq)), pode = podeEditar() || (ehCoordEq() && ME.equipeLgnd === eq);
+  const leg = S.P.filter(p => p.tipo === "legendario" && p.equipe === eq).sort((a, b) => FUNC_ORDEM(a.funcao) - FUNC_ORDEM(b.funcao) || a.nome.localeCompare(b.nome));
+  const lider = leg.filter(p => FUNC_ORDEM(p.funcao) < 2).map(p => p.nome.split(" ").slice(0, 2).join(" "));
+  const I = indTodas().filter(x => x.equipe === eq), T = tarLista(D).filter(t => t.equipe === eq), pend = T.filter(t => !t.feito), feitas = T.filter(t => t.feito);
+  const A = acoesTodas().filter(a => a.equipe === eq && a.data >= hojeISO()), msgs = ((cfgDe(salaId(eq)) || {}).msgs || []).slice(-15).reverse();
+  const temLink = !!(cfgDe(indCfgId()) || {}).token, st = x => { const p = indInscrito(x); return p ? `<span class="chip ok">Inscrito ✓</span>` : `<span class="chip ${indAtrasada(x) ? "bad" : (IND_ST.find(y => y.v === x.status) || IND_ST[0]).c}">${indAtrasada(x) ? "Sem contato +48 h" : (IND_ST.find(y => y.v === x.status) || IND_ST[0]).l}</span>`; };
+  const resp = t => pode && !t.feito && t.tipo !== "auto" ? `<select class="sel sm" data-tar-resp="${t.id}" aria-label="Quem faz"><option value="">Quem faz?</option>${leg.map(p => `<option ${t.resp === p.nome ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</select>` : "";
+  return `${ehCoordEq() ? "" : `<div class="actions"><select class="sel" data-sala-eq aria-label="Equipe">${eqs.map(x => `<option ${x === eq ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>`}
+  <section class="panel sala-cab"><div class="grow"><span class="lbl">${fr ? "Frente " + esc(fr.l) : "Equipe"}</span><h3 style="margin:2px 0">${esc(eq)}</h3>
+      <small class="hint">${leg.length} servidor(es)${lider.length ? " · coordenação: " + esc(lider.join(", ")) : ""}</small>${fr ? `<small class="hint">Missão: ${esc(fr.m)}</small>` : ""}</div>
+    ${e ? `<div class="meta-mini"><div><span class="lbl">Nomes que a equipe indicou</span><b class="num">${e.nomes}<small> de ${e.metaNomes}</small></b><div class="bar"><i style="width:${pct(e.nomes, e.metaNomes)}%"></i></div></div>
+      <div><span class="lbl">Viraram inscritos</span><b class="num">${e.insc}<small> de ${e.metaInsc}</small></b><div class="bar good"><i style="width:${pct(e.insc, e.metaInsc)}%"></i></div></div></div>` : ""}
+    <div class="actions">${podeIndicar() ? `<button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button>` : ""}
+      ${temLink ? `<button class="btn" type="button" data-sala-link="${esc(eq)}">${ico("wa")} Link da equipe para o grupo</button>` : `<span class="hint">${podeEditar() ? "Gere o Link de indicação no alto da página para liberar o link da equipe." : "A ADM ainda vai gerar o link de indicação."}</span>`}
+      ${pode ? `<button class="btn" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>` : ""}</div></section>
+  <section class="panel"><h3>Recados da equipe <small>${msgs.length}</small></h3>
+    ${pode ? `<form class="sala-msg" data-sala-form="${esc(eq)}"><input name="txt" maxlength="500" placeholder="Escreva para a equipe: combinados, quem vai em qual evento, ideias…" aria-label="Recado"><button class="btn primary" type="submit">Enviar</button></form>` : ""}
+    ${msgs.length ? `<div class="list">${msgs.map(m => `<div class="li sala-li"><div class="grow"><b>${esc((m.por || "").split(" ")[0] || "Equipe")}</b> <small class="hint">${esc(haQuanto(m.em))}</small><br>${esc(m.txt)}</div></div>`).join("")}</div>` : `<div class="empty">Nenhum recado ainda. Combinem aqui o que a equipe vai fazer nesta semana.</div>`}</section>
+  <section class="panel"><h3>O que a equipe precisa fazer <small>${feitas.length}/${T.length} feitas</small></h3>
+    ${pend.length ? `<div class="list">${pend.map(t => `<div class="sala-tar">${tarLi(t)}${resp(t)}</div>`).join("")}</div>` : `<div class="empty">Tudo feito 🙌</div>`}
+    ${feitas.length ? `<details><summary class="hint">Ver as ${feitas.length} feitas</summary><div class="list">${feitas.map(tarLi).join("")}</div></details>` : ""}</section>
+  <section class="panel"><h3>Próximos eventos da equipe <small>${A.length}</small> <button class="linkbtn" type="button" data-go="agenda">agenda ›</button></h3>
+    ${A.length ? `<div class="acao-lista">${A.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div>` : `<div class="empty">Nenhum evento marcado. Que tal uma ida a uma igreja?</div>`}</section>
+  <section class="panel"><h3>Nomes indicados pela equipe <small>${I.length}</small></h3>
+    ${I.length ? `<div class="list">${[...I].sort((a, b) => String(b.em).localeCompare(String(a.em))).map(x => `<div class="li ind-li"><div class="grow"><b>${esc(x.nome)}</b> ${st(x)}<br><small class="hint">${[x.quem && "por " + x.quem, haQuanto(x.em)].filter(Boolean).map(esc).join(" · ")}</small></div></div>`).join("")}</div>` : `<div class="empty">Ninguém indicado ainda. Cada servidor indica 5 nomes.</div>`}</section>`;
+}
+document.addEventListener("submit", e => { const f = e.target; if (!f || !f.dataset || f.dataset.salaForm == null) return; e.preventDefault();
+  const eq = f.dataset.salaForm; if (!(podeEditar() || (ehCoordEq() && ME.equipeLgnd === eq))) { toast("Só a equipe " + eq + " e a ADM escrevem aqui."); return; }
+  salaRecado(eq, f.txt.value); });
 function metaSemana(D) {
   const T = tarLista(D).filter(t => !ehCoordEq() || t.equipe === ME.equipeLgnd), at = T.filter(t => t.sit === "atrasada"), sem = T.filter(t => t.sit === "semana");
   const hoje = hojeISO(), ate = new Date(Date.now() + 7 * 864e5).toLocaleDateString("sv"), ev = acoesTodas().filter(a => a.data >= hoje && a.data <= ate);
@@ -5840,7 +5888,7 @@ function faqForm(i) {
 }
 function metaAbas(aba) {
   const at = tarLista(metaDados()).filter(t => t.sit === "atrasada" && (!ehCoordEq() || t.equipe === ME.equipeLgnd)).length;
-  return `<div class="seg meta-abas" role="tablist">${[["placar", "Resumo"], ["ind", "Indicações"], ["eq", "Equipes" + (at ? ` <span class="badge num">${at}</span>` : "")]].map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
+  return `<div class="seg meta-abas" role="tablist">${[...(SALA() ? [["sala", ehCoordEq() ? "Minha equipe" : "Salas"]] : []), ["placar", "Resumo"], ["ind", "Indicações"], ["eq", ehCoordEq() && SALA() ? "Frentes" : "Equipes" + (at ? ` <span class="badge num">${at}</span>` : "")]].map(([k, l]) => `<button type="button" data-meta-aba="${k}" aria-pressed="${aba === k}">${l}</button>`).join("")}</div>`;
 }
 function metaAjustarForm() {
   const D = metaDados();
@@ -6590,6 +6638,8 @@ document.addEventListener("click", e => {
   if (d.tarNovo) { tarForm(); return; }
   if (d.acaoNovo) { acaoForm(); return; }
   if (d.saidasGerar) { saidasGerar(); return; }
+  if (d.sala) { S.salaEq = d.sala; S.metaAba = "sala"; if (S.view !== "meta") go("meta"); else render(); return; }
+  if (d.salaLink) { const l = indLink(d.salaLink), msg = `Equipe ${d.salaLink}: vamos juntos levar mais homens ao ${topName()}! Indique um amigo aqui, leva 1 minuto: ${l}`; window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank", "noopener"); return; }
   if (d.pdfTar || d.pdfAg) { const b = t; b.disabled = true; (d.pdfTar ? tarefasPdf() : agendaPdf()).catch(e => toast("Não consegui gerar o PDF. " + (e.message || ""))).finally(() => { b.disabled = false; }); return; }
   if (d.tselOn || d.tselSair || d.tselTodas || d.tselFrente || d.tselFeito || d.tselDel || d.tselVolta) { tarSelecao(d, t); return; }
   if (d.faqEd) { faqForm(+d.faqEd); return; }
