@@ -50,7 +50,7 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
 <div id="numW" hidden><label class="l" for="num">Nº de legendário</label><input id="num" inputmode="numeric" placeholder="ex.: 45872" maxlength="12"></div>
 <div id="eqW"><label class="l" for="eq">Área em que você serve</label><select id="eq" required><option value="">Selecione</option></select></div>
 <div id="igW" hidden><label class="l" for="igreja">Igreja que frequenta (opcional)</label><input id="igreja" maxlength="60"></div>
-<div class="full"><label class="l" for="tel">Telefone<span id="telOp"> (opcional)</span></label><input id="tel" inputmode="tel" placeholder="(16) 99999-0000" autocomplete="tel"></div>
+<div class="full"><label class="l" for="tel">Telefone (WhatsApp)</label><input id="tel" inputmode="tel" required placeholder="(16) 99999-0000" autocomplete="tel"></div>
 <div class="full" id="infoW" hidden><label class="l" for="ajuda">Como você pode ajudar? (opcional)</label><textarea id="ajuda" maxlength="300" placeholder="Profissão, habilidades, algo que queira fazer com a gente…"></textarea></div>
 <p class="muted full" id="lgpd" hidden>Seus dados ficam só com a coordenação da Base 3 Colinas, para organizar os próximos encontros.</p>
 </div><p class="err" id="err" hidden></p><div style="margin-top:14px"><button class="btn primary" type="submit">Confirmar presença</button></div></div>
@@ -71,7 +71,7 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
     $("#info").hidden = false; }
   const v2 = I.v === 2, aberto = v2 && I.x === 1, legSel = () => !aberto || (document.querySelector('input[name="leg"]:checked') || {}).value === "1";
   if (v2) { $("#numW").hidden = false; $("#infoW").hidden = false; $("#lgpd").hidden = false; $("#legW").hidden = !aberto; if (I.q) $("#eb").textContent = "Convite · " + (/legend/i.test(I.q) ? I.q : "equipe " + I.q); }
-  const troca = () => { const l = legSel(); $("#numW").hidden = !v2 || !l; $("#eqW").hidden = !l; $("#igW").hidden = l; $("#telOp").hidden = !l; };
+  const troca = () => { const l = legSel(); $("#numW").hidden = !v2 || !l; $("#eqW").hidden = !l; $("#igW").hidden = l; };
   document.querySelectorAll('input[name="leg"]').forEach(x => x.addEventListener("change", troca)); troca();
   if (I.fe) { const m = document.createElement("div"); m.className = "card"; m.innerHTML = `<h2>Missão da equipe ${esc(I.fe)}</h2><p><b>${esc(I.m || "A ADM combina com vocês o que fazer.")}</b></p>${I.n ? `<p class="muted" style="margin-top:6px">Precisamos de ${I.n} homens da equipe.</p>` : ""}`; $("#info").after(m); }
   EQUIPES.forEach(e => { const o = document.createElement("option"); o.textContent = e; $("#eq").appendChild(o); });
@@ -79,7 +79,7 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
   if (I.fe) { if (![...$("#eq").options].some(o => o.value === I.fe)) { const o = document.createElement("option"); o.textContent = I.fe; $("#eq").appendChild(o); } $("#eq").value = I.fe; $("#eq").disabled = true; }
   f.addEventListener("submit", e => {
     e.preventDefault(); const err = $("#err"), falta = [], v = id => $("#" + id).value.trim();
-    const leg = legSel(); if (!v("nome")) falta.push("o seu nome"); if (leg && !v("eq")) falta.push("a área em que você serve"); if (!leg && !v("tel")) falta.push("o seu telefone");
+    const leg = legSel(); if (!v("nome")) falta.push("o seu nome"); if (leg && !v("eq")) falta.push("a área em que você serve"); if (v("tel").replace(/\D/g, "").length < 10) falta.push("o seu telefone com DDD");
     if (falta.length) { err.textContent = "Falta preencher: " + falta.join(", ") + "."; err.hidden = false; return; }
     const p = { nome: v("nome"), equipe: leg ? v("eq") : "", tel: v("tel"), ...(v2 ? { leg, num: leg ? v("num") : "", igreja: leg ? "" : v("igreja"), info: v("ajuda") } : {}) };
     if (leg) try { localStorage.setItem("adm3-indic-eu", JSON.stringify({ quem: p.nome, eq: p.equipe, num: p.num })); } catch (x) {}
