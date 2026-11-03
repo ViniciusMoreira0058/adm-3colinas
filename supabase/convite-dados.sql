@@ -1,11 +1,28 @@
 -- Convite de evento: guarda se é legendário, nº de legendário, igreja e como pode ajudar.
 -- Não deixa confirmar 2 vezes: o mesmo telefone no mesmo evento só atualiza os dados.
+-- Evento que já passou ou com as inscrições encerradas pela ADM (a.fechado) não aceita confirmação.
 -- Pode rodar sozinho no SQL Editor do Supabase (substitui só a função adm_acao_confirmar).
+create or replace function public.adm_acao_status(p_top text, p_acao text, p_token text)
+returns text language plpgsql stable security definer set search_path = ''
+as $$
+declare ev jsonb;
+begin
+  select x.v into ev from public.adm_docs d, jsonb_array_elements(coalesce(d.data->'lista', '[]'::jsonb)) x(v)
+    where d.col = 'config' and d.id like 'acao-' || left(coalesce(p_top, ''), 40) || '-%' and x.v->>'id' = left(coalesce(p_acao, ''), 40)
+      and x.v->>'token' = left(coalesce(p_token, ''), 40) and length(coalesce(p_token, '')) >= 8 limit 1;
+  if ev is null then return 'invalido'; end if;
+  if coalesce(ev->>'data', '') <> '' and ev->>'data' < to_char((now() at time zone 'America/Sao_Paulo')::date, 'YYYY-MM-DD') then return 'passou'; end if;
+  if coalesce((ev->>'fechado')::boolean, false) then return 'fechado'; end if;
+  return 'aberto';
+end $$;
+revoke all on function public.adm_acao_status(text, text, text) from public;
+grant execute on function public.adm_acao_status(text, text, text) to anon, authenticated;
+
 create or replace function public.adm_acao_confirmar(p_top text, p_acao text, p_token text, p_pessoa jsonb)
 returns text language plpgsql security definer set search_path = ''
 as $$
 declare
-  ok boolean; n int; novo text; velho text; tel10 text; c jsonb := coalesce(p_pessoa, '{}'::jsonb);
+  ok boolean; n int; novo text; velho text; tel10 text; st text; c jsonb := coalesce(p_pessoa, '{}'::jsonb);
   t  text := left(coalesce(p_top, ''), 40);
   a  text := left(coalesce(p_acao, ''), 40);
   tx text := left(coalesce(p_token, ''), 40);
@@ -14,6 +31,9 @@ begin
   select exists (select 1 from public.adm_docs d, jsonb_array_elements(coalesce(d.data->'lista', '[]'::jsonb)) x(v)
                  where d.col = 'config' and d.id like 'acao-' || t || '-%' and x.v->>'id' = a and x.v->>'token' = tx) into ok;
   if not ok then raise exception 'Link inválido ou a ação foi excluída. Peça um link novo para o coordenador.'; end if;
+  st := public.adm_acao_status(t, a, tx);
+  if st = 'passou' then raise exception 'Este evento já passou.'; end if;
+  if st = 'fechado' then raise exception 'Ops! As vagas deste evento já se encerraram.'; end if;
   select count(*) into n from public.adm_docs where col = 'config' and id like 'acaopres-' || t || '-' || a || '-%';
   if n >= 300 then raise exception 'Limite de confirmações atingido'; end if;
   if length(trim(coalesce(c->>'nome', ''))) < 2 then raise exception 'Coloque o seu nome'; end if;

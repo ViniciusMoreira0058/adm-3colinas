@@ -74,6 +74,16 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
   const troca = () => { const l = legSel(); $("#numW").hidden = !v2 || !l; $("#eqW").hidden = !l; $("#igW").hidden = l; };
   document.querySelectorAll('input[name="leg"]').forEach(x => x.addEventListener("change", troca)); troca();
   if (I.fe) { const m = document.createElement("div"); m.className = "card"; m.innerHTML = `<h2>Missão da equipe ${esc(I.fe)}</h2><p><b>${esc(I.m || "A ADM combina com vocês o que fazer.")}</b></p>${I.n ? `<p class="muted" style="margin-top:6px">Precisamos de ${I.n} homens da equipe.</p>` : ""}`; $("#info").after(m); }
+  // evento que já passou ou com inscrições encerradas: mostra o aviso no lugar do formulário
+  const travar = st => { if (st !== "passou" && st !== "fechado") return; f.hidden = true; const c = document.createElement("div"); c.className = "card ok";
+    c.innerHTML = st === "passou" ? `<b>📅</b><h1>Este evento já passou</h1><p class="muted">Fique de olho no grupo: logo tem outro encontro e você vai receber o convite.</p>`
+      : `<b>🙏</b><h1>Ops! As vagas deste evento já se encerraram</h1><p class="muted">Obrigado pelo interesse! Fique de olho no grupo: logo tem outro encontro.</p>`;
+    f.after(c); };
+  const hoje = new Date().toLocaleDateString("sv", { timeZone: "America/Sao_Paulo" });
+  if (I.d && I.d < hoje) travar("passou");
+  else if (demo) { try { if ((JSON.parse(localStorage.getItem("adm3-acao-fechados") || "{}"))[acao]) travar("fechado"); } catch (x) {} }
+  else fetch(URL_SB + "/rest/v1/rpc/adm_acao_status", { method: "POST", headers: { "Content-Type": "application/json", apikey: KEY_SB }, body: JSON.stringify({ p_top: top, p_acao: acao, p_token: token }) })
+    .then(r => r.ok ? r.json() : "").then(travar).catch(() => {});
   EQUIPES.forEach(e => { const o = document.createElement("option"); o.textContent = e; $("#eq").appendChild(o); });
   try { const eu = JSON.parse(localStorage.getItem("adm3-indic-eu") || "{}"); if (eu.quem) $("#nome").value = eu.quem; if (eu.eq) $("#eq").value = eu.eq; if (eu.num) $("#num").value = eu.num; } catch (x) {}
   if (I.fe) { if (![...$("#eq").options].some(o => o.value === I.fe)) { const o = document.createElement("option"); o.textContent = I.fe; $("#eq").appendChild(o); } $("#eq").value = I.fe; $("#eq").disabled = true; }
