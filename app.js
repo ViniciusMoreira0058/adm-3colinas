@@ -5562,7 +5562,7 @@ async function acaoPdf(a) {
   await entregarPdf(doc.output("blob"), `Convite - ${a.titulo.replace(/[^\wÀ-ú -]/g, "").slice(0, 50)}.pdf`, `Convite: ${a.titulo}`, true);
 }
 /* Lembrete no WhatsApp para cada confirmado (só na demo): mensagem editável por evento em a.lembrete, enviados em a.lembrados {chave: iso} */
-const ZAP = () => DEMO;
+const ZAP = () => true;
 const LEMBRETE_PADRAO = "Olá {nome}! Passando para lembrar: *{evento}* é {quando}{local}. Contamos com você! 🙏";
 const lembreteTxt = (tpl, a, x) => String(tpl || LEMBRETE_PADRAO).replace(/\{nome\}/g, String(x.nome || "").split(" ")[0]).replace(/\{evento\}/g, a.titulo).replace(/\{quando\}/g, acaoQuando(a))
   .replace(/\{local\}/g, a.local ? " em " + a.local : "").replace(/\{endereco\}/g, a.endereco || "");
