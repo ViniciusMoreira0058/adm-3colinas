@@ -1,4 +1,5 @@
 -- Convite de evento: guarda se é legendário, nº de legendário, igreja e como pode ajudar.
+-- Quem entra pelo link da equipe é servo (servo=true) e já participa; se depois confirmar como participante, continua servo.
 -- Não deixa confirmar 2 vezes: o mesmo telefone no mesmo evento só atualiza os dados.
 -- Evento que já passou ou com as inscrições encerradas pela ADM (a.fechado) não aceita confirmação.
 -- Pode rodar sozinho no SQL Editor do Supabase (substitui só a função adm_acao_confirmar).
@@ -22,7 +23,7 @@ create or replace function public.adm_acao_confirmar(p_top text, p_acao text, p_
 returns text language plpgsql security definer set search_path = ''
 as $$
 declare
-  ok boolean; n int; novo text; velho text; tel10 text; st text; c jsonb := coalesce(p_pessoa, '{}'::jsonb);
+  ok boolean; vs boolean; n int; novo text; velho text; tel10 text; st text; c jsonb := coalesce(p_pessoa, '{}'::jsonb);
   t  text := left(coalesce(p_top, ''), 40);
   a  text := left(coalesce(p_acao, ''), 40);
   tx text := left(coalesce(p_token, ''), 40);
@@ -40,7 +41,7 @@ begin
   tel10 := right(regexp_replace(coalesce(c->>'tel', ''), '\D', '', 'g'), 10);
   if length(tel10) < 10 then raise exception 'Coloque o seu telefone com DDD'; end if;
   -- mesmo telefone no mesmo evento: atualiza a confirmação que já existe, não cria outra
-  select d.id into velho from public.adm_docs d
+  select d.id, coalesce((d.data->>'servo')::boolean, false) into velho, vs from public.adm_docs d
     where d.col = 'config' and d.id like 'acaopres-' || t || '-' || a || '-%'
       and right(regexp_replace(coalesce(d.data->>'tel', ''), '\D', '', 'g'), 10) = tel10 limit 1;
   novo := coalesce(velho, 'acaopres-' || t || '-' || a || '-' || replace(gen_random_uuid()::text, '-', ''));
@@ -49,6 +50,7 @@ begin
     'nome',   left(trim(coalesce(c->>'nome', '')), 80),
     'equipe', left(trim(coalesce(c->>'equipe', '')), 40),
     'tel',    left(trim(coalesce(c->>'tel', '')), 30),
+    'servo',  coalesce(c->>'servo', '') = 'true' or coalesce(vs, false),   -- quem já se inscreveu para servir continua servo
     'leg',    case when c->>'leg' = 'false' then false else true end,
     'num',    left(regexp_replace(coalesce(c->>'num', ''), '[^0-9A-Za-z./-]', '', 'g'), 12),
     'igreja', left(trim(coalesce(c->>'igreja', '')), 60),

@@ -1902,7 +1902,7 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     { id: "ac3", tipo: "Pré-TOP", titulo: "Pré-TOP 1922", data: dia(-20), hora: "19:00", local: "Base 3 Colinas", equipe: "Eventos", vagas: 20, token: "demoac3tok", por: "Vinicius Moreira", em: new Date().toISOString() },
   ] } });
   try { if (!localStorage.getItem("adm3-acao-link")) localStorage.setItem("adm3-acao-link", JSON.stringify([{ acao: "ac1", nome: "Marcelo Duarte Lima", equipe: "Segurança", top: "top1922" }, { acao: "ac1", nome: "Paulo Roberto Nunes", equipe: "Segurança", top: "top1922" }, { acao: "ac1", nome: "Leonardo Prado Souza", equipe: "Mídia", top: "top1922" },
-    { acao: "ac8", nome: "Rafael Teixeira Moura", equipe: "Voz", leg: true, num: "51230", tel: "(16) 99111-2233", info: "Músico, toca violão no louvor", top: "top1922", em: new Date().toISOString() },
+    { acao: "ac8", nome: "Rafael Teixeira Moura", equipe: "Voz", servo: true, leg: true, num: "51230", tel: "(16) 99111-2233", info: "Músico, toca violão no louvor", top: "top1922", em: new Date().toISOString() },
     { acao: "ac8", nome: "Gustavo Henrique Lopes", equipe: "", leg: false, tel: "(16) 99222-4455", igreja: "Igreja Videira", info: "Eletricista, quer ajudar na montagem", top: "top1922", em: new Date().toISOString() },
-    { acao: "ac8", nome: "Diego Martins Rocha", equipe: "Segurança", leg: true, num: "48877", tel: "(16) 99333-6677", info: "Policial militar", top: "top1922", em: new Date().toISOString() }])); } catch (e) {}
+    { acao: "ac8", nome: "Diego Martins Rocha", equipe: "Segurança", servo: true, leg: true, num: "48877", tel: "(16) 99333-6677", info: "Policial militar", top: "top1922", em: new Date().toISOString() }])); } catch (e) {}
 })();

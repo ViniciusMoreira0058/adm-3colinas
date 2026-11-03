@@ -5433,8 +5433,10 @@ function acaoConfirmados(a) {
   if (DEMO) { try { L = (JSON.parse(localStorage.getItem(ACAO_LS) || "[]") || []).filter(x => x.acao === a.id); } catch { L = []; } }
   else L = Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`acaopres-${curTopId()}-${a.id}-`)).map(([, d]) => d);
   // a mesma pessoa (mesmo telefone, ou mesmo nome sem telefone) conta uma vez só: fica a confirmação mais nova
-  const m = new Map(); L.forEach(x => { const t = telLimpo(x.tel || "").slice(-10), k = t.length >= 10 ? "t" + t : "n" + norm(x.nome || "").trim(); const y = m.get(k); if (!y || String(x.em || "") >= String(y.em || "")) m.set(k, x); });
-  return [...m.values()];
+  const m = new Map(); L.forEach(x => { const t = telLimpo(x.tel || "").slice(-10), k = t.length >= 10 ? "t" + t : "n" + norm(x.nome || "").trim(); const y = m.get(k);
+    // quem se inscreveu para servir já participa: fica só a inscrição de servo
+    if (!y || (x.servo && !y.servo) || (!!x.servo === !!y.servo && String(x.em || "") >= String(y.em || ""))) m.set(k, x); });
+  return [...m.values()].sort((x, y) => (y.servo ? 1 : 0) - (x.servo ? 1 : 0));
 }
 const acaoLink = (a, r) => { if (!DEMO && S.linkCurto && a.token) return `${location.origin}/c/${a.token}${r ? "-" + (acaoResp(a).findIndex(x => x.eq === r.eq) + 1) : ""}`;
   const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: r ? r.eq : acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, v: 2, x: a.aberto && !r ? 1 : 0, ...(r ? { fe: r.eq, m: String(r.oque || "").slice(0, 160), n: r.homens || 0 } : {}) };
@@ -5498,9 +5500,9 @@ function acaoForm(a) {
 async function acaoXlsx(a) {
   const C = acaoConfirmados(a), dt = v => v ? new Date(v).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
   try { const X = await carregarXlsx(), wb = X.utils.book_new();
-    const ws = X.utils.aoa_to_sheet([["Nome", "É legendário?", "Nº de legendário", "Área que serve", "Telefone", "Igreja", "Pode contribuir com", "Inscrito em (data e hora)"],
-      ...C.map(x => [x.nome || "", x.leg === false ? "Ainda não" : "Sim", x.num || "", x.equipe || "", x.tel || "", x.igreja || "", x.info || "", dt(x.em)])]);
-    ws["!cols"] = [{ wch: 30 }, { wch: 13 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 45 }, { wch: 14 }];
+    const ws = X.utils.aoa_to_sheet([["Nome", "Vai como", "É legendário?", "Nº de legendário", "Área que serve", "Telefone", "Igreja", "Pode contribuir com", "Inscrito em (data e hora)"],
+      ...C.map(x => [x.nome || "", x.servo ? "Servo" : "Participante", x.leg === false ? "Ainda não" : "Sim", x.num || "", x.equipe || "", x.tel || "", x.igreja || "", x.info || "", dt(x.em)])]);
+    ws["!cols"] = [{ wch: 30 }, { wch: 13 }, { wch: 13 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 45 }, { wch: 14 }];
     X.utils.book_append_sheet(wb, ws, "Confirmados");
     const R = acaoResp(a), ev = X.utils.aoa_to_sheet([["Evento", a.titulo], ["Objetivo", acaoObj(a).tag], ["Quando", acaoQuando(a)], ["Local", [a.local, a.endereco].filter(Boolean).join(" · ")], ["Recado", a.obs || ""],
       ["Confirmados", C.length], ["Legendários", C.filter(x => x.leg !== false).length], ["Ainda não legendários", C.filter(x => x.leg === false).length], [],
@@ -5589,7 +5591,7 @@ function acaoVer(a) {
     <section class="panel" style="margin-top:6px"><h3>Confirmados <small>${C.length}${a.vagas ? " de " + a.vagas : ""}</small></h3>
       ${zap && C.length ? `<details class="ev-msg"><summary>✏️ Mensagem do lembrete</summary><textarea id="evMsg" rows="4">${esc(a.lembrete || LEMBRETE_PADRAO)}</textarea>
         <p class="hint" style="margin:4px 0">Troca sozinho: {nome} {evento} {quando} {local} {endereco}</p><div class="actions"><button class="btn sm" type="button" id="evMsgPadrao">Voltar ao padrão</button><button class="btn sm primary" type="button" id="evMsgSalvar">Salvar mensagem</button></div></details>` : ""}
-      ${C.length ? `<div class="list">${C.map((x, i) => `<div class="li"><span class="grow"><b>${esc(x.nome)}</b> ${x.leg === false ? `<span class="chip wait">ainda não é legendário</span>` : `<span class="hint">${esc(x.equipe || "")}${x.num ? " · nº " + esc(x.num) : ""}</span>`}${x.igreja || x.info ? `<small class="hint" style="display:block">${esc([x.igreja, x.info].filter(Boolean).join(" · "))}</small>` : ""}${x.em ? `<small class="hint" style="display:block">🕒 inscrito em ${new Date(x.em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(",", " às")}</small>` : ""}</span>${zap ? (waNumber(x.tel) ? `<button class="btn sm ${(a.lembrados || {})[confKey(x)] ? "" : "primary"}" type="button" data-ev-zap="${i}">${ico("wa")} ${(a.lembrados || {})[confKey(x)] ? "Enviado ✓" : "WhatsApp"}</button>` : `<span class="hint">sem telefone</span>`) : ""}</div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
+      ${C.length ? `<div class="list">${C.map((x, i) => `${i === 0 || !x.servo !== !C[i - 1].servo ? `<p class="ev-grupo">${x.servo ? `🛠️ Servos <small>${C.filter(y => y.servo).length}</small>` : `🙋 Participantes <small>${C.filter(y => !y.servo).length}</small>`}</p>` : ""}<div class="li"><span class="grow"><b>${esc(x.nome)}</b> ${x.leg === false ? `<span class="chip wait">ainda não é legendário</span>` : `<span class="hint">${esc(x.equipe || "")}${x.num ? " · nº " + esc(x.num) : ""}</span>`}${x.igreja || x.info ? `<small class="hint" style="display:block">${esc([x.igreja, x.info].filter(Boolean).join(" · "))}</small>` : ""}${x.em ? `<small class="hint" style="display:block">🕒 inscrito em ${new Date(x.em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(",", " às")}</small>` : ""}</span>${zap ? (waNumber(x.tel) ? `<button class="btn sm ${(a.lembrados || {})[confKey(x)] ? "" : "primary"}" type="button" data-ev-zap="${i}">${ico("wa")} ${(a.lembrados || {})[confKey(x)] ? "Enviado ✓" : "WhatsApp"}</button>` : `<span class="hint">sem telefone</span>`) : ""}</div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
   $("#acCopiar").onclick = () => copiarTexto(l, "Link copiado");
   $("#acPdf").onclick = () => acaoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
