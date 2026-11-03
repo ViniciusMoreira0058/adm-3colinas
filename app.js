@@ -3536,7 +3536,7 @@ function mpPegarGps(ok) {
    Qualquer ADM ou coordenador anota no mapa da pista o que viu: onde pôr água, o que limpar, perigo, o que foi feito e o que falta.
    Cada pessoa grava só o próprio documento config visita-<top>-<membroId> {lista:[{id,dia,tipo,txt,lat,lng,foto,feito,em}], por, eq}; todos veem as de todos.
    Sem internet: a anotação entra na fila do app e o mapa da pista pode ser guardado no aparelho ("Guardar mapa"). PDF do dia com croqui da pista. */
-const VISITA = () => DEMO;
+const VISITA = () => true;   // app real desde 03/11/2026 (precisa do supabase/visita.sql)
 const VT_TIPOS = [
   { k: "agua", e: "💧", l: "Água / hidratação", c: "#38bdf8" }, { k: "limpar", e: "🧹", l: "Limpar / roçar", c: "#a3e635" },
   { k: "perigo", e: "⚠️", l: "Perigo / atenção", c: "#ef4444" }, { k: "falta", e: "🛠️", l: "Falta fazer", c: "#f59e0b" },
