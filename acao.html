@@ -83,12 +83,13 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
     if (falta.length) { err.textContent = "Falta preencher: " + falta.join(", ") + "."; err.hidden = false; return; }
     const p = { nome: v("nome"), equipe: leg ? v("eq") : "", tel: v("tel"), ...(v2 ? { leg, num: leg ? v("num") : "", igreja: leg ? "" : v("igreja"), info: v("ajuda") } : {}) };
     if (leg) try { localStorage.setItem("adm3-indic-eu", JSON.stringify({ quem: p.nome, eq: p.equipe, num: p.num })); } catch (x) {}
-    const fim = () => { document.querySelector("main").innerHTML = `<div class="card ok"><b>🙌</b><h1>Presença confirmada!</h1><p class="muted">Valeu, ${esc(p.nome.split(" ")[0])}. Te esperamos${I.d ? " " + esc(new Date(I.d + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })) : ""}${I.h ? " às " + esc(I.h) : ""}${I.l ? " em " + esc(I.l) : ""}.</p></div>`; scrollTo(0, 0); };
-    if (demo) { try { const L = JSON.parse(localStorage.getItem("adm3-acao-link") || "[]"); L.push({ ...p, acao, top, em: new Date().toISOString() }); localStorage.setItem("adm3-acao-link", JSON.stringify(L)); fim(); } catch (x) { err.textContent = "Não consegui guardar neste aparelho."; err.hidden = false; } return; }
+    const fim = ja => { document.querySelector("main").innerHTML = `<div class="card ok"><b>🙌</b><h1>${ja ? "Você já estava confirmado!" : "Presença confirmada!"}</h1>${ja ? `<p class="muted" style="margin-bottom:6px">Este telefone já tinha confirmado. Atualizamos os seus dados, sem repetir.</p>` : ""}<p class="muted">Valeu, ${esc(p.nome.split(" ")[0])}. Te esperamos${I.d ? " " + esc(new Date(I.d + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })) : ""}${I.h ? " às " + esc(I.h) : ""}${I.l ? " em " + esc(I.l) : ""}.</p></div>`; scrollTo(0, 0); };
+    if (demo) { try { const L = JSON.parse(localStorage.getItem("adm3-acao-link") || "[]"); const t10 = x => String(x || "").replace(/\D/g, "").slice(-10), i = L.findIndex(x => x.acao === acao && t10(x.tel) === t10(p.tel)), novo = { ...p, acao, top, em: new Date().toISOString() };
+      if (i >= 0) L[i] = novo; else L.push(novo); localStorage.setItem("adm3-acao-link", JSON.stringify(L)); fim(i >= 0); } catch (x) { err.textContent = "Não consegui guardar neste aparelho."; err.hidden = false; } return; }
     const bt = f.querySelector("button[type=submit]"); bt.disabled = true; bt.textContent = "Enviando…"; err.hidden = true;
     fetch(URL_SB + "/rest/v1/rpc/adm_acao_confirmar", { method: "POST", headers: { "Content-Type": "application/json", apikey: KEY_SB },
       body: JSON.stringify({ p_top: top, p_acao: acao, p_token: token, p_pessoa: p }) })
-      .then(async r => { if (r.ok) return fim(); let m = ""; try { m = (await r.json()).message || ""; } catch (x) {} throw new Error(m); })
+      .then(async r => { if (r.ok) { let id = ""; try { id = await r.json(); } catch (x) {} return fim(id === "atualizado"); } let m = ""; try { m = (await r.json()).message || ""; } catch (x) {} throw new Error(m); })
       .catch(x => { err.textContent = (x && x.message && !/fetch|network/i.test(x.message) ? x.message : "Não consegui enviar. Confira a internet e tente de novo."); err.hidden = false; bt.disabled = false; bt.textContent = "Confirmar presença"; });
   });
 })();

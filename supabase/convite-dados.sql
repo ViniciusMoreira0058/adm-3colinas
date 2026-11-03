@@ -1,10 +1,11 @@
 -- Convite de evento: guarda se é legendário, nº de legendário, igreja e como pode ajudar.
+-- Não deixa confirmar 2 vezes: o mesmo telefone no mesmo evento só atualiza os dados.
 -- Pode rodar sozinho no SQL Editor do Supabase (substitui só a função adm_acao_confirmar).
 create or replace function public.adm_acao_confirmar(p_top text, p_acao text, p_token text, p_pessoa jsonb)
 returns text language plpgsql security definer set search_path = ''
 as $$
 declare
-  ok boolean; n int; novo text; c jsonb := coalesce(p_pessoa, '{}'::jsonb);
+  ok boolean; n int; novo text; velho text; tel10 text; c jsonb := coalesce(p_pessoa, '{}'::jsonb);
   t  text := left(coalesce(p_top, ''), 40);
   a  text := left(coalesce(p_acao, ''), 40);
   tx text := left(coalesce(p_token, ''), 40);
@@ -16,7 +17,13 @@ begin
   select count(*) into n from public.adm_docs where col = 'config' and id like 'acaopres-' || t || '-' || a || '-%';
   if n >= 300 then raise exception 'Limite de confirmações atingido'; end if;
   if length(trim(coalesce(c->>'nome', ''))) < 2 then raise exception 'Coloque o seu nome'; end if;
-  novo := 'acaopres-' || t || '-' || a || '-' || replace(gen_random_uuid()::text, '-', '');
+  tel10 := right(regexp_replace(coalesce(c->>'tel', ''), '\D', '', 'g'), 10);
+  if length(tel10) < 10 then raise exception 'Coloque o seu telefone com DDD'; end if;
+  -- mesmo telefone no mesmo evento: atualiza a confirmação que já existe, não cria outra
+  select d.id into velho from public.adm_docs d
+    where d.col = 'config' and d.id like 'acaopres-' || t || '-' || a || '-%'
+      and right(regexp_replace(coalesce(d.data->>'tel', ''), '\D', '', 'g'), 10) = tel10 limit 1;
+  novo := coalesce(velho, 'acaopres-' || t || '-' || a || '-' || replace(gen_random_uuid()::text, '-', ''));
   insert into public.adm_docs (col, id, data) values ('config', novo, jsonb_build_object(
     'top', t, 'acao', a, 'em', now(),
     'nome',   left(trim(coalesce(c->>'nome', '')), 80),
@@ -25,8 +32,9 @@ begin
     'leg',    case when c->>'leg' = 'false' then false else true end,
     'num',    left(regexp_replace(coalesce(c->>'num', ''), '[^0-9A-Za-z./-]', '', 'g'), 12),
     'igreja', left(trim(coalesce(c->>'igreja', '')), 60),
-    'info',   left(trim(coalesce(c->>'info', '')), 300)));
-  return novo;
+    'info',   left(trim(coalesce(c->>'info', '')), 300)))
+  on conflict (col, id) do update set data = excluded.data;
+  return case when velho is null then novo else 'atualizado' end;
 end $$;
 revoke all on function public.adm_acao_confirmar(text, text, text, jsonb) from public;
 grant execute on function public.adm_acao_confirmar(text, text, text, jsonb) to anon, authenticated;

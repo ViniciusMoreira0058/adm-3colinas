@@ -5429,8 +5429,12 @@ const ACAO_LS = "adm3-acao-link";
 const acaoDocMeu = () => "acao-" + curTopId() + "-" + (ME.id || "eu");
 function acoesTodas() { const pre = "acao-" + curTopId() + "-"; return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k }))).sort((a, b) => String(a.data + a.hora).localeCompare(String(b.data + b.hora))); }
 function acaoConfirmados(a) {
-  if (DEMO) { try { return (JSON.parse(localStorage.getItem(ACAO_LS) || "[]") || []).filter(x => x.acao === a.id); } catch { return []; } }
-  return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`acaopres-${curTopId()}-${a.id}-`)).map(([, d]) => d);
+  let L = [];
+  if (DEMO) { try { L = (JSON.parse(localStorage.getItem(ACAO_LS) || "[]") || []).filter(x => x.acao === a.id); } catch { L = []; } }
+  else L = Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(`acaopres-${curTopId()}-${a.id}-`)).map(([, d]) => d);
+  // a mesma pessoa (mesmo telefone, ou mesmo nome sem telefone) conta uma vez só: fica a confirmação mais nova
+  const m = new Map(); L.forEach(x => { const t = telLimpo(x.tel || "").slice(-10), k = t.length >= 10 ? "t" + t : "n" + norm(x.nome || "").trim(); const y = m.get(k); if (!y || String(x.em || "") >= String(y.em || "")) m.set(k, x); });
+  return [...m.values()];
 }
 const acaoLink = (a, r) => { const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: r ? r.eq : acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, v: 2, x: a.aberto && !r ? 1 : 0, ...(r ? { fe: r.eq, m: String(r.oque || "").slice(0, 160), n: r.homens || 0 } : {}) };
   return `${location.origin}${DEMO ? location.pathname.replace(/[^/]*$/, "") + "acao.html" : "/api/convite"}?t=${encodeURIComponent(a.token)}&top=${encodeURIComponent(curTopId())}&a=${encodeURIComponent(a.id)}&i=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(info)))))}${DEMO ? "&demo=1" : ""}`; };
