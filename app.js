@@ -5561,7 +5561,13 @@ async function acaoPdf(a) {
   doc.setTextColor(140, 130, 120); doc.setFontSize(8.5); doc.text(`${topName()} · ${acaoEquipeTxt(a)}${a.por ? " · " + a.por : ""}`, W / 2, H - 12, { align: "center" });
   await entregarPdf(doc.output("blob"), `Convite - ${a.titulo.replace(/[^\wÀ-ú -]/g, "").slice(0, 50)}.pdf`, `Convite: ${a.titulo}`, true);
 }
+/* Lembrete no WhatsApp para cada confirmado (só na demo): mensagem editável por evento em a.lembrete, enviados em a.lembrados {chave: iso} */
+const ZAP = () => DEMO;
+const LEMBRETE_PADRAO = "Olá {nome}! Passando para lembrar: *{evento}* é {quando}{local}. Contamos com você! 🙏";
+const lembreteTxt = (tpl, a, x) => String(tpl || LEMBRETE_PADRAO).replace(/\{nome\}/g, String(x.nome || "").split(" ")[0]).replace(/\{evento\}/g, a.titulo).replace(/\{quando\}/g, acaoQuando(a))
+  .replace(/\{local\}/g, a.local ? " em " + a.local : "").replace(/\{endereco\}/g, a.endereco || "");
 function acaoVer(a) {
+  const zap = ZAP() && podeEditar() && !ehCoordEq();
   const C = acaoConfirmados(a), l = acaoLink(a), R = acaoResp(a), msg = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}${R.length ? "\n\n" + R.map(x => `• ${x.eq}${x.oque ? ": " + x.oque : ""}${x.homens ? ` (${x.homens} homens)` : ""}`).join("\n") : ""}\n\n${R.length ? "Contamos com você!" : `A equipe ${a.equipe} convida você!`} Confirme sua presença: ${l}`, pode = podeEditar() || (ehCoordEq() && a.equipe === ME.equipeLgnd);
   modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${acaoTag(a)} · ${esc(acaoEquipeTxt(a))} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
     <div class="actions" style="flex-wrap:wrap"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Mandar link no WhatsApp</a>
@@ -5575,11 +5581,20 @@ function acaoVer(a) {
       ${C.length ? `<div class="list">${C.map(x => `<label class="li ck-line" style="cursor:pointer"><input type="checkbox" class="ev-foi" value="${esc(confKey(x))}" ${!a.foram || a.foram.includes(confKey(x)) ? "checked" : ""}> <span class="grow"><b>${esc(x.nome)}</b> <span class="hint">${esc(x.leg === false ? "convidado" : x.equipe || "")}</span></span></label>`).join("")}</div>` : ""}
       <div class="actions" style="margin-top:8px"><label class="hint" for="evExtra">Foram sem confirmar:</label><input id="evExtra" type="number" min="0" value="${+a.foramExtra || 0}" style="width:80px"><button class="btn primary sm" type="button" id="evForam">${ico("check")} Salvar presença</button></div></section>` : ""}
     <section class="panel" style="margin-top:6px"><h3>Confirmados <small>${C.length}${a.vagas ? " de " + a.vagas : ""}</small></h3>
-      ${C.length ? `<div class="list">${C.map(x => `<div class="li"><span class="grow"><b>${esc(x.nome)}</b> ${x.leg === false ? `<span class="chip wait">ainda não é legendário</span>` : `<span class="hint">${esc(x.equipe || "")}${x.num ? " · nº " + esc(x.num) : ""}</span>`}${x.igreja || x.info ? `<small class="hint" style="display:block">${esc([x.igreja, x.info].filter(Boolean).join(" · "))}</small>` : ""}</span></div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
+      ${zap && C.length ? `<details class="ev-msg"><summary>✏️ Mensagem do lembrete</summary><textarea id="evMsg" rows="4">${esc(a.lembrete || LEMBRETE_PADRAO)}</textarea>
+        <p class="hint" style="margin:4px 0">Troca sozinho: {nome} {evento} {quando} {local} {endereco}</p><div class="actions"><button class="btn sm" type="button" id="evMsgPadrao">Voltar ao padrão</button><button class="btn sm primary" type="button" id="evMsgSalvar">Salvar mensagem</button></div></details>` : ""}
+      ${C.length ? `<div class="list">${C.map((x, i) => `<div class="li"><span class="grow"><b>${esc(x.nome)}</b> ${x.leg === false ? `<span class="chip wait">ainda não é legendário</span>` : `<span class="hint">${esc(x.equipe || "")}${x.num ? " · nº " + esc(x.num) : ""}</span>`}${x.igreja || x.info ? `<small class="hint" style="display:block">${esc([x.igreja, x.info].filter(Boolean).join(" · "))}</small>` : ""}</span>${zap ? (waNumber(x.tel) ? `<button class="btn sm ${(a.lembrados || {})[confKey(x)] ? "" : "primary"}" type="button" data-ev-zap="${i}">${ico("wa")} ${(a.lembrados || {})[confKey(x)] ? "Enviado ✓" : "WhatsApp"}</button>` : `<span class="hint">sem telefone</span>`) : ""}</div>`).join("")}</div>` : `<div class="empty">Ninguém confirmou ainda. Mande o link no grupo.</div>`}</section>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button></div></div>`, () => closeModal());
   $("#acCopiar").onclick = () => copiarTexto(l, "Link copiado");
   $("#acPdf").onclick = () => acaoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
   const xl = $("#acXls"); if (xl) xl.onclick = () => acaoXlsx(a);
+  const tpl = () => ($("#evMsg") || {}).value || a.lembrete || LEMBRETE_PADRAO;
+  const ms = $("#evMsgSalvar"); if (ms) ms.onclick = () => { a.lembrete = tpl().trim(); api.set("config", a.doc, { lista: (((S.cfgDocs || {})[a.doc] || {}).lista || []).map(y => y.id === a.id ? { ...y, lembrete: a.lembrete } : y) }).then(() => toast("Mensagem salva para este evento")).catch(e => toast("Não foi possível salvar. " + erroAmigavel(e))); };
+  const mp = $("#evMsgPadrao"); if (mp) mp.onclick = () => { $("#evMsg").value = LEMBRETE_PADRAO; };
+  document.querySelectorAll("[data-ev-zap]").forEach(b => b.onclick = () => { const x = C[+b.dataset.evZap];
+    window.open(`https://wa.me/${waNumber(x.tel)}?text=${encodeURIComponent(lembreteTxt(tpl(), a, x))}`, "_blank", "noopener");
+    b.classList.remove("primary"); b.innerHTML = `${ico("wa")} Enviado ✓`; a.lembrados = { ...(a.lembrados || {}), [confKey(x)]: new Date().toISOString() };
+    api.set("config", a.doc, { lista: (((S.cfgDocs || {})[a.doc] || {}).lista || []).map(y => y.id === a.id ? { ...y, lembrados: a.lembrados } : y) }).catch(() => {}); });
   const fo = $("#evForam"); if (fo) fo.onclick = () => { const foram = [...document.querySelectorAll(".ev-foi:checked")].map(i => i.value), extra = Math.max(0, +$("#evExtra").value || 0);
     closeModal(); acaoSalvar(a.doc, { ...a, foram, foramExtra: extra, foramEm: new Date().toISOString(), foramPor: ME.adm || "" }, `${foram.length + extra} presença(s) marcada(s)`); };
   document.querySelectorAll("[data-ev-copia]").forEach(b => b.onclick = () => copiarTexto(acaoLink(a, R[+b.dataset.evCopia]), "Link da equipe copiado"));
