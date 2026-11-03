@@ -5436,7 +5436,8 @@ function acaoConfirmados(a) {
   const m = new Map(); L.forEach(x => { const t = telLimpo(x.tel || "").slice(-10), k = t.length >= 10 ? "t" + t : "n" + norm(x.nome || "").trim(); const y = m.get(k); if (!y || String(x.em || "") >= String(y.em || "")) m.set(k, x); });
   return [...m.values()];
 }
-const acaoLink = (a, r) => { const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: r ? r.eq : acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, v: 2, x: a.aberto && !r ? 1 : 0, ...(r ? { fe: r.eq, m: String(r.oque || "").slice(0, 160), n: r.homens || 0 } : {}) };
+const acaoLink = (a, r) => { if (!DEMO && S.linkCurto && a.token) return `${location.origin}/c/${a.token}${r ? "-" + (acaoResp(a).findIndex(x => x.eq === r.eq) + 1) : ""}`;
+  const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: r ? r.eq : acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, v: 2, x: a.aberto && !r ? 1 : 0, ...(r ? { fe: r.eq, m: String(r.oque || "").slice(0, 160), n: r.homens || 0 } : {}) };
   return `${location.origin}${DEMO ? location.pathname.replace(/[^/]*$/, "") + "acao.html" : "/api/convite"}?t=${encodeURIComponent(a.token)}&top=${encodeURIComponent(curTopId())}&a=${encodeURIComponent(a.id)}&i=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(info)))))}${DEMO ? "&demo=1" : ""}`; };
 const acaoQuando = a => { const d = a.data ? new Date(a.data + "T12:00:00") : null; return (d ? d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) : "data a definir") + (a.hora ? " às " + a.hora : ""); };
 function acaoSalvar(doc, item, msg, apagar) {
@@ -6582,6 +6583,7 @@ function markSeen(force) {
   if (!force && now - lastSeenAt < 5 * 60 * 1000) return;
   lastSeenAt = now;
   sb.rpc("adm_marcar_presenca").then(() => {}, () => {});
+  if (!S.linkCurto) sb.rpc("adm_acao_link", { p_code: "x" }).then(({ error }) => { S.linkCurto = !error; }, () => {});   // link curto só depois do convite-dados.sql
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") markSeen(); });
 function withAdm(fn) { fn({ adm: ME.adm, admId: ME.id || null, admEm: new Date().toISOString() }); }

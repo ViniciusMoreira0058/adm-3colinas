@@ -58,3 +58,21 @@ begin
 end $$;
 revoke all on function public.adm_acao_confirmar(text, text, text, jsonb) from public;
 grant execute on function public.adm_acao_confirmar(text, text, text, jsonb) to anon, authenticated;
+
+-- Link curto do convite (adm-3colinas.vercel.app/c/<token> ou /c/<token>-<nº da equipe>):
+-- devolve só o que a página de confirmação mostra (título, data, local, equipes e missões). Nada de confirmados.
+create or replace function public.adm_acao_link(p_code text)
+returns jsonb language plpgsql stable security definer set search_path = ''
+as $$
+declare tk text := split_part(left(coalesce(p_code, ''), 60), '-', 1); r jsonb;
+begin
+  if length(tk) < 8 or tk !~ '^[a-z0-9]+$' then return null; end if;
+  select jsonb_build_object('top', substring(d.id from '^acao-([^-]+)-'), 'a', x.v->>'id', 't', tk,
+           'ev', jsonb_build_object('titulo', x.v->'titulo', 'data', x.v->'data', 'hora', x.v->'hora', 'local', x.v->'local',
+                                    'endereco', x.v->'endereco', 'equipe', x.v->'equipe', 'aberto', x.v->'aberto', 'resp', x.v->'resp'))
+    into r from public.adm_docs d, jsonb_array_elements(coalesce(d.data->'lista', '[]'::jsonb)) x(v)
+    where d.col = 'config' and d.id like 'acao-%' and x.v->>'token' = tk limit 1;
+  return r;
+end $$;
+revoke all on function public.adm_acao_link(text) from public;
+grant execute on function public.adm_acao_link(text) to anon, authenticated;

@@ -1,0 +1,3 @@
+{
+  "rewrites": [{ "source": "/c/:k", "destination": "/api/convite?c=:k" }]
+}
