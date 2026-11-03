@@ -1344,7 +1344,7 @@ function licoesForm() {
 /* ---------- Guia "Como usar": o que fazer em cada página, só das páginas que a pessoa vê ---------- */
 const GUIA = {
   meta: ["Meta do TOP", ["Equipes: os grupos de equipes e as duas missões, trazer senderistas e cuidar dos legendários.", "Tarefas: a ADM cria e manda para um grupo; o coordenador escolhe quem faz e marca feita.", "Indicações: os nomes de cada equipe, com respostas prontas para as dúvidas.", "Resumo: o que pede atenção agora e como cada grupo está nas duas missões."]],
-  visita: ["Visita técnica", ["Na pista, toque em \"Anotar onde estou\": escolha o tipo (água, limpar, perigo, feito, falta, sugestão), escreva e, se quiser, tire uma foto.", "Também dá para tocar em qualquer ponto do mapa para anotar.", "Antes de sair, com internet, toque em \"guardar o mapa para usar sem internet\". Sem sinal, as anotações ficam no celular e sobem quando a internet voltar.", "No fim do dia, \"PDF do dia\" junta todas as anotações com o croqui da pista para mandar no grupo dos coordenadores."]],
+  visita: ["Visita técnica", ["Na pista, toque em \"Nova anotação\" (já pega onde você está): escolha o tipo (água, limpar, perigo, feito, falta, sugestão), escreva e, se quiser, tire uma foto.", "Também dá para tocar em qualquer ponto do mapa para anotar.", "Antes de sair, com internet, toque em \"guardar o mapa para usar sem internet\". Sem sinal, as anotações ficam no celular e sobem quando a internet voltar.", "No fim do dia, \"PDF do dia\" junta todas as anotações com o croqui da pista para mandar no grupo dos coordenadores."]],
   agenda: ["Agenda", ["Todos os eventos de divulgação do Legendários e o TOP, por mês.", "Toque num evento para ver quantos vão, quem vai e mandar o link para mais pessoas confirmarem.", "Qualquer coordenador pode criar um evento em \"Novo evento\"."]],
   painel: ["Visão geral do TOP", ["Mostra quantos dias faltam, quantos estão prontos e o que fazer hoje.", "Toque em qualquer item de \"O que fazer hoje\" para ir direto à tela certa."]],
   participantes: ["Lista dos senderistas", ["Toque no status de atestado ou termo para avançar.", "O lápis abre a ficha completa. Quem mexe por último vira o ADM responsável."]],
@@ -3567,7 +3567,7 @@ function vVisita() {
   <div class="vt-bar"><div class="seg" role="tablist" aria-label="Dia da visita">${dias.map(d => `<button type="button" role="tab" data-vt-dia="${d}" aria-selected="${d === dia}">${vtDiaTxt(d)}${vtTodas().some(x => x.dia === d) ? ` <small class="num">${vtTodas().filter(x => x.dia === d).length}</small>` : ""}</button>`).join("")}</div>
     <div class="seg" role="tablist" aria-label="De quem">${[["todas", "Todas"], ["minhas", "Só as minhas"]].map(([k, l]) => `<button type="button" role="tab" data-vt-quem="${k}" aria-selected="${(S.vtQuem || "todas") === k}">${l}</button>`).join("")}</div></div>
   <section class="panel vt-mapa-p">
-    <div class="actions vt-acoes"><button class="btn primary" type="button" data-vt-gps="1">📍 Anotar onde estou</button><button class="btn ${S.vtPick ? "primary" : ""}" type="button" data-vt-pick="1">${S.vtPick ? "Toque no ponto do mapa…" : "👆 Tocar no mapa"}</button></div>
+    <div class="actions vt-acoes"><button class="btn primary" type="button" data-vt-gps="1">➕ Nova anotação</button><button class="btn ${S.vtPick ? "primary" : ""}" type="button" data-vt-pick="1">${S.vtPick ? "Toque no ponto do mapa…" : "👆 Tocar no mapa"}</button></div>
     ${pistaMapa() ? `<div id="vtMapa" class="vt-mapa ${S.vtPick ? "mp-pegar" : ""}"></div>
       <p class="hint vt-off">${store.get("adm3-vt-mapa") ? `✓ Mapa guardado neste aparelho em ${esc(store.get("adm3-vt-mapa"))}. ` : "Antes de ir para a pista, com internet: "}<button class="linkbtn" type="button" data-vt-baixar="1">${store.get("adm3-vt-mapa") ? "guardar de novo" : "guardar o mapa para usar sem internet"}</button></p>`
       : `<div class="empty">O mapa da pista (KMZ) ainda não foi enviado. Dá para anotar com a sua localização mesmo assim, e o dono envia o KMZ na página Pista.</div>`}
@@ -3578,7 +3578,7 @@ function vVisita() {
       return `<div class="li vt-li ${x.feito ? "vt-feito" : ""}"><span class="vt-n" style="--c:${t.c}">${i + 1}</span><span class="grow"><small class="hint">${t.e} ${esc(t.l)}${x.feito ? " · ✓ resolvido" : ""}</small><b style="display:block">${esc(x.txt)}</b>
         <small class="hint">${esc(x.por || "")}${x.eq ? " · " + esc(x.eq) : ""} · ${vtHora(x.em)}</small>${x.foto ? `<img class="vt-foto" src="${x.foto}" alt="Foto da anotação ${i + 1}">` : ""}</span>
         <span class="actions vt-li-a"><button class="btn sm" type="button" data-vt-ver="${esc(x.doc)}|${esc(x.id)}">Ver no mapa</button>${meuDoc ? `<button class="btn sm" type="button" data-vt-ok="${esc(x.id)}">${x.feito ? "Reabrir" : "✓ Resolvido"}</button><button class="btn sm ghost" type="button" data-vt-ed="${esc(x.id)}">Editar</button>` : ""}</span></div>`; }).join("")}</div>`
-      : `<div class="empty">Nenhuma anotação ${S.vtQuem === "minhas" ? "sua " : ""}neste dia. Use "Anotar onde estou" na pista ou toque no mapa.</div>`}
+      : `<div class="empty">Nenhuma anotação ${S.vtQuem === "minhas" ? "sua " : ""}neste dia. Toque em "Nova anotação" ou toque no mapa.</div>`}
   </section>`;
 }
 let mapaVT = null, vtWatch = null, vtEu = null;
@@ -3587,7 +3587,7 @@ async function montarMapaVisita() {
   let el = $("#vtMapa"); if (!el) { if (mapaVT) vtParar(); return; }
   // a tela foi redesenhada: põe de volta o mesmo mapa (mantém zoom e posição)
   if (mapaVT && mapaVT.el !== el && !mapaVT.el.isConnected) { el.replaceWith(mapaVT.el); el = mapaVT.el; }
-  let L; try { L = await carregarMapa(); } catch (e) { el.innerHTML = `<div class="empty">${esc(e.message)} Mesmo sem o mapa dá para anotar com "Anotar onde estou".</div>`; return; }
+  let L; try { L = await carregarMapa(); } catch (e) { el.innerHTML = `<div class="empty">${esc(e.message)} Mesmo sem o mapa dá para anotar em "Nova anotação".</div>`; return; }
   if (!el.isConnected) return;
   if (!mapaVT || mapaVT.el !== el) {
     if (mapaVT) try { mapaVT.map.remove(); } catch (e) {}
@@ -3611,7 +3611,7 @@ async function montarMapaVisita() {
   el.classList.toggle("mp-pegar", !!S.vtPick);
   setTimeout(() => { try { mapaVT && mapaVT.map.invalidateSize(); } catch (e) {} }, 60);
 }
-function vtForm(x, pos) {
+function vtForm(x, pos, gps) {
   const novo = !x; x = x || { tipo: "agua", txt: "" }; let onde = pos || (x.lat != null ? { lat: x.lat, lng: x.lng } : null), foto = x.foto || "";
   const ondeTxt = () => onde ? `📍 ${onde.lat.toFixed(5)}, ${onde.lng.toFixed(5)}` : "📍 sem local (só texto)";
   modal(`<h3>${novo ? "Nova anotação" : "Editar anotação"}</h3>
@@ -3630,6 +3630,10 @@ function vtForm(x, pos) {
     closeModal(); if (novo) S.vtDia = hojeISO(); const L = vtMinhas().filter(y => y.id !== item.id); L.push(item);
     vtSalvar(L, novo ? "Anotação salva" : "Anotação atualizada");
   });
+  // nova anotação: já tenta pegar onde a pessoa está (sem GPS, salva só com o texto)
+  if (gps && navigator.geolocation) { $("#vtOnde").textContent = "📍 pegando sua localização…";
+    navigator.geolocation.getCurrentPosition(g => { if (!$("#vtOnde") || onde) return; onde = { lat: +g.coords.latitude.toFixed(6), lng: +g.coords.longitude.toFixed(6) }; $("#vtOnde").textContent = ondeTxt() + " (sua posição)"; },
+      () => { if (!$("#vtOnde") || onde) return; if (DEMO) { onde = { lat: -20.2105, lng: -47.2731 }; $("#vtOnde").textContent = ondeTxt() + " (sua posição)"; } else $("#vtOnde").textContent = "📍 sem localização (salva só com o texto)"; }, { enableHighAccuracy: true, timeout: 10000 }); }
   $("#vtGps").onclick = () => mpPegarGps(q => { onde = q; $("#vtOnde").textContent = ondeTxt() + " (sua posição)"; });
   $("#vtFotoIn").onchange = async e => { const fl = e.target.files[0]; if (!fl) return; try { foto = await reduzirFoto(fl, 720); $("#vtFotoImg").src = foto; $("#vtFotoImg").hidden = false; } catch (er) { toast("Não consegui ler a foto."); } };
   const del = $("#delBtn");
@@ -6852,7 +6856,7 @@ document.addEventListener("click", e => {
   if (d.agPass) { S.agPass = !S.agPass; render(); return; }
   if (d.vtDia) { S.vtDia = d.vtDia; render(); return; }
   if (d.vtQuem) { S.vtQuem = d.vtQuem; render(); return; }
-  if (d.vtGps) { mpPegarGps(q => vtForm(null, q)); return; }
+  if (d.vtGps) { vtForm(null, null, true); return; }
   if (d.vtPick) { S.vtPick = !S.vtPick; render(); if (S.vtPick) toast("Toque no lugar do mapa"); return; }
   if (d.vtEd) { const x = vtMinhas().find(y => y.id === d.vtEd); if (x) vtForm(x); return; }
   if (d.vtOk) { const L = vtMinhas().map(y => y.id === d.vtOk ? { ...y, feito: !y.feito } : y); vtSalvar(L, "Anotação atualizada"); return; }
