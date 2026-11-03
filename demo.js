@@ -1869,6 +1869,18 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     { id: "mp5", tipo: "ambulancia", nome: "Ambulância", obs: "Fica no portão da base o TOP todo.", lat: -20.203521, lng: -47.27185, por: "Vinicius Moreira", em: h(500) },
   ] } });
 })();
+// VISITA TÉCNICA (demo): anotações de ontem de um ADM e de um coordenador
+(function () {
+  const ontem = new Date(Date.now() - 864e5), d = ontem.toLocaleDateString("sv"), h = (hh, mm) => { const x = new Date(ontem); x.setHours(hh, mm, 0, 0); return x.toISOString(); }, D = window.ADM_DEMO.docs;
+  D.push({ col: "config", id: "visita-top1922-m-coord", data: { por: "Fábio Henrique Alves", eq: "Segurança", lista: [
+    { id: "vt1", dia: d, tipo: "perigo", txt: "Barranco solto na descida, precisa de corda e 2 homens da Segurança.", lat: -20.226, lng: -47.2955, em: h(8, 40) },
+    { id: "vt2", dia: d, tipo: "limpar", txt: "Mato alto fechando a trilha uns 200 m. Roçar antes do TOP.", lat: -20.2195, lng: -47.2848, em: h(9, 15) },
+    { id: "vt3", dia: d, tipo: "feito", txt: "Porteira da fazenda liberada, combinado com o seu Zé.", lat: -20.2105, lng: -47.2768, em: h(10, 5), feito: true } ] } });
+  D.push({ col: "config", id: "visita-top1922-m-dono", data: { por: "Vinicius Moreira", eq: "ADM", lista: [
+    { id: "vt4", dia: d, tipo: "agua", txt: "Ponto bom para hidratação: sombra e acesso de carro. Uns 15 galões.", lat: -20.2318, lng: -47.3028, em: h(8, 10) },
+    { id: "vt5", dia: d, tipo: "falta", txt: "Falta placa de sinalização na bifurcação (seguir à direita).", lat: -20.2165, lng: -47.2805, em: h(9, 40) },
+    { id: "vt6", dia: d, tipo: "sugestao", txt: "Fazer a prédica aqui no alto, vista boa para o pôr do sol.", lat: -20.2052, lng: -47.2741, em: h(10, 30) } ] } });
+})();
 // META DO TOP (demo): meta pequena para a demo (10 vagas) e algumas indicações das equipes
 (function () {
   const h = horas => new Date(Date.now() - horas * 3600e3).toISOString(), D = window.ADM_DEMO.docs;

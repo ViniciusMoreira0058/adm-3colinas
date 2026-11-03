@@ -183,6 +183,7 @@ const VIEWS = [
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
+  { id: "visita", l: "Visita técnica", c: "Visita", i: "route", all: true, menu: true },   // anotações no mapa da pista nas visitas técnicas (ADM e coordenadores)
   { id: "meta", l: "Meta do TOP", c: "Meta", i: "chart", all: true, menu: true },   // meta de inscrições até o TOP e indicações das equipes (Estratégia 150)
   { id: "agenda", l: "Agenda", i: "clock", all: true, menu: true },   // todos os eventos de divulgação e o TOP, com quem vai e o link de presença
   { id: "importacao", l: "Importação do dia", c: "Importação", i: "upload", need: ["participantes", "legendarios"], org: true },   // as 4 planilhas do dia com ✓
@@ -201,14 +202,14 @@ const NIVEIS = [
 // todas as páginas podem ser liberadas por usuário (menos Dashboard, que todos veem, e Usuários/Histórico, que são só do dono)
 const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && (!v.demo || DEMO) && liberada(v));
 // a página já foi lançada no app real? (o que ainda está só na demo não aparece no menu nem em Usuários)
-const liberada = v => !(v.org && !ORG()) && !(v.extra && !EXTRA()) && !(v.nfc && !NFC()) && !(v.id === "campo" && !CAMPO()) && !(v.id === "celulares" && !CEL())
+const liberada = v => !(v.id === "visita" && !VISITA()) && !(v.org && !ORG()) && !(v.extra && !EXTRA()) && !(v.nfc && !NFC()) && !(v.id === "campo" && !CAMPO()) && !(v.id === "celulares" && !CEL())
   && !(TOP2_VIEWS.includes(v.id) && !TOP2() && !(v.id === "transporte" && TRANSP())) && !(v.id === "carros" && TRANSP()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM()) && !(v.id === "meta" && !META()) && !(v.id === "agenda" && !META());
 // "_v2" marca o cadastro salvo já com a escolha página por página; cadastros antigos seguem a regra antiga (página que usa dados de outra aparece junto)
 const ABA_V2 = "_v2";
 /* Coordenadores e subcoordenadores de equipe (demo): perfil "coord" no cadastro, só leitura, vê só a própria equipe */
 const COORD = () => true;   // liberado no app real em 31/10/2026 (precisa do supabase/coordenadores.sql)
 const COORD_ABAS = ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista", "financeiro"];   // no Financeiro o coordenador só lança os gastos da equipe
-const COORD_VER = ["painel", ...COORD_ABAS, "meta", "agenda"];
+const COORD_VER = ["painel", ...COORD_ABAS, "meta", "agenda", "visita"];
 const coordAbasSalvar = () => [...COORD_ABAS, "legendarios", ABA_V2];   // "legendarios" só para o banco liberar a equipe dele (a página Legendários fica escondida)
 const ehCoordEq = () => COORD() && !!ME.coord;
 const ehCoordCad = e => COORD() && e && e.perfil === "coord";
@@ -226,6 +227,7 @@ const canSee = v => {
   if (v.id === "carros" && TRANSP()) return false;   // os Carros ficam dentro do Transporte
   if ((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
+  if (v.id === "visita" && !VISITA()) return false;
   if ((v.id === "meta" || v.id === "agenda") && !META()) return false;
   if (!ME.acesso) return v.id === "painel";
   if (ehCoordEq()) return COORD_VER.includes(v.id);   // coordenador de equipe: só as páginas dele, sem saúde, telefones e pagamentos
@@ -1195,7 +1197,7 @@ const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
 const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["meta", "agenda", "participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
-  ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
+  ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista", "visita"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
 /* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
@@ -1342,6 +1344,7 @@ function licoesForm() {
 /* ---------- Guia "Como usar": o que fazer em cada página, só das páginas que a pessoa vê ---------- */
 const GUIA = {
   meta: ["Meta do TOP", ["Equipes: os grupos de equipes e as duas missões, trazer senderistas e cuidar dos legendários.", "Tarefas: a ADM cria e manda para um grupo; o coordenador escolhe quem faz e marca feita.", "Indicações: os nomes de cada equipe, com respostas prontas para as dúvidas.", "Resumo: o que pede atenção agora e como cada grupo está nas duas missões."]],
+  visita: ["Visita técnica", ["Na pista, toque em \"Anotar onde estou\": escolha o tipo (água, limpar, perigo, feito, falta, sugestão), escreva e, se quiser, tire uma foto.", "Também dá para tocar em qualquer ponto do mapa para anotar.", "Antes de sair, com internet, toque em \"guardar o mapa para usar sem internet\". Sem sinal, as anotações ficam no celular e sobem quando a internet voltar.", "No fim do dia, \"PDF do dia\" junta todas as anotações com o croqui da pista para mandar no grupo dos coordenadores."]],
   agenda: ["Agenda", ["Todos os eventos de divulgação do Legendários e o TOP, por mês.", "Toque num evento para ver quantos vão, quem vai e mandar o link para mais pessoas confirmarem.", "Qualquer coordenador pode criar um evento em \"Novo evento\"."]],
   painel: ["Visão geral do TOP", ["Mostra quantos dias faltam, quantos estão prontos e o que fazer hoje.", "Toque em qualquer item de \"O que fazer hoje\" para ir direto à tela certa."]],
   participantes: ["Lista dos senderistas", ["Toque no status de atestado ou termo para avançar.", "O lápis abre a ficha completa. Quem mexe por último vira o ADM responsável."]],
@@ -3528,6 +3531,164 @@ function mpPegarGps(ok) {
   if (!navigator.geolocation) { if (DEMO) ok({ lat: -20.2105, lng: -47.2731 }); else falha(); return; }
   toast("Pegando sua localização…");
   navigator.geolocation.getCurrentPosition(g => ok({ lat: +g.coords.latitude.toFixed(6), lng: +g.coords.longitude.toFixed(6) }), () => DEMO ? ok({ lat: -20.2105, lng: -47.2731 }) : falha(), { enableHighAccuracy: true, timeout: 10000 });
+}
+/* ---------- Visita técnica (03/11/2026, só DEMO) ----------
+   Qualquer ADM ou coordenador anota no mapa da pista o que viu: onde pôr água, o que limpar, perigo, o que foi feito e o que falta.
+   Cada pessoa grava só o próprio documento config visita-<top>-<membroId> {lista:[{id,dia,tipo,txt,lat,lng,foto,feito,em}], por, eq}; todos veem as de todos.
+   Sem internet: a anotação entra na fila do app e o mapa da pista pode ser guardado no aparelho ("Guardar mapa"). PDF do dia com croqui da pista. */
+const VISITA = () => DEMO;
+const VT_TIPOS = [
+  { k: "agua", e: "💧", l: "Água / hidratação", c: "#38bdf8" }, { k: "limpar", e: "🧹", l: "Limpar / roçar", c: "#a3e635" },
+  { k: "perigo", e: "⚠️", l: "Perigo / atenção", c: "#ef4444" }, { k: "falta", e: "🛠️", l: "Falta fazer", c: "#f59e0b" },
+  { k: "feito", e: "✅", l: "Feito na visita", c: "#22c55e" }, { k: "sugestao", e: "💡", l: "Sugestão", c: "#c084fc" }, { k: "outro", e: "📍", l: "Outro", c: "#ffd29a" }];
+const vtTipo = k => VT_TIPOS.find(t => t.k === k) || VT_TIPOS[VT_TIPOS.length - 1];
+const vtMeuId = () => "visita-" + curTopId() + "-" + (ME.id || "eu");
+const vtMinhas = () => ((S.cfgDocs || {})[vtMeuId()] || {}).lista || [];
+function vtTodas() {
+  const pre = "visita-" + curTopId() + "-";
+  return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k, por: d.por || "", eq: d.eq || "" })))
+    .sort((a, b) => String(a.em).localeCompare(String(b.em)));
+}
+const vtDias = () => [...new Set([hojeISO(), ...vtTodas().map(x => x.dia)])].sort().reverse();
+const vtDia = () => S.vtDia || (vtTodas().some(x => x.dia === hojeISO()) || !vtTodas().length ? hojeISO() : vtDias().find(d => vtTodas().some(x => x.dia === d)));
+const vtDoDia = () => vtTodas().filter(x => x.dia === vtDia() && (S.vtQuem !== "minhas" || x.doc === vtMeuId()));
+const vtDiaTxt = d => { const t = new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }); return d === hojeISO() ? "Hoje" : t.replace(".", ""); };
+const vtHora = iso => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+async function vtSalvar(lista, msg) {
+  try { await api.set("config", vtMeuId(), { lista, por: ME.adm || "", eq: ME.equipeLgnd || "", em: new Date().toISOString() });
+    toast(navigator.onLine === false ? msg + " (sem internet: envia quando voltar)" : msg); }
+  catch (e) { toast("Não consegui salvar a anotação. " + erroAmigavel(e)); }
+}
+function vVisita() {
+  const dia = vtDia(), T = vtDoDia(), meu = vtMeuId(), cont = {}; T.forEach(x => { cont[x.tipo] = (cont[x.tipo] || 0) + 1; });
+  const dias = vtDias().slice(0, 12);
+  return `<div class="head"><div><h2>Visita técnica</h2><p class="sub">Anote no mapa o que viu na pista: onde pôr água, o que limpar, o que foi feito e o que falta. Funciona sem internet.</p></div>
+    <div class="actions"><button class="btn" type="button" data-vt-pdf="1" ${T.length ? "" : "disabled"}>${ico("upload")} PDF do dia</button></div></div>
+  <div class="vt-bar"><div class="seg" role="tablist" aria-label="Dia da visita">${dias.map(d => `<button type="button" role="tab" data-vt-dia="${d}" aria-selected="${d === dia}">${vtDiaTxt(d)}${vtTodas().some(x => x.dia === d) ? ` <small class="num">${vtTodas().filter(x => x.dia === d).length}</small>` : ""}</button>`).join("")}</div>
+    <div class="seg" role="tablist" aria-label="De quem">${[["todas", "Todas"], ["minhas", "Só as minhas"]].map(([k, l]) => `<button type="button" role="tab" data-vt-quem="${k}" aria-selected="${(S.vtQuem || "todas") === k}">${l}</button>`).join("")}</div></div>
+  <section class="panel vt-mapa-p">
+    <div class="actions vt-acoes"><button class="btn primary" type="button" data-vt-gps="1">📍 Anotar onde estou</button><button class="btn ${S.vtPick ? "primary" : ""}" type="button" data-vt-pick="1">${S.vtPick ? "Toque no ponto do mapa…" : "👆 Tocar no mapa"}</button></div>
+    ${pistaMapa() ? `<div id="vtMapa" class="vt-mapa ${S.vtPick ? "mp-pegar" : ""}"></div>
+      <p class="hint vt-off">${store.get("adm3-vt-mapa") ? `✓ Mapa guardado neste aparelho em ${esc(store.get("adm3-vt-mapa"))}. ` : "Antes de ir para a pista, com internet: "}<button class="linkbtn" type="button" data-vt-baixar="1">${store.get("adm3-vt-mapa") ? "guardar de novo" : "guardar o mapa para usar sem internet"}</button></p>`
+      : `<div class="empty">O mapa da pista (KMZ) ainda não foi enviado. Dá para anotar com a sua localização mesmo assim, e o dono envia o KMZ na página Pista.</div>`}
+    ${T.length ? `<div class="mp-filtro">${VT_TIPOS.filter(t => cont[t.k]).map(t => `<span class="mp-f" style="--c:${t.c}"><span>${t.e}</span>${esc(t.l)} <small class="num">${cont[t.k]}</small></span>`).join("")}</div>` : ""}
+  </section>
+  <section class="panel"><h3>Anotações de ${vtDiaTxt(dia).toLowerCase() === "hoje" ? "hoje" : esc(vtDiaTxt(dia))} <small>${T.length}</small></h3>
+    ${T.length ? `<div class="list">${T.map((x, i) => { const t = vtTipo(x.tipo), meuDoc = x.doc === meu;
+      return `<div class="li vt-li ${x.feito ? "vt-feito" : ""}"><span class="vt-n" style="--c:${t.c}">${i + 1}</span><span class="grow"><small class="hint">${t.e} ${esc(t.l)}${x.feito ? " · ✓ resolvido" : ""}</small><b style="display:block">${esc(x.txt)}</b>
+        <small class="hint">${esc(x.por || "")}${x.eq ? " · " + esc(x.eq) : ""} · ${vtHora(x.em)}</small>${x.foto ? `<img class="vt-foto" src="${x.foto}" alt="Foto da anotação ${i + 1}">` : ""}</span>
+        <span class="actions vt-li-a"><button class="btn sm" type="button" data-vt-ver="${esc(x.doc)}|${esc(x.id)}">Ver no mapa</button>${meuDoc ? `<button class="btn sm" type="button" data-vt-ok="${esc(x.id)}">${x.feito ? "Reabrir" : "✓ Resolvido"}</button><button class="btn sm ghost" type="button" data-vt-ed="${esc(x.id)}">Editar</button>` : ""}</span></div>`; }).join("")}</div>`
+      : `<div class="empty">Nenhuma anotação ${S.vtQuem === "minhas" ? "sua " : ""}neste dia. Use "Anotar onde estou" na pista ou toque no mapa.</div>`}
+  </section>`;
+}
+let mapaVT = null, vtWatch = null, vtEu = null;
+function vtParar() { if (vtWatch != null) try { navigator.geolocation.clearWatch(vtWatch); } catch (e) {} vtWatch = null; if (mapaVT) try { mapaVT.map.remove(); } catch (e) {} mapaVT = null; }
+async function montarMapaVisita() {
+  let el = $("#vtMapa"); if (!el) { if (mapaVT) vtParar(); return; }
+  // a tela foi redesenhada: põe de volta o mesmo mapa (mantém zoom e posição)
+  if (mapaVT && mapaVT.el !== el && !mapaVT.el.isConnected) { el.replaceWith(mapaVT.el); el = mapaVT.el; }
+  let L; try { L = await carregarMapa(); } catch (e) { el.innerHTML = `<div class="empty">${esc(e.message)} Mesmo sem o mapa dá para anotar com "Anotar onde estou".</div>`; return; }
+  if (!el.isConnected) return;
+  if (!mapaVT || mapaVT.el !== el) {
+    if (mapaVT) try { mapaVT.map.remove(); } catch (e) {}
+    const map = L.map(el, { zoomControl: true });
+    const ruas = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap", crossOrigin: true });
+    const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Esri", crossOrigin: true });
+    sat.addTo(map); L.control.layers({ "Satélite": sat, "Ruas": ruas }, null, { position: "topright" }).addTo(map);
+    const P = pistaMapa() || {}, lin = P.linhas || [];
+    lin.forEach(l => { L.polyline(l, { color: "#ffffff", weight: 6, opacity: .45 }).addTo(map); L.polyline(l, { color: "#ff7a1a", weight: 3, opacity: .95 }).addTo(map); });
+    const all = lin.flat(); if (all.length) map.fitBounds(L.latLngBounds(all), { padding: [24, 24] }); else map.setView([-20.21, -47.28], 14);
+    map.on("click", e => { if (!S.vtPick) return; S.vtPick = false; render(); vtForm(null, { lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6) }); });
+    mapaVT = { map, el, camada: L.layerGroup().addTo(map) };
+    if (navigator.geolocation && vtWatch == null) vtWatch = navigator.geolocation.watchPosition(g => { if (!mapaVT) return; const ll = [g.coords.latitude, g.coords.longitude];
+      if (vtEu && vtEu._map) vtEu.setLatLng(ll); else vtEu = L.circleMarker(ll, { radius: 8, color: "#fff", weight: 3, fillColor: "#3b82f6", fillOpacity: 1 }).addTo(mapaVT.map).bindTooltip("Você está aqui"); }, () => {}, { enableHighAccuracy: true, maximumAge: 15000 });
+  }
+  const { camada } = mapaVT; camada.clearLayers();
+  vtDoDia().forEach((x, i) => { if (x.lat == null) return; const t = vtTipo(x.tipo);
+    L.marker([x.lat, x.lng], { icon: L.divIcon({ className: "mp-pin vt-pin" + (x.feito ? " vt-feito" : ""), html: `<i style="--c:${t.c}">${t.e}</i><b>${i + 1}</b>`, iconSize: [30, 30], iconAnchor: [15, 15] }) })
+      .addTo(camada).bindPopup(`<div class="mp-pop"><small>${t.e} ${esc(t.l)} · nº ${i + 1}</small><b>${esc(x.txt)}</b><small class="hint">${esc(x.por || "")} · ${vtHora(x.em)}</small>
+        <div class="mp-pop-a"><a class="btn sm" href="https://www.google.com/maps/dir/?api=1&destination=${x.lat},${x.lng}" target="_blank" rel="noopener">Rota</a></div></div>`); });
+  el.classList.toggle("mp-pegar", !!S.vtPick);
+  setTimeout(() => { try { mapaVT && mapaVT.map.invalidateSize(); } catch (e) {} }, 60);
+}
+function vtForm(x, pos) {
+  const novo = !x; x = x || { tipo: "agua", txt: "" }; let onde = pos || (x.lat != null ? { lat: x.lat, lng: x.lng } : null), foto = x.foto || "";
+  const ondeTxt = () => onde ? `📍 ${onde.lat.toFixed(5)}, ${onde.lng.toFixed(5)}` : "📍 sem local (só texto)";
+  modal(`<h3>${novo ? "Nova anotação" : "Editar anotação"}</h3>
+    <div class="form">
+      <div class="field full"><span class="lab">O que é</span><div class="or-tipos">${VT_TIPOS.map(t => `<label class="or-t"><input type="radio" name="tipo" value="${t.k}" ${x.tipo === t.k ? "checked" : ""}><span>${t.e} ${t.l}</span></label>`).join("")}</div></div>
+      <div class="field full"><label for="vt-t">Anotação</label><textarea id="vt-t" name="txt" rows="3" maxlength="500" placeholder="ex.: colocar 10 galões aqui, a subida é longa" required>${esc(x.txt || "")}</textarea></div>
+      <div class="field full"><span class="lab">Foto (opcional)</span><label class="btn sm" style="width:max-content">📷 ${foto ? "Trocar foto" : "Tirar ou escolher foto"}<input id="vtFotoIn" type="file" accept="image/*" capture="environment" hidden></label><img id="vtFotoImg" class="vt-foto" src="${foto}" alt="" ${foto ? "" : "hidden"}></div>
+      <p class="hint full"><span id="vtOnde">${ondeTxt()}</span> · <button class="linkbtn" type="button" id="vtGps">usar minha posição agora</button></p>
+    </div>
+    <div class="modal-foot"><div>${novo ? "" : `<button class="btn danger" type="button" id="delBtn">Excluir</button>`}</div>
+      <div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></div>`,
+  fd => {
+    const txt = String(fd.get("txt") || "").trim(); if (!txt) { toast("Escreva a anotação."); return; }
+    const item = { ...x, id: x.id || "vt" + Date.now().toString(36), dia: x.dia || hojeISO(), tipo: String(fd.get("tipo") || "outro"), txt, foto, lat: onde ? onde.lat : null, lng: onde ? onde.lng : null, em: x.em || new Date().toISOString() };
+    delete item.doc; delete item.por; delete item.eq;
+    closeModal(); if (novo) S.vtDia = hojeISO(); const L = vtMinhas().filter(y => y.id !== item.id); L.push(item);
+    vtSalvar(L, novo ? "Anotação salva" : "Anotação atualizada");
+  });
+  $("#vtGps").onclick = () => mpPegarGps(q => { onde = q; $("#vtOnde").textContent = ondeTxt() + " (sua posição)"; });
+  $("#vtFotoIn").onchange = async e => { const fl = e.target.files[0]; if (!fl) return; try { foto = await reduzirFoto(fl, 720); $("#vtFotoImg").src = foto; $("#vtFotoImg").hidden = false; } catch (er) { toast("Não consegui ler a foto."); } };
+  const del = $("#delBtn");
+  if (del) del.onclick = () => { if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmar exclusão"; return; } closeModal(); vtSalvar(vtMinhas().filter(y => y.id !== x.id), "Anotação excluída"); };
+}
+// guarda no aparelho os pedaços do mapa (satélite) em volta da pista, para abrir sem internet
+async function vtBaixarMapa(bt) {
+  const lin = ((pistaMapa() || {}).linhas || []).flat(); if (!lin.length) return;
+  if (navigator.onLine === false) { toast("Precisa de internet para guardar o mapa. Faça isso antes de ir para a pista."); return; }
+  const la = lin.map(p => p[0]), lo = lin.map(p => p[1]), pad = .006, b = { n: Math.max(...la) + pad, s: Math.min(...la) - pad, e: Math.max(...lo) + pad, w: Math.min(...lo) - pad };
+  const tx = (lng, z) => Math.floor((lng + 180) / 360 * 2 ** z), ty = (lat, z) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** z); };
+  const U = [];
+  for (let z = 12; z <= 18; z++) { const n = (tx(b.e, z) - tx(b.w, z) + 1) * (ty(b.s, z) - ty(b.n, z) + 1); if (U.length + n > 2600) break;
+    for (let x = tx(b.w, z); x <= tx(b.e, z); x++) for (let y = ty(b.n, z); y <= ty(b.s, z); y++) U.push(`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`); }
+  let ok = 0, i = 0; bt.disabled = true;
+  try { const c = await caches.open("adm3-mapa");
+    const um = async () => { while (i < U.length) { const u = U[i++]; try { if (!(await c.match(u))) { const r = await fetch(u, { mode: "cors" }); if (r.ok) await c.put(u, r); } ok++; } catch (e) {} if (ok % 40 === 0) bt.textContent = `guardando… ${Math.round(ok / U.length * 100)}%`; } };
+    await Promise.all([um(), um(), um(), um(), um(), um()]);
+    store.set("adm3-vt-mapa", new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })); toast(`Mapa guardado: ${ok} pedaços. Agora abre sem internet.`); }
+  catch (e) { toast("Não consegui guardar o mapa neste aparelho."); }
+  render();
+}
+async function vtPdf() {
+  const dia = vtDia(), T = vtDoDia(); if (!T.length) return;
+  const dl = new Date(dia + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+  const quem = [...new Set(T.map(x => x.por).filter(Boolean))];
+  const X = await pdfBase("Visita técnica", `${dl} · ${T.length} anotação(ões) · ${S.vtQuem === "minhas" ? "anotações de " + (ME.adm || "") : quem.length ? "por " + quem.join(", ") : ""}`), { doc, C, W } = X;
+  // croqui da pista com as anotações numeradas (desenhado, funciona sem internet)
+  const lin = ((pistaMapa() || {}).linhas || []), pts = [...lin.flat(), ...T.filter(x => x.lat != null).map(x => [x.lat, x.lng])];
+  if (pts.length > 1) {
+    const bx = { x: 14, y: X.y, w: W - 28, h: 105 }, la = pts.map(p => p[0]), lo = pts.map(p => p[1]), k = Math.cos(la[0] * Math.PI / 180);
+    let n = Math.max(...la), s = Math.min(...la), e = Math.max(...lo), w = Math.min(...lo); const dx = (e - w) * k || .001, dy = (n - s) || .001, esc2 = Math.min((bx.w - 12) / dx, (bx.h - 12) / dy);
+    const ox = bx.x + (bx.w - dx * esc2) / 2, oy = bx.y + (bx.h - dy * esc2) / 2, P = p => [ox + (p[1] - w) * k * esc2, oy + (n - p[0]) * esc2];
+    doc.setFillColor(18, 26, 36); doc.setDrawColor(60, 72, 88); doc.setLineWidth(0.3); doc.roundedRect(bx.x, bx.y, bx.w, bx.h, 3, 3, "FD");
+    lin.forEach(l => { doc.setDrawColor(...C.LARANJA); doc.setLineWidth(0.9); for (let i = 1; i < l.length; i++) { const a = P(l[i - 1]), b = P(l[i]); doc.line(a[0], a[1], b[0], b[1]); } });
+    T.forEach((x, i) => { if (x.lat == null) return; const [px, py] = P([x.lat, x.lng]), c = vtTipo(x.tipo).c.match(/\w\w/g).map(h => parseInt(h, 16));
+      doc.setFillColor(...c); doc.setDrawColor(255, 255, 255); doc.setLineWidth(0.4); doc.circle(px, py, 2.8, "FD");
+      doc.setTextColor(10, 14, 20); doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text(String(i + 1), px, py + 1, { align: "center" }); });
+    doc.setTextColor(150, 160, 175); doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.text("Linha laranja: pista · números: anotações abaixo · norte para cima", bx.x + 3, bx.y + bx.h - 3);
+    X.y += bx.h + 7;
+  }
+  // resumo por tipo
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); let rx = 14;
+  VT_TIPOS.forEach(t => { const q = T.filter(x => x.tipo === t.k).length; if (!q) return; const s = `${t.l}: ${q}`, c = t.c.match(/\w\w/g).map(h => parseInt(h, 16)), ww = doc.getTextWidth(s) + 8;
+    if (rx + ww > W - 14) { rx = 14; X.y += 8; } doc.setFillColor(...c); doc.roundedRect(rx, X.y, ww, 6, 3, 3, "F"); doc.setTextColor(10, 14, 20); doc.text(s, rx + 4, X.y + 4.2); rx += ww + 3; });
+  X.y += 12;
+  // lista por tipo, com o número do croqui
+  VT_TIPOS.forEach(t => { const L = T.map((x, i) => ({ x, n: i + 1 })).filter(o => o.x.tipo === t.k); if (!L.length) return;
+    X.cabe(16); doc.setTextColor(...C.LARANJA); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text(t.l.toUpperCase(), 14, X.y + 4, { charSpace: 0.6 }); X.y += 9;
+    L.forEach(({ x, n }) => { const txt = doc.splitTextToSize(x.txt, x.foto ? W - 78 : W - 40), h = Math.max(txt.length * 4.8 + 10, x.foto ? 30 : 0);
+      X.cabe(h + 3); doc.setFillColor(255, 255, 255); doc.setGState && doc.saveGraphicsState(); try { doc.setGState(new doc.GState({ opacity: .06 })); } catch (e) {} doc.roundedRect(14, X.y, W - 28, h, 2, 2, "F"); doc.restoreGraphicsState && doc.restoreGraphicsState();
+      const c = t.c.match(/\w\w/g).map(hh => parseInt(hh, 16)); doc.setFillColor(...c); doc.circle(21, X.y + 6, 3.4, "F"); doc.setTextColor(10, 14, 20); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.text(String(n), 21, X.y + 7.2, { align: "center" });
+      doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.text(txt, 28, X.y + 6.5);
+      doc.setTextColor(170, 160, 150); doc.setFont("helvetica", "normal"); doc.setFontSize(8); const meta = [x.por, x.eq, vtHora(x.em), x.feito ? "resolvido" : ""].filter(Boolean).join(" · ");
+      doc.text(meta, 28, X.y + 6.5 + txt.length * 4.8 + 1);
+      if (x.lat != null) { doc.setTextColor(255, 170, 110); doc.textWithLink("abrir no mapa", 28 + doc.getTextWidth(meta) + 4, X.y + 6.5 + txt.length * 4.8 + 1, { url: `https://www.google.com/maps?q=${x.lat},${x.lng}` }); }
+      if (x.foto) try { doc.addImage(x.foto, "JPEG", W - 52, X.y + 2, 36, h - 4, undefined, "FAST"); } catch (e) {}
+      X.y += h + 3; }); X.y += 3; });
+  await entregarPdf(doc.output("blob"), `Visita tecnica ${dia}.pdf`, `Visita técnica · ${dl}`, true);
 }
 function marcarTrecho(i, campo) {
   const dias = pistaDias(), V = pistaVivo(), diaId = estadoMapa().dia.id, k = diaId + "-" + i;
@@ -6026,6 +6187,7 @@ function render() {
     : v === "comunicados" ? vComunicados()
     : v === "financeiro" ? vFinanceiro()
     : v === "guia" ? vGuia()
+    : v === "visita" ? vVisita()
     : vPista());
   if (D2()) { if (carregando(v)) html = faixa + other + esqueleto(v); else html = vazios(html); }
   // padrão das telas: o nome do grupo do menu aparece em cima do título de cada tela
@@ -6040,6 +6202,7 @@ function render() {
   document.body.classList.toggle("av-tv", modoTv());
   if (S.view !== "aovivo") S.mapaCheio = false;
   document.body.classList.toggle("av-mapa-cheio", !!S.mapaCheio);
+  if (S.view === "visita") montarMapaVisita(); else if (mapaVT) vtParar();
   if (S.view === "aovivo") montarMapaVivo(); else if (mapaAV) { try { mapaAV.map.remove(); } catch (e) {} mapaAV = null; }
   if (nfcPendente && ME.acesso && S.P.length && !$("#modalRoot").innerHTML) { const t = nfcPendente; nfcPendente = ""; try { history.replaceState(null, "", location.pathname + location.search.replace(/[?&]nfc=[\w-]+/, "").replace(/^&/, "?") + location.hash); } catch {} setTimeout(() => abrirPorToken(t), 200); }
   if ((focusId === "q" || focusId === "hq" || focusId === "pq" || focusId === "nq") && $("#" + focusId)) { const q = $("#" + focusId); q.focus(); try { q.setSelectionRange(caret, caret); } catch {} }
@@ -6687,6 +6850,17 @@ document.addEventListener("click", e => {
   if (d.agTop) { const t = S.tops.find(x => x.id === d.agTop) || topDoc(); if (t) agTopVer(t); return; }
   if (d.prevEd) { prevForm(); return; }
   if (d.agPass) { S.agPass = !S.agPass; render(); return; }
+  if (d.vtDia) { S.vtDia = d.vtDia; render(); return; }
+  if (d.vtQuem) { S.vtQuem = d.vtQuem; render(); return; }
+  if (d.vtGps) { mpPegarGps(q => vtForm(null, q)); return; }
+  if (d.vtPick) { S.vtPick = !S.vtPick; render(); if (S.vtPick) toast("Toque no lugar do mapa"); return; }
+  if (d.vtEd) { const x = vtMinhas().find(y => y.id === d.vtEd); if (x) vtForm(x); return; }
+  if (d.vtOk) { const L = vtMinhas().map(y => y.id === d.vtOk ? { ...y, feito: !y.feito } : y); vtSalvar(L, "Anotação atualizada"); return; }
+  if (d.vtVer) { const [doc, id] = d.vtVer.split("|"), x = vtTodas().find(y => y.doc === doc && y.id === id);
+    if (!x || x.lat == null) { toast("Esta anotação não tem local no mapa."); return; }
+    if (mapaVT) { $("#vtMapa").scrollIntoView({ behavior: "smooth", block: "center" }); mapaVT.map.setView([x.lat, x.lng], 17); mapaVT.camada.eachLayer(m => { const p = m.getLatLng && m.getLatLng(); if (p && p.lat === x.lat && p.lng === x.lng) m.openPopup(); }); } return; }
+  if (d.vtBaixar) { vtBaixarMapa(t); return; }
+  if (d.vtPdf) { const b = t; b.disabled = true; vtPdf().catch(e => toast("Não consegui gerar o PDF. " + (e.message || ""))).finally(() => { b.disabled = false; }); return; }
   if (d.acaoVer) { const [doc, id] = d.acaoVer.split("|"), a = acoesTodas().find(x => x.doc === doc && x.id === id); if (a) acaoVer(a); return; }
   if (!podeEditar() && WRITE_KEYS.some(k => d[k] != null)) { toast("Seu acesso é somente leitura."); return; }
   if (d.fil) { S.f.status = d.fil; render(); return; }
@@ -8107,7 +8281,7 @@ function conectarDados() {
     S.cronoCriando = S.cronoCriando || new Set();
     if (ficha && navigator.onLine !== false && !db.estado().offline && !S.cfgDocs[ficha] && !S.cronoCriando.has(ficha)) {
       S.cronoCriando.add(ficha); db.doc("config/" + ficha).set({ _adm: eu() }).catch(() => {}).finally(() => S.cronoCriando.delete(ficha)); }
-    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios", "aovivo", "ocorrencias", "tops"].includes(S.view)) render();
+    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios", "aovivo", "ocorrencias", "tops", "visita"].includes(S.view)) render();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });
