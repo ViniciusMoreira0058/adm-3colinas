@@ -2139,14 +2139,14 @@ async function celFotoData(c) {   // para o PDF: a foto como data URL
   try { const r = await sb.storage.from("adm-fotos").download(c.fotoPath); if (!r.data) return ""; return await reduzirFoto(r.data, 360); } catch { return ""; }
 }
 async function celGuardarFoto(p, fl) { return fotoGuardar(fl, `celulares/${curTopId()}/${p.id}`); }
-async function fotoGuardar(fl, base) {
+async function fotoGuardar(fl, base, peq = 360) {
   if (!DEMO && sb && navigator.onLine !== false) {
     try { const grande = await reduzirFoto(fl, 1000), blob = await (await fetch(grande)).blob(), path = `${base}-${Date.now().toString(36)}.jpg`;
       const r = await sb.storage.from("adm-fotos").upload(path, blob, { contentType: "image/jpeg", upsert: true });
       if (!r.error) { fotoUrls[path] = grande; return { foto: "", fotoPath: path }; }
     } catch (e) {}
   }
-  return { foto: await reduzirFoto(fl, 360), fotoPath: "" };
+  return { foto: await reduzirFoto(fl, peq), fotoPath: "" };
 }
 const CEL_MOTIVOS = ["Esqueceu no carro", "Liberado pela coordenação", "Precisa por trabalho", "Precisa pela família", "Não veio ao TOP", "Outro"];
 const celId = p => `cel-${curTopId()}-${p.id}`;
@@ -3697,12 +3697,12 @@ async function vtPdf() {
       X.y += h + 3; }); X.y += 3; });
   await entregarPdf(doc.output("blob"), `Visita tecnica ${dia}.pdf`, `Visita técnica · ${dl}`, true);
 }
-/* ---------- Feed do TOP (04/11/2026, só DEMO) ----------
+/* ---------- Feed do TOP (04/11/2026; no app real a foto vai para o Storage adm-fotos/feed/<top>/<id>/) ----------
    Rede social da equipe: foto ou só texto, curtir, comentar, marcar (@) e salvar a foto.
    Cada post é um documento config post-<top>-<membroId>-<id> {txt,foto,por,porId,eq,men:[membroId],em}.
    Curtidas, salvos e comentários de cada pessoa ficam no documento dela feedeu-<top>-<membroId> {likes:{postId:iso}, salvos:{postId:iso}, coms:[{id,post,txt,men,em}], por, eq, vistoMen}.
    Assim cada um só grava o que é seu (igual à Visita técnica). */
-const FEED = () => DEMO;
+const FEED = () => true;   // app real desde 04/11/2026 (precisa do supabase/feed.sql)
 const feedPre = () => "post-" + curTopId() + "-";
 const feedEuId = (id = ME.id || "eu") => "feedeu-" + curTopId() + "-" + id;
 const feedEu = () => (S.cfgDocs || {})[feedEuId()] || {};
@@ -3747,7 +3747,7 @@ function vFeed() {
   if (S.feedVisto0 === undefined) S.feedVisto0 = store.get(feedVistoK()) || "";
   const ult = feedPosts()[0]; if (ult && String(ult.em) > (store.get(feedVistoK()) || "")) setTimeout(() => { store.set(feedVistoK(), String(ult.em)); renderNav(); }, 0);
   const P = feedPosts(), A = feedAtiv(), eu = feedEu(), men = feedMencoes(), so = S.feedSo || "";
-  const L = so === "salvos" ? P.filter(p => (eu.salvos || {})[p.id]) : so === "meus" ? P.filter(p => p.porId === ME.id) : so === "fotos" ? P.filter(p => p.foto) : P;
+  const L = so === "salvos" ? P.filter(p => (eu.salvos || {})[p.id]) : so === "meus" ? P.filter(p => p.porId === ME.id) : so === "fotos" ? P.filter(p => p.foto || p.fotoPath) : P;
   if (men.length && !S.feedMenAviso) S.feedMenAviso = men.length;
   return `<div class="head"><div><h2>Feed do TOP</h2><p class="sub">Fotos e recados da equipe, ao vivo. Curta, comente e marque quem estava junto.</p></div></div>
   ${men.length ? `<section class="panel fd-avisos"><h3>🔔 Marcaram você <small>${men.length}</small><button class="linkbtn" type="button" data-fd-visto="1">marcar como visto</button></h3>
@@ -3758,15 +3758,16 @@ function vFeed() {
   ${L.length ? L.map(p => feedCard(p, A, eu)).join("") : `<div class="empty">${so === "salvos" ? "Você ainda não salvou nenhum post." : so === "meus" ? "Você ainda não postou nada." : "Ninguém postou ainda. Seja o primeiro!"}</div>`}`;
 }
 function feedCard(p, A, eu) {
-  const lk = A.likes[p.id] || [], cs = A.coms[p.id] || [], curti = !!(eu.likes || {})[p.id], salvo = !!(eu.salvos || {})[p.id], meu = p.porId === ME.id, aberto = S.feedCom === p.id;
+  const lk = A.likes[p.id] || [], cs = A.coms[p.id] || [], curti = !!(eu.likes || {})[p.id], salvo = !!(eu.salvos || {})[p.id], meu = p.porId === ME.id, aberto = S.feedCom === p.id,
+    temFoto = !!(p.foto || p.fotoPath), src = temFoto ? celFotoSrc(p) : "";
   return `<article class="panel fd-post" id="fd-${esc(p.id)}">
     <header class="fd-h"><span class="fd-av">${feedIni(p.por)}</span><span class="grow"><b>${esc(p.por || "Alguém")}</b><small class="hint" style="display:block">${p.eq ? esc(p.eq) + " · " : ""}${feedQuando(p.em)}${p.porId !== ME.id && S.feedVisto0 !== undefined && String(p.em) > S.feedVisto0 ? ` <span class="fd-novo-dot">● novo</span>` : ""}</small></span>
       ${meu || S.isOwner ? `<button class="linkbtn" type="button" data-fd-del="${esc(p.id)}" aria-label="Apagar post">${ico("trash")}</button>` : ""}</header>
-    ${p.txt ? `<p class="fd-txt ${p.foto ? "" : "fd-so-txt"}">${feedTexto(p.txt)}</p>` : ""}
-    ${p.foto ? `<img class="fd-foto" src="${p.foto}" alt="Foto de ${esc(p.por || "")}" loading="lazy" data-fd-like2="${esc(p.id)}">` : ""}
+    ${p.txt ? `<p class="fd-txt ${temFoto ? "" : "fd-so-txt"}">${feedTexto(p.txt)}</p>` : ""}
+    ${temFoto ? (src ? `<img class="fd-foto" src="${esc(src)}" alt="Foto de ${esc(p.por || "")}" loading="lazy" data-fd-like2="${esc(p.id)}">` : `<div class="fd-foto fd-carregando">carregando a foto…</div>`) : ""}
     <div class="fd-acoes"><button type="button" class="fd-b ${curti ? "on" : ""}" data-fd-like="${esc(p.id)}" aria-pressed="${curti}">${curti ? "❤️" : "🤍"} <span>${lk.length || ""}</span></button>
       <button type="button" class="fd-b" data-fd-com="${esc(p.id)}">💬 <span>${cs.length || ""}</span></button>
-      ${p.foto ? `<button type="button" class="fd-b" data-fd-baixar="${esc(p.id)}" aria-label="Baixar a foto">⬇️</button>` : ""}
+      ${temFoto ? `<button type="button" class="fd-b" data-fd-baixar="${esc(p.id)}" aria-label="Baixar a foto">⬇️</button>` : ""}
       <button type="button" class="fd-b fd-salvar ${salvo ? "on" : ""}" data-fd-salvar="${esc(p.id)}" aria-pressed="${salvo}">${salvo ? "🔖 Salvo" : "🔖"}</button></div>
     ${lk.length ? `<p class="hint fd-quem">Curtido por ${esc(lk.slice(0, 3).map(x => x.quem.split(" ")[0]).join(", "))}${lk.length > 3 ? ` e mais ${lk.length - 3}` : ""}</p>` : ""}
     ${cs.length && !aberto ? `<button class="linkbtn fd-ver" type="button" data-fd-com="${esc(p.id)}">Ver ${cs.length > 1 ? `os ${cs.length} comentários` : "1 comentário"}</button>` : ""}
@@ -3785,7 +3786,7 @@ function feedMarcar(input, onPick) {
     input.value = (input.value.replace(/\s*$/, "") + " @" + nome + " ").trimStart(); onPick(x.id); box.remove(); input.focus(); };
 }
 function feedNovo(comFoto) {
-  let foto = "", men = [];
+  let foto = "", arq = null, men = [];
   modal(`<h3>Novo post</h3><div class="form">
     <div class="field full"><textarea id="fd-t" name="txt" rows="4" maxlength="1000" placeholder="Escreva algo… (use @ para marcar alguém)"></textarea></div>
     <div class="field full"><div class="actions"><label class="btn sm">📷 ${"Foto"}<input id="fdFotoIn" type="file" accept="image/*" hidden></label><button class="btn sm" type="button" id="fdMarcar">@ Marcar alguém</button></div>
@@ -3795,12 +3796,13 @@ function feedNovo(comFoto) {
     const txt = String(fd.get("txt") || "").trim(); if (!txt && !foto) { toast("Escreva algo ou escolha uma foto."); return; }
     const id = feedPre() + (ME.id || "eu") + "-" + Date.now().toString(36);
     men = men.filter(m => feedPessoas().some(x => x.id === m && txt.includes("@" + x.nome.split(" ").slice(0, 2).join(" "))));
-    closeModal(); S.feedSo = "";
-    api.set("config", id, { txt, foto, por: ME.adm || "", porId: ME.id || "", eq: ME.equipeLgnd || "", men, em: new Date().toISOString() })
+    closeModal(); S.feedSo = ""; const em = new Date().toISOString();
+    (async () => { const f = arq && !DEMO ? await fotoGuardar(arq, `feed/${curTopId()}/${ME.id}/post`, 720) : { foto, fotoPath: "" };
+      await api.set("config", id, { txt, ...f, por: ME.adm || "", porId: ME.id || "", eq: ME.equipeLgnd || "", men, em }); })()
       .then(() => toast(navigator.onLine === false ? "Post guardado: sobe quando a internet voltar" : "Postado!"), e => toast("Não consegui postar. " + erroAmigavel(e)));
   });
   const fi = $("#fdFotoIn");
-  fi.onchange = async e => { const fl = e.target.files[0]; if (!fl) return; try { foto = await reduzirFoto(fl, 1080); $("#fdFotoImg").src = foto; $("#fdFotoImg").hidden = false; } catch (er) { toast("Não consegui ler a foto."); } };
+  fi.onchange = async e => { const fl = e.target.files[0]; if (!fl) return; try { arq = fl; foto = await reduzirFoto(fl, 1080); $("#fdFotoImg").src = foto; $("#fdFotoImg").hidden = false; } catch (er) { toast("Não consegui ler a foto."); } };
   $("#fdMarcar").onclick = () => feedMarcar($("#fd-t"), id => { men.push(id); $("#fdMen").textContent = `${men.length} marcado(s)`; });
   if (comFoto) fi.click(); else $("#fd-t").focus();
 }
@@ -3812,9 +3814,11 @@ document.addEventListener("submit", e => {
   const c = { id: "c" + Date.now().toString(36), post: f.dataset.fdCform, txt: txt.slice(0, 400), men, em: new Date().toISOString() };
   inp.value = ""; f._men = []; feedSalvarEu({ coms: [...(feedEu().coms || []), c] });
 });
-function feedBaixar(p) {
-  if (!p || !p.foto) return; const a = document.createElement("a"); a.href = p.foto; a.download = `TOP ${topName()} - ${(p.por || "foto").split(" ")[0]} ${String(p.em).slice(0, 10)}.jpg`;
-  document.body.appendChild(a); a.click(); a.remove(); toast("Foto salva no aparelho");
+async function feedBaixar(p) {
+  if (!p || !(p.foto || p.fotoPath)) return; let href = p.foto, url = "";
+  if (!href) { try { const r = await sb.storage.from("adm-fotos").download(p.fotoPath); if (!r.data) throw 0; href = url = URL.createObjectURL(r.data); } catch { toast("Não consegui baixar a foto. Confira a internet."); return; } }
+  const a = document.createElement("a"); a.href = href; a.download = `TOP ${topName()} - ${(p.por || "foto").split(" ")[0]} ${String(p.em).slice(0, 10)}.jpg`;
+  document.body.appendChild(a); a.click(); a.remove(); if (url) setTimeout(() => URL.revokeObjectURL(url), 5000); toast("Foto salva no aparelho");
 }
 function marcarTrecho(i, campo) {
   const dias = pistaDias(), V = pistaVivo(), diaId = estadoMapa().dia.id, k = diaId + "-" + i;
@@ -4519,11 +4523,11 @@ async function gerarListaPdf(sp, wa) {
   doc.text(`Gerado em ${gerado} por ${adm}`, W - 12, 73, { align: "right" });
   const cols = sp.colunas, nc = cols.length;
   // seções (ex.: Família 01, Pré TOP): viram uma linha de título dentro da tabela
-  const body = [];
+  const body = [], dest = new Set();   // dest: linhas destacadas (ex.: quem ainda não é legendário)
   (sp.secoes || [{ linhas: sp.linhas }]).forEach(s => {
-    if (s.titulo) body.push([{ content: s.titulo.toUpperCase(), colSpan: nc, styles: { fillColor: [40, 24, 10], textColor: [255, 200, 150], fontStyle: "bold", fontSize: 8 } }]);
-    if (!s.linhas.length && s.titulo) body.push([{ content: "Nada aqui.", colSpan: nc, styles: { textColor: C.CINZA, fontStyle: "italic" } }]);
-    s.linhas.forEach(l => body.push(l.map(v => v == null || v === "" ? "-" : String(v))));
+    if (s.titulo) body.push([{ content: s.titulo.toUpperCase(), colSpan: nc, styles: { fillColor: [40, 24, 10], textColor: [255, 200, 150], fontStyle: "bold", fontSize: 8, halign: "left" } }]);
+    if (!s.linhas.length && s.titulo) body.push([{ content: "Nada aqui.", colSpan: nc, styles: { textColor: C.CINZA, fontStyle: "italic", halign: "left" } }]);
+    s.linhas.forEach(l => { if (l.dest) dest.add(body.length); body.push(l.map(v => v == null || v === "" ? "-" : String(v))); });
   });
   if (!body.length) body.push([{ content: "Nada nesta lista.", colSpan: nc, styles: { textColor: C.CINZA, fontStyle: "italic", halign: "center" } }]);
   const colStyles = {};
@@ -4537,6 +4541,7 @@ async function gerarListaPdf(sp, wa) {
     columnStyles: colStyles,
     didParseCell: c => {
       if (c.section === "head") { c.cell.styles.halign = (cols[c.column.index] || {}).al || "left"; return; }
+      if (c.section === "body" && dest.has(c.row.index) && c.cell.colSpan === 1) { c.cell.styles.fillColor = [255, 214, 165]; if (c.column.index <= 1) c.cell.styles.fontStyle = "bold"; if (c.cell.raw === "AINDA NÃO") { c.cell.styles.textColor = [170, 50, 0]; c.cell.styles.fontStyle = "bold"; } }
       const col = cols[c.column.index]; if (col && col.foto && c.cell.colSpan === 1) { c.cell.text = []; c.cell.styles.minCellHeight = 22; return; }
       if (!col || !col.status || c.cell.colSpan > 1) return;
       const cor = corStatus(String(c.cell.raw || "")); if (cor) { c.cell.styles.textColor = cor; c.cell.styles.fontStyle = "bold"; }
@@ -5786,6 +5791,28 @@ function acaoForm(a) {
   box.addEventListener("click", e => { const b = e.target.closest("[data-ev-tira]"); if (!b) return; if (box.children.length > 1) b.closest(".ev-resp").remove(); else toast("O evento precisa de pelo menos uma equipe."); tot(); });
   box.addEventListener("input", tot); tot();
 }
+/* PDF com quem se inscreveu até agora: simples (todos juntos) ou dividido pela área que serve. Quem ainda não é legendário vem destacado. */
+const LISTA_PDF = () => DEMO;   // demo desde 04/11/2026
+async function acaoListaPdf(a, porArea) {
+  const C = [...acaoConfirmados(a)].sort((x, y) => (y.servo ? 1 : 0) - (x.servo ? 1 : 0) || norm(x.nome || "").localeCompare(norm(y.nome || ""))),
+    nao = C.filter(x => x.leg === false), lg = C.length - nao.length,
+    legTxt = x => x.leg === false ? "AINDA NÃO" : "Sim", como = x => x.servo ? "Servo" : "Participante";
+  const linha = (x, i, area) => { const l = [i + 1, x.nome || "", como(x), legTxt(x), area ? (x.num || "") : (x.equipe || ""), x.tel || ""]; if (x.leg === false) l.dest = 1; return l; };
+  let secoes;
+  if (porArea) {
+    const areas = [...new Set([...acaoResp(a).map(r => r.eq), ...C.filter(x => x.leg !== false).map(x => x.equipe || "")])];
+    secoes = areas.map(e => { const L = C.filter(x => x.leg !== false && (x.equipe || "") === e); return { titulo: `${e || "Sem área informada"} · ${L.length}`, linhas: L.map((x, i) => linha(x, i, 1)) }; })
+      .filter(s => s.linhas.length || acaoResp(a).some(r => s.titulo.startsWith(r.eq + " ·")));
+    if (nao.length) secoes.push({ titulo: `Ainda não são legendários · ${nao.length}`, linhas: nao.map((x, i) => linha(x, i, 1)) });
+  }
+  try {
+    await gerarListaPdf({ titulo: "Confirmados", sub: `${a.titulo} · ${acaoQuando(a)}`, arquivo: `Confirmados ${a.titulo}${porArea ? " por area" : ""}`, orient: "portrait",
+      resumo: [["Confirmados", C.length], ["Legendários", lg], ["Ainda não são", nao.length, nao.length > 0]],
+      legenda: `${porArea ? "Dividida pela área que cada um serve." : "Servos primeiro, depois participantes."} Em destaque: quem ainda não é legendário.`,
+      colunas: [{ t: "#", w: 8, al: "right", cinza: true }, { t: "Nome", bold: true }, { t: "Vai como", w: 24 }, { t: "Legendário?", w: 24 }, { t: porArea ? "Nº" : "Área que serve", w: porArea ? 18 : 32 }, { t: "Telefone", w: 32 }],
+      ...(porArea ? { secoes } : { linhas: C.map((x, i) => linha(x, i)) }) });
+  } catch (e) { toast("Não consegui gerar o PDF. " + (e.message || "")); }
+}
 async function acaoXlsx(a) {
   const C = acaoConfirmados(a), dt = v => v ? new Date(v).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
   try { const X = await carregarXlsx(), wb = X.utils.book_new();
@@ -5868,7 +5895,8 @@ function acaoVer(a) {
   const C = acaoConfirmados(a), l = acaoLink(a), R = acaoResp(a), msg = `*${a.titulo}*\n${acaoQuando(a)}${a.local ? "\n" + a.local : ""}${R.length ? "\n\n" + R.map(x => `• ${x.eq}${x.oque ? ": " + x.oque : ""}${x.homens ? ` (${x.homens} homens)` : ""}`).join("\n") : ""}\n\n${R.length ? "Contamos com você!" : `A equipe ${a.equipe} convida você!`} Confirme sua presença: ${l}`, pode = podeEditar() || (ehCoordEq() && a.equipe === ME.equipeLgnd);
   modal(`<h3>${esc(a.titulo)}</h3><p class="hint" style="margin:0">${acaoTag(a)} · ${esc(acaoEquipeTxt(a))} · ${esc(acaoQuando(a))}${a.local ? " · " + esc(a.local) : ""}</p>
     <div class="actions" style="flex-wrap:wrap"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico("wa")} Mandar link no WhatsApp</a>
-      <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button><button class="btn" type="button" id="acPlano">${ico("upload")} PDF do evento</button>${podeEditar() && !ehCoordEq() ? `<button class="btn" type="button" id="acXls">${ico("upload")} Planilha dos confirmados</button>` : ""}${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}${pode && a.data >= hojeISO() ? `<button class="btn ${a.fechado ? "" : a.vagas && C.length >= a.vagas ? "primary" : "ghost"}" type="button" id="acFecha">${a.fechado ? "🔓 Reabrir inscrições" : a.vagas && C.length >= a.vagas ? "🔒 Vagas cheias: encerrar inscrições" : "🔒 Encerrar inscrições"}</button>` : ""}</div>
+      <button class="btn" type="button" id="acCopiar">Copiar link</button><button class="btn" type="button" id="acPdf">${ico("upload")} Convite em PDF</button><button class="btn" type="button" id="acPlano">${ico("upload")} PDF do evento</button>${podeEditar() && !ehCoordEq() ? `<button class="btn" type="button" id="acXls">${ico("upload")} Planilha dos confirmados</button>` : ""}${LISTA_PDF() && (podeEditar() || ehCoordEq()) ? `<button class="btn" type="button" id="acLista">${ico("upload")} Lista dos confirmados (PDF)</button>` : ""}${pode ? `<button class="btn ghost" type="button" id="acEd">${ico("edit")} Editar</button>` : ""}${pode && a.data >= hojeISO() ? `<button class="btn ${a.fechado ? "" : a.vagas && C.length >= a.vagas ? "primary" : "ghost"}" type="button" id="acFecha">${a.fechado ? "🔓 Reabrir inscrições" : a.vagas && C.length >= a.vagas ? "🔒 Vagas cheias: encerrar inscrições" : "🔒 Encerrar inscrições"}</button>` : ""}</div>
+    ${LISTA_PDF() ? `<div class="actions ev-lista-op" id="acListaOp" hidden><span class="hint">Lista dos ${C.length} confirmado(s):</span><button class="btn sm primary" type="button" data-ac-lista="simples">Simples</button><button class="btn sm primary" type="button" data-ac-lista="area">Dividida por área</button></div>` : ""}
     ${a.fechado ? `<p class="chk-alerta" style="margin:6px 0 0">Inscrições encerradas: quem abrir o link vê "Ops! As vagas deste evento já se encerraram".</p>` : ""}
     ${R.length ? `<section class="panel" style="margin-top:6px"><h3>O que precisamos das equipes <small>${R.reduce((n, x) => n + (x.homens || 0), 0)} homens</small></h3><p class="hint" style="margin:0 0 6px">Cada equipe tem o seu link: mande para os servos daquela área. Quem confirmar já entra na equipe certa.</p><div class="list">${R.map((x, i) => { const c = C.filter(y => y.equipe === x.eq).length, pode = podeEditar() || x.eq === ME.equipeLgnd;
       const m = `*Equipe ${x.eq}*, precisamos de vocês!\n${x.oque || a.titulo}\n\nConfirme no link: ${acaoLink(a, x)}`;
@@ -5886,6 +5914,8 @@ function acaoVer(a) {
   $("#acCopiar").onclick = () => copiarTexto(l, "Link copiado");
   $("#acPdf").onclick = () => acaoPdf(a).catch(e => toast("Não consegui gerar o PDF. " + (e.message || "")));
   const xl = $("#acXls"); if (xl) xl.onclick = () => acaoXlsx(a);
+  const lp = $("#acLista"); if (lp) lp.onclick = () => { const r = $("#acListaOp"); r.hidden = !r.hidden; };
+  document.querySelectorAll("[data-ac-lista]").forEach(b => b.onclick = () => acaoListaPdf(a, b.dataset.acLista === "area"));
   const fc = $("#acFecha"); if (fc) fc.onclick = () => { const fechado = !a.fechado;
     if (DEMO) try { const F = JSON.parse(localStorage.getItem("adm3-acao-fechados") || "{}"); if (fechado) F[a.id] = 1; else delete F[a.id]; localStorage.setItem("adm3-acao-fechados", JSON.stringify(F)); } catch (e) {}
     closeModal(); acaoSalvar(a.doc, { ...a, fechado }, fechado ? "Inscrições encerradas 🔒" : "Inscrições reabertas"); };
