@@ -3875,7 +3875,7 @@ function vFeed2() {
   const G = feedStoryGrupos(), meuEq = ME.equipeLgnd || "ADM";
   const grade = so === "fotos";
   return `<div class="fd2">
-  <header class="fd2-top"><h2 class="fd2-logo">Feed 3Colinas</h2><span class="grow"></span>
+  <header class="fd2-top"><button class="fd2-ic" type="button" data-fd2-nav="voltar" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 4.5 7.5 12l7.5 7.5"/></svg></button><h2 class="fd2-logo">Feed 3Colinas</h2><span class="grow"></span>
     <button class="fd2-ic" type="button" data-fd-novo="1" aria-label="Novo post"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><path d="M12 8v8M8 12h8"/></svg></button></header>
   <div class="fd2-stories" role="list">
     <button class="fd2-st" type="button" data-fd-novo="story" role="listitem"><span class="fd2-ring eu">${fdAv(ME.adm, meuEq, "lg")}<b class="fd2-mais">+</b></span><small>Seu story</small></button>
@@ -6517,6 +6517,7 @@ function render() {
   if (S.view !== "aovivo") S.mapaCheio = false;
   document.body.classList.toggle("av-mapa-cheio", !!S.mapaCheio);
   if (S.view !== "feed") S.feedVisto0 = undefined;
+  document.body.classList.toggle("fd2-on", S.view === "feed" && FEED2());   // Feed 3Colinas em tela cheia, sem o cabeçalho do app
   if (S.view === "visita") montarMapaVisita(); else if (mapaVT) vtParar();
   if (S.view === "aovivo") montarMapaVivo(); else if (mapaAV) { try { mapaAV.map.remove(); } catch (e) {} mapaAV = null; }
   if (nfcPendente && ME.acesso && S.P.length && !$("#modalRoot").innerHTML) { const t = nfcPendente; nfcPendente = ""; try { history.replaceState(null, "", location.pathname + location.search.replace(/[?&]nfc=[\w-]+/, "").replace(/^&/, "?") + location.hash); } catch {} setTimeout(() => abrirPorToken(t), 200); }
@@ -7166,6 +7167,7 @@ document.addEventListener("click", e => {
   if (d.prevEd) { prevForm(); return; }
   if (d.agPass) { S.agPass = !S.agPass; render(); return; }
   if (d.fdNovo) { feedNovo(d.fdNovo === "foto" || d.fdNovo === "story", d.fdNovo === "story"); return; }
+  if (d.fd2Nav) { const b = $("#backBtn"); if (b && !b.hidden) b.click(); else { const x = document.createElement("button"); x.dataset.go = "painel"; document.body.appendChild(x); x.click(); x.remove(); } return; }
   if (d.fdSt) { feedStories(d.fdSt); return; }
   if (d.fdReac) { feedReacBar(t, d.fdReac); return; }
   if (d.fdR) { const [id, em] = d.fdR.split("|"); feedReagir(id, em); document.querySelectorAll(".fd2-rbar").forEach(x => x.remove()); return; }
