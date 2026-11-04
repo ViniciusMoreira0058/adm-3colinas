@@ -1198,8 +1198,8 @@ const PRECO_ESTOQUE = () => true; // preços no estoque, custo por MRE e busca e
 const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
-const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["meta", "agenda", "participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
-  ["Operação", ["feed", "checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista", "visita"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
+const MENU_GRUPOS = [["", ["painel", "feed"]], ["Pessoas", ["meta", "agenda", "participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
+  ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista", "visita"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
 /* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
