@@ -3875,7 +3875,7 @@ function vFeed2() {
   const G = feedStoryGrupos(), meuEq = ME.equipeLgnd || "ADM";
   const grade = so === "fotos";
   return `<div class="fd2">
-  <header class="fd2-top"><button class="fd2-ic" type="button" data-fd2-nav="voltar" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 4.5 7.5 12l7.5 7.5"/></svg></button><h2 class="fd2-logo">Feed 3Colinas</h2><span class="grow"></span>
+  <header class="fd2-top"><button class="fd2-ic" type="button" data-fd2-nav="voltar" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M15 4.5 7.5 12l7.5 7.5"/></svg></button><img class="fd2-marca" src="assets/logo.png" alt=""><h2 class="fd2-logo">Feed 3Colinas</h2><span class="grow"></span>
     <button class="fd2-ic" type="button" data-fd-novo="1" aria-label="Novo post"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><path d="M12 8v8M8 12h8"/></svg></button></header>
   <div class="fd2-stories" role="list">
     <button class="fd2-st" type="button" data-fd-novo="story" role="listitem"><span class="fd2-ring eu">${fdAv(ME.adm, meuEq, "lg")}<b class="fd2-mais">+</b></span><small>Seu story</small></button>
