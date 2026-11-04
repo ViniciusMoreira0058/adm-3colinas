@@ -6071,8 +6071,8 @@ function metaFaltamCoord() {
     const m = `*Equipe ${eq}*, precisamos de vocês!\n${r.oque || a.titulo}\n\nConfirme no link: ${acaoLink(a, r)}`;
     return `<div class="li"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint" style="display:block">${esc(acaoQuando(a))} · faltam ${f} de ${r.homens}</small></span><a class="btn sm primary" href="https://wa.me/?text=${encodeURIComponent(m)}" target="_blank" rel="noopener">${ico("wa")} Chamar a equipe</a></div>`; }).join("")}</div></section>`;
 }
-const INSC_COORD = () => DEMO;   // 04/11/2026: só na demo até "Jogar no app real"
-const VT_TAR = () => DEMO;       // 04/11/2026: anotação da visita técnica vira tarefa (só na demo)
+const INSC_COORD = () => true;   // app real desde 04/11/2026 (push: supabase/avisos-inscricao.sql)
+const VT_TAR = () => true;       // app real desde 04/11/2026: anotação da visita técnica vira tarefa
 /* Dashboard do coordenador: quem da equipe dele se inscreveu nos próximos eventos (o que chegou desde a última vez fica marcado "novo") */
 function metaInscritosCoord() {
   const eq = ME.equipeLgnd; if (!eq || !INSC_COORD()) return "";
