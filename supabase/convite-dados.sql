@@ -71,7 +71,7 @@ begin
   if length(tk) < 8 or tk !~ '^[a-z0-9]+$' then return null; end if;
   select jsonb_build_object('top', substring(d.id from '^acao-([^-]+)-'), 'a', x.v->>'id', 't', tk,
            'ev', jsonb_build_object('titulo', x.v->'titulo', 'data', x.v->'data', 'hora', x.v->'hora', 'local', x.v->'local',
-                                    'endereco', x.v->'endereco', 'equipe', x.v->'equipe', 'aberto', x.v->'aberto', 'resp', x.v->'resp'))
+                                    'endereco', x.v->'endereco', 'equipe', x.v->'equipe', 'aberto', x.v->'aberto', 'resp', x.v->'resp', 'gratis', x.v->'gratis'))
     into r from public.adm_docs d, jsonb_array_elements(coalesce(d.data->'lista', '[]'::jsonb)) x(v)
     where d.col = 'config' and d.id like 'acao-%' and x.v->>'token' = tk limit 1;
   return r;

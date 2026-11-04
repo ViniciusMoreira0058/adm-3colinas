@@ -164,6 +164,7 @@ const VIEWS = [
   { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "comunicados", l: "Comunicados", c: "Comunicados", i: "wa", need: ["participantes", "legendarios"] },   // recado para senderistas e legendários pelo WhatsApp
+  { id: "feed", l: "Feed do TOP", c: "Feed", i: "heart", all: true, menu: true },   // fotos e recados da equipe (rede social do TOP)
   { id: "comunicacao", l: "Comunicação", c: "Comunicação", i: "chat", all: true, menu: true },   // recados, lembretes e aprendizados
   { id: "checkin", l: "Check-in", c: "Check-in", i: "door", need: ["participantes"] },
   { id: "remedios", l: "Remédios", c: "Remédios", i: "pill", need: [] , all: true, menu: true },
@@ -183,7 +184,6 @@ const VIEWS = [
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
-  { id: "feed", l: "Feed do TOP", c: "Feed", i: "heart", all: true, menu: true },   // fotos e recados da equipe (rede social do TOP)
   { id: "visita", l: "Visita técnica", c: "Visita", i: "route", all: true, menu: true },   // anotações no mapa da pista nas visitas técnicas (ADM e coordenadores)
   { id: "meta", l: "Meta do TOP", c: "Meta", i: "chart", all: true, menu: true },   // meta de inscrições até o TOP e indicações das equipes (Estratégia 150)
   { id: "agenda", l: "Agenda", i: "clock", all: true, menu: true },   // todos os eventos de divulgação e o TOP, com quem vai e o link de presença
@@ -289,7 +289,7 @@ function renderNav() {
   const online = onlineAdms().length;
   counts.usuarios = online ? `${online} on` : null;
   const novas = ME.acesso ? notifNovas() : 0;
-  const navBtn = v => `<button type="button" data-go="${v.id}" title="${esc(v.l)}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : v.id === "comunicacao" && comNaoLidas() + lembretesHoje().length ? `<span class="badge num">${comNaoLidas() + lembretesHoje().length}</span>` : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : v.id === "importacao" && impFaltam() ? `<span class="badge num">${impFaltam()}</span>` : ""}</button>`;
+  const navBtn = v => `<button type="button" data-go="${v.id}" title="${esc(v.l)}" ${S.view === v.id ? 'aria-current="page"' : ""}>${ico(v.i)}<span>${v.l}</span>${v.id === "notificacoes" ? (novas ? `<span class="badge num">${novas}</span>` : "") : v.id === "comunicacao" && comNaoLidas() + lembretesHoje().length ? `<span class="badge num">${comNaoLidas() + lembretesHoje().length}</span>` : counts[v.id] != null ? `<span class="count num">${counts[v.id]}</span>` : v.id === "importacao" && impFaltam() ? `<span class="badge num">${impFaltam()}</span>` : v.id === "feed" && FEED() && feedNovos() ? `<span class="badge num" title="posts novos">${feedNovos()}</span>` : ""}</button>`;
   const vis = VIEWS.filter(v => canSee(v) && (!v.all || v.menu));
   document.body.classList.toggle("org", ORG());
   document.body.classList.toggle("d2", D2());
@@ -1199,7 +1199,7 @@ const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
 const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["meta", "agenda", "participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
-  ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista", "visita", "feed"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
+  ["Operação", ["feed", "checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista", "visita"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
 /* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
@@ -3706,6 +3706,9 @@ const FEED = () => DEMO;
 const feedPre = () => "post-" + curTopId() + "-";
 const feedEuId = (id = ME.id || "eu") => "feedeu-" + curTopId() + "-" + id;
 const feedEu = () => (S.cfgDocs || {})[feedEuId()] || {};
+// bolinha de novidade no menu: posts dos outros desde a última vez que a pessoa abriu o Feed (fica neste aparelho)
+const feedVistoK = () => "adm3-feed-visto-" + (ME.id || "");
+const feedNovos = () => { const v = store.get(feedVistoK()) || ""; return feedPosts().filter(p => p.porId !== ME.id && String(p.em) > v).length; };
 function feedPosts() {
   const pre = feedPre();
   return Object.entries(S.cfgDocs || {}).filter(([k, d]) => k.startsWith(pre) && d && !d.apagado).map(([k, d]) => ({ ...d, id: k })).sort((a, b) => String(b.em).localeCompare(String(a.em)));
@@ -3741,6 +3744,8 @@ async function feedSalvarEu(patch, msg) {
   catch (e) { toast("Não consegui salvar. " + erroAmigavel(e)); }
 }
 function vFeed() {
+  if (S.feedVisto0 === undefined) S.feedVisto0 = store.get(feedVistoK()) || "";
+  const ult = feedPosts()[0]; if (ult && String(ult.em) > (store.get(feedVistoK()) || "")) setTimeout(() => { store.set(feedVistoK(), String(ult.em)); renderNav(); }, 0);
   const P = feedPosts(), A = feedAtiv(), eu = feedEu(), men = feedMencoes(), so = S.feedSo || "";
   const L = so === "salvos" ? P.filter(p => (eu.salvos || {})[p.id]) : so === "meus" ? P.filter(p => p.porId === ME.id) : so === "fotos" ? P.filter(p => p.foto) : P;
   if (men.length && !S.feedMenAviso) S.feedMenAviso = men.length;
@@ -3755,7 +3760,7 @@ function vFeed() {
 function feedCard(p, A, eu) {
   const lk = A.likes[p.id] || [], cs = A.coms[p.id] || [], curti = !!(eu.likes || {})[p.id], salvo = !!(eu.salvos || {})[p.id], meu = p.porId === ME.id, aberto = S.feedCom === p.id;
   return `<article class="panel fd-post" id="fd-${esc(p.id)}">
-    <header class="fd-h"><span class="fd-av">${feedIni(p.por)}</span><span class="grow"><b>${esc(p.por || "Alguém")}</b><small class="hint" style="display:block">${p.eq ? esc(p.eq) + " · " : ""}${feedQuando(p.em)}</small></span>
+    <header class="fd-h"><span class="fd-av">${feedIni(p.por)}</span><span class="grow"><b>${esc(p.por || "Alguém")}</b><small class="hint" style="display:block">${p.eq ? esc(p.eq) + " · " : ""}${feedQuando(p.em)}${p.porId !== ME.id && S.feedVisto0 !== undefined && String(p.em) > S.feedVisto0 ? ` <span class="fd-novo-dot">● novo</span>` : ""}</small></span>
       ${meu || S.isOwner ? `<button class="linkbtn" type="button" data-fd-del="${esc(p.id)}" aria-label="Apagar post">${ico("trash")}</button>` : ""}</header>
     ${p.txt ? `<p class="fd-txt ${p.foto ? "" : "fd-so-txt"}">${feedTexto(p.txt)}</p>` : ""}
     ${p.foto ? `<img class="fd-foto" src="${p.foto}" alt="Foto de ${esc(p.por || "")}" loading="lazy" data-fd-like2="${esc(p.id)}">` : ""}
@@ -5707,7 +5712,7 @@ const acaoCuidar = a => a.objetivo ? a.objetivo === "cuidar" : ACAO_CUIDAR.inclu
 const acaoObj = a => a.objetivo === "outro" ? { k: "outro", tag: a.objetivoTxt || "Outro", cls: "ev-outro", txt: a.objetivoTxt || "" }
   : acaoCuidar(a) ? { k: "cuidar", tag: "Legendários", cls: "ev-cuidar", txt: "Cuidar dos legendários: estar junto de quem já passou pelo TOP e fortalecer a irmandade." }
   : { k: "captar", tag: "Divulgação", cls: "ev-captar", txt: "Trazer senderistas: apresentar o Legendários e levar mais homens para o próximo TOP." };
-const acaoTag = a => { const o = acaoObj(a); return `<span class="tag ${o.cls}">${esc(o.tag)}</span>`; };   // evento com os legendários (cuidar) x divulgação (trazer senderistas)
+const acaoTag = a => { const o = acaoObj(a); return `<span class="tag ${o.cls}">${esc(o.tag)}</span>${a.gratis ? ` <span class="tag ev-gratis">GRATUITO</span>` : ""}`; };   // evento com os legendários (cuidar) x divulgação (trazer senderistas)
 const ACAO_LS = "adm3-acao-link";
 const acaoDocMeu = () => "acao-" + curTopId() + "-" + (ME.id || "eu");
 function acoesTodas() { const pre = "acao-" + curTopId() + "-"; return Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).flatMap(([k, d]) => (d.lista || []).map(x => ({ ...x, doc: k }))).sort((a, b) => String(a.data + a.hora).localeCompare(String(b.data + b.hora))); }
@@ -5722,7 +5727,7 @@ function acaoConfirmados(a) {
   return [...m.values()].sort((x, y) => (y.servo ? 1 : 0) - (x.servo ? 1 : 0));
 }
 const acaoLink = (a, r) => { if (!DEMO && S.linkCurto && a.token) return `${location.origin}/c/${a.token}${r ? "-" + (acaoResp(a).findIndex(x => x.eq === r.eq) + 1) : ""}`;
-  const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: r ? r.eq : acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, v: 2, x: a.aberto && !r ? 1 : 0, ...(r ? { fe: r.eq, m: String(r.oque || "").slice(0, 160), n: r.homens || 0 } : {}) };
+  const info = { t: a.titulo, d: a.data, h: a.hora, l: a.local, e: a.endereco, q: r ? r.eq : acaoResp(a).length > 1 ? "Legendários Base 3 Colinas" : a.equipe, v: 2, x: a.aberto && !r ? 1 : 0, ...(a.gratis ? { g: 1 } : {}), ...(r ? { fe: r.eq, m: String(r.oque || "").slice(0, 160), n: r.homens || 0 } : {}) };
   return `${location.origin}${DEMO ? location.pathname.replace(/[^/]*$/, "") + "acao.html" : "/api/convite"}?t=${encodeURIComponent(a.token)}&top=${encodeURIComponent(curTopId())}&a=${encodeURIComponent(a.id)}&i=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(info)))))}${DEMO ? "&demo=1" : ""}`; };
 const acaoQuando = a => { const d = a.data ? new Date(a.data + "T12:00:00") : null; return (d ? d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) : "data a definir") + (a.hora ? " às " + a.hora : ""); };
 function acaoSalvar(doc, item, msg, apagar) {
@@ -5745,6 +5750,7 @@ function acaoForm(a) {
     <div class="field"><label for="ac-ob">Objetivo</label><select id="ac-ob" name="objetivo" class="sel">${[["captar", "Divulgação: trazer senderistas"], ["cuidar", "Cuidar dos legendários"], ["outro", "Outro (escrever)"]].map(([k, l]) => `<option value="${k}" ${acaoObj(a).k === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="field" id="ac-obw" ${acaoObj(a).k === "outro" ? "" : "hidden"}><label for="ac-obt">Qual objetivo?</label><input id="ac-obt" name="objetivoTxt" value="${esc(a.objetivoTxt || "")}" placeholder="ex.: Arrecadar alimentos" maxlength="40"></div>
     <label class="field full ck-line"><input type="checkbox" name="aberto" ${a.aberto ? "checked" : ""}> Convite aberto: quem ainda não é legendário também pode confirmar</label>
+    <label class="field full ck-line"><input type="checkbox" name="gratis" ${a.gratis ? "checked" : ""}> 🟢 Evento gratuito: mostra <b>GRATUITO</b> bem grande na prévia do link e no convite</label>
     <div class="field full"><label for="ac-ti">Título</label><input id="ac-ti" name="titulo" value="${esc(a.titulo || "")}" placeholder="ex.: Apresentação na Igreja Batista Central" required></div>
     <div class="field"><label for="ac-d">Dia</label><input id="ac-d" name="data" type="date" value="${esc(a.data || "")}" required></div>
     <div class="field"><label for="ac-h">Hora</label><input id="ac-h" name="hora" type="time" value="${esc(a.hora || "")}"></div>
@@ -5763,7 +5769,7 @@ function acaoForm(a) {
     if ($("#evResp")) { const E = fd.getAll("req-eq"), O = fd.getAll("req-o"), Hh = fd.getAll("req-h"), vis = new Set();
       resp = E.map((eq, i) => ({ eq: String(eq), oque: String(O[i] || "").trim(), homens: +Hh[i] || 0 })).filter(x => x.eq && !vis.has(x.eq) && vis.add(x.eq));
       if (!resp.length) { toast("Coloque pelo menos uma equipe."); return; } }
-    const obj = { objetivo: String(fd.get("objetivo") || ""), objetivoTxt: fd.get("objetivo") === "outro" ? String(fd.get("objetivoTxt") || "").trim().slice(0, 40) : "", aberto: !!fd.get("aberto") };
+    const obj = { objetivo: String(fd.get("objetivo") || ""), objetivoTxt: fd.get("objetivo") === "outro" ? String(fd.get("objetivoTxt") || "").trim().slice(0, 40) : "", aberto: !!fd.get("aberto"), gratis: !!fd.get("gratis") };
     if (obj.objetivo === "outro" && !obj.objetivoTxt) { toast("Escreva qual é o objetivo."); return; }
     const item = { ...a, ...obj, id: a.id || "ac" + Date.now().toString(36), token: a.token || Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4), tipo: a.tipo && a.objetivo === obj.objetivo ? a.tipo : obj.objetivo === "cuidar" ? "Encontro de legendários" : obj.objetivo === "outro" ? "Outro" : "Encontro de apresentação", titulo, data,
       hora: String(fd.get("hora") || ""), local: String(fd.get("local") || "").trim(), endereco: String(fd.get("endereco") || "").trim(), equipe: resp ? resp[0].eq : String(fd.get("equipe") || ""), vagas: resp ? resp.reduce((n, x) => n + x.homens, 0) : +fd.get("vagas") || 0, ...(resp ? { resp } : {}),
@@ -5843,6 +5849,7 @@ async function acaoPdf(a) {
   caixa("ONDE", a.local || "a definir", y); y += 25;
   if (a.endereco) { caixa("ENDEREÇO", a.endereco, y); y += 25; }
   if (a.obs) { doc.setTextColor(255, 210, 160); doc.setFont("helvetica", "italic"); doc.setFontSize(12); doc.text(doc.splitTextToSize(a.obs, W - 50), W / 2, y + 6, { align: "center" }); y += 16; }
+  if (a.gratis) { doc.setFillColor(22, 163, 74); doc.roundedRect(W / 2 - 34, y + 2, 68, 14, 3, 3, "F"); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.text("GRATUITO", W / 2, y + 11.6, { align: "center", charSpace: 1 }); y += 18; }
   doc.setFillColor(...C.LARANJA); doc.roundedRect(24, y + 4, W - 48, 30, 4, 4, "F");
   doc.setTextColor(26, 12, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text("CONFIRME SUA PRESENÇA", W / 2, y + 15, { align: "center" });
   doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.text("Toque aqui ou use o link enviado no grupo", W / 2, y + 23, { align: "center" });
@@ -6340,6 +6347,7 @@ function render() {
   document.body.classList.toggle("av-tv", modoTv());
   if (S.view !== "aovivo") S.mapaCheio = false;
   document.body.classList.toggle("av-mapa-cheio", !!S.mapaCheio);
+  if (S.view !== "feed") S.feedVisto0 = undefined;
   if (S.view === "visita") montarMapaVisita(); else if (mapaVT) vtParar();
   if (S.view === "aovivo") montarMapaVivo(); else if (mapaAV) { try { mapaAV.map.remove(); } catch (e) {} mapaAV = null; }
   if (nfcPendente && ME.acesso && S.P.length && !$("#modalRoot").innerHTML) { const t = nfcPendente; nfcPendente = ""; try { history.replaceState(null, "", location.pathname + location.search.replace(/[?&]nfc=[\w-]+/, "").replace(/^&/, "?") + location.hash); } catch {} setTimeout(() => abrirPorToken(t), 200); }
@@ -8436,7 +8444,7 @@ function conectarDados() {
     S.cronoCriando = S.cronoCriando || new Set();
     if (ficha && navigator.onLine !== false && !db.estado().offline && !S.cfgDocs[ficha] && !S.cronoCriando.has(ficha)) {
       S.cronoCriando.add(ficha); db.doc("config/" + ficha).set({ _adm: eu() }).catch(() => {}).finally(() => S.cronoCriando.delete(ficha)); }
-    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios", "aovivo", "ocorrencias", "tops", "visita", "feed"].includes(S.view)) render();
+    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios", "aovivo", "ocorrencias", "tops", "visita", "feed"].includes(S.view)) render(); else if (FEED()) renderNav();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });

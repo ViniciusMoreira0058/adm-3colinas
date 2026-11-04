@@ -34,6 +34,7 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
 @media (max-width:480px){.grid{grid-template-columns:1fr}}
 .fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px}.fotos .foto img,.fotos .foto .v{width:100%;height:120px;border-radius:12px}
 #placa{text-transform:uppercase;letter-spacing:.1em;font-weight:800;font-size:20px}
+.gratis{margin:0 auto 14px;width:max-content;padding:10px 26px;border-radius:14px;background:#16a34a;color:#fff;font-weight:900;font-size:28px;letter-spacing:2px;border:3px solid #fff;box-shadow:0 6px 18px rgba(0,0,0,.35);transform:rotate(-2deg)}
 </style>
 <style>form{display:flex;flex-direction:column;gap:14px}.info{display:flex;flex-direction:column;gap:8px}.info div{display:flex;gap:10px;align-items:flex-start}.info span{font-size:20px;width:26px;text-align:center}.info b{display:block}
 #legW .sn input:checked+span{background:var(--accent);border-color:var(--accent);color:#111}
@@ -79,6 +80,11 @@ output{display:block;padding:11px 12px;border-radius:10px;background:var(--card2
     c.innerHTML = st === "passou" ? `<b>📅</b><h1>Este evento já passou</h1><p class="muted">Fique de olho no grupo: logo tem outro encontro e você vai receber o convite.</p>`
       : `<b>🙏</b><h1>Ops! As vagas deste evento já se encerraram</h1><p class="muted">Obrigado pelo interesse! Fique de olho no grupo: logo tem outro encontro.</p>`;
     f.after(c); };
+  // evento gratuito: selo bem grande em cima das informações (link novo traz g=1; link antigo consulta o evento)
+  const gratis = () => { if ($("#gratis")) return; const g = document.createElement("div"); g.id = "gratis"; g.className = "gratis"; g.textContent = "GRATUITO"; $("#info").before(g); };
+  if (I.g) gratis();
+  else if (!demo && token) fetch(URL_SB + "/rest/v1/rpc/adm_acao_link", { method: "POST", headers: { "Content-Type": "application/json", apikey: KEY_SB }, body: JSON.stringify({ p_code: token }) })
+    .then(r => r.ok ? r.json() : null).then(j => { if (j && j.ev && j.ev.gratis) gratis(); }).catch(() => {});
   const hoje = new Date().toLocaleDateString("sv", { timeZone: "America/Sao_Paulo" });
   if (I.d && I.d < hoje) travar("passou");
   else if (demo) { try { if ((JSON.parse(localStorage.getItem("adm3-acao-fechados") || "{}"))[acao]) travar("fechado"); } catch (x) {} }
