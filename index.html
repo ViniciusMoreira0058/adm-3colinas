@@ -85,6 +85,8 @@ button { cursor: pointer; }
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav button { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 600; text-align: left; }
 .nav button svg { width: 18px; height: 18px; flex: none; }
+.nav button[data-go="feed"], .nav button[data-go="feed"][aria-current="page"] { color: #ff7a1a !important; }
+.nav button[data-go="feed"] svg { color: #ff7a1a; }
 .nav button:hover { background: var(--surface2); color: var(--fg); }
 .nav button[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
 .nav .count { margin-left: auto; font-size: 12px; color: var(--muted); }
