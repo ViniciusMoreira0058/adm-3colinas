@@ -3842,7 +3842,7 @@ async function feedBaixar(p) {
   $("#fdGal").onclick = () => { compartilhar(); closeModal(); };
 }
 /* ---------- Feed estilo Instagram (demo, 04/11/2026): stories por equipe, reações do TOP, post fixado pela ADM ---------- */
-const FEED2 = () => DEMO;
+const FEED2 = () => true;   // app real desde 04/11/2026
 const FD_REAC = [["🔥", "Brutal"], ["💪", "Força"], ["🙏", "Oração"], ["🫡", "Legendário"], ["❤️", "Amei"]];
 const fdCor = eq => { let h = 0; for (const c of String(eq || "ADM")) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 const fdAv = (nome, eq, cls = "") => `<span class="fd2-av ${cls}" style="--h:${fdCor(eq)}">${feedIni(nome)}</span>`;
