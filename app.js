@@ -164,7 +164,7 @@ const VIEWS = [
   { id: "equipes", l: "Equipes LGND", c: "Equipes", i: "group", need: ["legendarios"] },
   { id: "pendencias", l: "Pendências", i: "bell", need: ["participantes", "legendarios"] },
   { id: "comunicados", l: "Comunicados", c: "Comunicados", i: "wa", need: ["participantes", "legendarios"] },   // recado para senderistas e legendários pelo WhatsApp
-  { id: "feed", l: "Feed do TOP", c: "Feed", i: "heart", all: true, menu: true },   // fotos e recados da equipe (rede social do TOP)
+  { id: "feed", l: "Feed 3Colinas", c: "Feed 3Colinas", i: "heart", all: true, menu: true },   // fotos e recados da equipe (rede social do TOP)
   { id: "comunicacao", l: "Comunicação", c: "Comunicação", i: "chat", all: true, menu: true },   // recados, lembretes e aprendizados
   { id: "checkin", l: "Check-in", c: "Check-in", i: "door", need: ["participantes"] },
   { id: "remedios", l: "Remédios", c: "Remédios", i: "pill", need: [] , all: true, menu: true },
@@ -3757,7 +3757,7 @@ function vFeed() {
     setTimeout(() => feedSalvarEu({ vistos: v }).finally(() => { S.feedVisSalvando = 0; }), 400); }
   const L = so === "salvos" ? P.filter(p => (eu.salvos || {})[p.id]) : so === "meus" ? P.filter(p => p.porId === ME.id) : so === "fotos" ? P.filter(p => p.foto || p.fotoPath) : P;
   if (men.length && !S.feedMenAviso) S.feedMenAviso = men.length;
-  return `<div class="head"><div><h2>Feed do TOP</h2><p class="sub">Fotos e recados da equipe, ao vivo. Curta, comente e marque quem estava junto.</p></div></div>
+  return `<div class="head"><div><h2>Feed 3Colinas</h2><p class="sub">Fotos e recados da equipe, ao vivo. Curta, comente e marque quem estava junto.</p></div></div>
   ${men.length ? `<section class="panel fd-avisos"><h3>🔔 Marcaram você <small>${men.length}</small><button class="linkbtn" type="button" data-fd-visto="1">marcar como visto</button></h3>
     <div class="list">${men.slice(0, 5).map(x => `<button class="li" type="button" data-fd-ir="${esc(x.post)}"><span class="grow"><b>${esc(x.quem)}</b> marcou você ${x.tipo === "com" ? "num comentário" : "num post"}<small class="hint" style="display:block">${esc(String(x.txt || "").slice(0, 80))}</small></span><small class="hint">${feedQuando(x.em)}</small></button>`).join("")}</div></section>` : ""}
   <section class="panel fd-novo"><div class="fd-novo-l"><span class="fd-av">${feedIni(ME.adm)}</span><button class="fd-abrir" type="button" data-fd-novo="1">No que está pensando, ${esc((ME.adm || "").split(" ")[0])}?</button></div>
@@ -3875,7 +3875,7 @@ function vFeed2() {
   const G = feedStoryGrupos(), meuEq = ME.equipeLgnd || "ADM";
   const grade = so === "fotos";
   return `<div class="fd2">
-  <header class="fd2-top"><h2 class="fd2-logo">Feed do TOP</h2><span class="grow"></span>
+  <header class="fd2-top"><h2 class="fd2-logo">Feed 3Colinas</h2><span class="grow"></span>
     <button class="fd2-ic" type="button" data-fd-novo="1" aria-label="Novo post"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><path d="M12 8v8M8 12h8"/></svg></button></header>
   <div class="fd2-stories" role="list">
     <button class="fd2-st" type="button" data-fd-novo="story" role="listitem"><span class="fd2-ring eu">${fdAv(ME.adm, meuEq, "lg")}<b class="fd2-mais">+</b></span><small>Seu story</small></button>
