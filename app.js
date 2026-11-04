@@ -3575,9 +3575,10 @@ function vVisita() {
   </section>
   <section class="panel"><h3>Anotações de ${vtDiaTxt(dia).toLowerCase() === "hoje" ? "hoje" : esc(vtDiaTxt(dia))} <small>${T.length}</small></h3>
     ${T.length ? `<div class="list">${T.map((x, i) => { const t = vtTipo(x.tipo), meuDoc = x.doc === meu;
+      const tar = quadro().find(q => q.visita === x.doc + "|" + x.id), tg = tar && grupos().find(g => g.id === (tar.pegou || {}).grupo);
       return `<div class="li vt-li ${x.feito ? "vt-feito" : ""}"><span class="vt-n" style="--c:${t.c}">${i + 1}</span><span class="grow"><small class="hint">${t.e} ${esc(t.l)}${x.feito ? " · ✓ resolvido" : ""}</small><b style="display:block">${esc(x.txt)}</b>
-        <small class="hint">${esc(x.por || "")}${x.eq ? " · " + esc(x.eq) : ""} · ${vtHora(x.em)}</small>${x.foto ? `<img class="vt-foto" src="${x.foto}" alt="Foto da anotação ${i + 1}">` : ""}</span>
-        <span class="actions vt-li-a"><button class="btn sm" type="button" data-vt-ver="${esc(x.doc)}|${esc(x.id)}">Ver no mapa</button>${meuDoc ? `<button class="btn sm" type="button" data-vt-ok="${esc(x.id)}">${x.feito ? "Reabrir" : "✓ Resolvido"}</button><button class="btn sm ghost" type="button" data-vt-ed="${esc(x.id)}">Editar</button>` : ""}</span></div>`; }).join("")}</div>`
+        <small class="hint">${esc(x.por || "")}${x.eq ? " · " + esc(x.eq) : ""} · ${vtHora(x.em)}</small>${tar ? `<small class="vt-tar ${tar.feito ? "ok" : ""}">📋 Virou tarefa${tg ? " de " + esc(tg.nome) : ""}${tar.prazo ? " · até " + new Date(tar.prazo + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : ""}${tar.feito ? " · ✓ feita" : ""}</small>` : ""}${x.foto ? `<img class="vt-foto" src="${x.foto}" alt="Foto da anotação ${i + 1}">` : ""}</span>
+        <span class="actions vt-li-a"><button class="btn sm" type="button" data-vt-ver="${esc(x.doc)}|${esc(x.id)}">Ver no mapa</button>${VT_TAR() && !tar && x.tipo !== "feito" && podeEditar() && !ehCoordEq() ? `<button class="btn sm" type="button" data-vt-tar="${esc(x.doc)}|${esc(x.id)}">📋 Virar tarefa</button>` : ""}${meuDoc ? `<button class="btn sm" type="button" data-vt-ok="${esc(x.id)}">${x.feito ? "Reabrir" : "✓ Resolvido"}</button><button class="btn sm ghost" type="button" data-vt-ed="${esc(x.id)}">Editar</button>` : ""}</span></div>`; }).join("")}</div>`
       : `<div class="empty">Nenhuma anotação ${S.vtQuem === "minhas" ? "sua " : ""}neste dia. Toque em "Nova anotação" ou toque no mapa.</div>`}
   </section>`;
 }
@@ -5516,7 +5517,8 @@ function metaCoordCard() {
     <p class="hint" style="margin:0">Placar geral: <b class="num">${D.inscritos}</b> inscritos de ${D.meta} · meta para hoje ${D.metaHoje}</p>
     <div class="actions"><button class="btn primary" type="button" data-ind-novo="1">${ico("plus")} Indicar nome</button><button class="btn" type="button" data-acao-novo="1">${ico("plus")} Novo evento</button>${mine.length ? `<span class="hint">${mine.length} indicação(ões) da equipe</span>` : ""}</div></section>
   ${metaFaltamCoord()}
-  ${"Notification" in window && Notification.permission === "default" ? `<section class="panel"><h3>${ico("bell")} Avisos no celular</h3><p class="hint" style="margin:0 0 8px">Ative para saber na hora quando a ADM mandar uma tarefa, e 2 dias antes de um evento se faltar gente da sua equipe.</p><div class="actions"><button class="btn primary" type="button" data-act="ativar-notif">${ico("bell")} Ativar avisos</button></div></section>` : ""}
+  ${metaInscritosCoord()}
+  ${"Notification" in window && Notification.permission === "default" ? `<section class="panel"><h3>${ico("bell")} Avisos no celular</h3><p class="hint" style="margin:0 0 8px">Ative para saber na hora quando a ADM mandar uma tarefa, ${INSC_COORD() ? "quando alguém da sua equipe se inscrever num evento, " : ""}e 2 dias antes de um evento se faltar gente da sua equipe.</p><div class="actions"><button class="btn primary" type="button" data-act="ativar-notif">${ico("bell")} Ativar avisos</button></div></section>` : ""}
   ${(() => { const A = acoesTodas().filter(a => a.data >= hojeISO()).slice(0, 3); return A.length ? `<section class="panel"><h3>Próximos eventos <button class="linkbtn" type="button" data-go="agenda">agenda ›</button></h3><div class="acao-lista">${A.map(a => `<button class="acao-c" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint">${esc(a.equipe)} · ${esc(acaoQuando(a))}</small></span><span class="chip">${acaoConfirmados(a).length} vão</span></button>`).join("")}</div></section>` : ""; })()}`;
 }
 function vMeta() {
@@ -5927,7 +5929,7 @@ async function agendaPdf() {
    Grupos: a ADM junta ou separa as equipes LGND (config meta-grupos {lista:[{id,nome,equipes,missao}]}; sem nada salvo, começa pelas frentes do PDF).
    Tarefas: a ADM cria e manda para um grupo; o coordenador escolhe quem faz e marca feito.
    config metatar-<top>-quadro {lista:[{id,titulo,missao:captar|cuidar|outro,prazo,obs,para,pegou:{grupo,por,em},resp,feito,feitoEm,feitoPor,por,em}]} */
-const MISSOES = { captar: ["Trazer senderistas", "ev-captar"], cuidar: ["Cuidar dos legendários", "ev-cuidar"], outro: ["Outra", ""] };
+const MISSOES = { captar: ["Trazer senderistas", "ev-captar"], cuidar: ["Cuidar dos legendários", "ev-cuidar"], pista: ["Preparar a pista", "ev-outro"], outro: ["Outra", ""] };
 const grupos = () => { const g = (cfgDe("meta-grupos") || {}).lista; return g && g.length ? g : FRENTES.map(f => ({ id: f.k, nome: f.l, equipes: f.eq, missao: f.m })); };
 const grupoDe = eq => grupos().find(g => (g.equipes || []).includes(eq));
 const meuGrupo = () => ehCoordEq() ? grupoDe(ME.equipeLgnd) : null;
@@ -5948,9 +5950,9 @@ function quadroMarcar(id, op, val) {
     : op === "resp" ? { ...t, resp: val } : { ...t, feito: !t.feito, feitoEm: t.feito ? "" : agora, feitoPor: t.feito ? "" : ME.adm || "" };
   quadroSalvar(L.map(x => x.id === id ? n : x), op === "pegar" ? `Tarefa com ${nome} 💪` : op === "devolver" ? "Tarefa voltou para as livres" : op === "feito" ? (n.feito ? "Feito! 🙌" : "Desmarcada") : "", op === "pegar" && !ehCoordEq() ? quadroAviso(g, t) : null);
 }
-function quadroForm(id) {
+function quadroForm(id, pre) {
   if (!podeEditar()) { toast("Quem cria as tarefas é a ADM."); return; }
-  const t = quadro().find(x => x.id === id) || { missao: "captar" }, G = grupos();
+  const t = quadro().find(x => x.id === id) || { missao: "captar", ...(pre || {}) }, G = grupos();
   modal(`<h3>${id ? "Editar tarefa" : "Nova tarefa"}</h3><div class="form">
     <div class="field full"><label for="q-t">O que fazer</label><input id="q-t" name="titulo" value="${esc(t.titulo || "")}" placeholder="ex.: Visitar 2 igrejas e apresentar o TOP" required></div>
     <div class="field"><label for="q-m">Missão</label><select id="q-m" name="missao" class="sel">${Object.entries(MISSOES).map(([k, [l]]) => `<option value="${k}" ${t.missao === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
@@ -6026,7 +6028,7 @@ function quadroLi(t, noGrupo) {
     : g ? (pode ? `<button class="btn sm primary" type="button" data-q-feito="${t.id}">${ico("check")} Feito</button>${podeEditar() ? `<button class="linkbtn" type="button" data-q-devolver="${t.id}">tirar do grupo</button>` : ""}` : "")
     : podeEditar() ? `<select class="sel sm" aria-label="Mandar para" data-q-dar="${t.id}"><option value="">Mandar para…</option>${G.map(x => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join("")}</select>` : "";
   return `<div class="li q-li ${t.feito ? "feito" : venc ? "venc" : ""}"><span class="tar-ck">${t.feito ? ico("check") : ""}</span><div class="grow"><b>${esc(t.titulo)}</b>
-      <small class="hint"><span class="tag ${m[1]}">${m[0]}</span>${t.prazo ? ` · até ${fmt(t.prazo)}${venc ? " (venceu)" : ""}` : ""}${!noGrupo && g ? ` · <b>${esc(g.nome)}</b>` : ""}${t.resp ? ` · com ${esc(t.resp.split(" ")[0])}` : ""}${t.obs ? " · " + esc(t.obs) : ""}</small>
+      <small class="hint"><span class="tag ${m[1]}">${m[0]}</span>${t.prazo ? ` · até ${fmt(t.prazo)}${venc ? " (venceu)" : ""}` : ""}${!noGrupo && g ? ` · <b>${esc(g.nome)}</b>` : ""}${t.resp ? ` · com ${esc(t.resp.split(" ")[0])}` : ""}${t.obs ? " · " + esc(t.obs) : ""}${t.lat != null ? ` · <a href="https://www.google.com/maps?q=${t.lat},${t.lng}" target="_blank" rel="noopener">📍 ver no mapa</a>` : ""}</small>
       ${g && pode && !t.feito && leg.length ? `<select class="sel sm" data-q-resp="${t.id}" aria-label="Quem faz"><option value="">Quem faz?</option>${leg.map(p => `<option ${t.resp === p.nome ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</select>` : ""}</div>
     <div class="actions">${acoes}${podeEditar() ? `<button class="linkbtn" type="button" data-q-ed="${t.id}" aria-label="Editar">${ico("edit")}</button>` : ""}</div></div>`;
 }
@@ -6068,6 +6070,21 @@ function metaFaltamCoord() {
   return `<section class="panel q-novas"><h3>${ico("flag")} Faltam homens da ${esc(eq)}</h3><div class="list">${L.map(a => { const r = acaoResp(a).find(x => x.eq === eq), f = acaoFaltam(a, eq);
     const m = `*Equipe ${eq}*, precisamos de vocês!\n${r.oque || a.titulo}\n\nConfirme no link: ${acaoLink(a, r)}`;
     return `<div class="li"><span class="grow"><b>${esc(a.titulo)}</b><small class="hint" style="display:block">${esc(acaoQuando(a))} · faltam ${f} de ${r.homens}</small></span><a class="btn sm primary" href="https://wa.me/?text=${encodeURIComponent(m)}" target="_blank" rel="noopener">${ico("wa")} Chamar a equipe</a></div>`; }).join("")}</div></section>`;
+}
+const INSC_COORD = () => DEMO;   // 04/11/2026: só na demo até "Jogar no app real"
+const VT_TAR = () => DEMO;       // 04/11/2026: anotação da visita técnica vira tarefa (só na demo)
+/* Dashboard do coordenador: quem da equipe dele se inscreveu nos próximos eventos (o que chegou desde a última vez fica marcado "novo") */
+function metaInscritosCoord() {
+  const eq = ME.equipeLgnd; if (!eq || !INSC_COORD()) return "";
+  if (S.inscVisto0 === undefined) { const k = "adm3-insc-visto-" + (ME.id || ""); S.inscVisto0 = store.get(k) || ""; store.set(k, new Date().toISOString()); }
+  const L = acoesTodas().filter(a => a.data >= hojeISO()).flatMap(a => acaoConfirmados(a).filter(x => x.equipe === eq).map(x => ({ x, a })))
+    .sort((p, q) => String(q.x.em || "").localeCompare(String(p.x.em || "")));
+  if (!L.length) return "";
+  const novos = L.filter(o => String(o.x.em || "") > S.inscVisto0).length, quando = iso => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(",", " às");
+  return `<section class="panel"><h3>${ico("check")} Inscritos da ${esc(eq)} nos eventos <small>${L.length}</small>${novos ? ` <span class="badge num">${novos} novo${novos > 1 ? "s" : ""}</span>` : ""}</h3><div class="list">${L.slice(0, 8).map(({ x, a }) => { const novo = String(x.em || "") > S.inscVisto0;
+    return `<button class="li ${novo ? "ev-minha" : ""}" type="button" data-acao-ver="${esc(a.doc)}|${esc(a.id)}"><span class="grow"><b>${esc(x.nome)}</b> ${x.servo ? `<span class="chip ok">servo</span>` : `<span class="chip">participante</span>`}${novo ? ` <span class="chip wait">novo</span>` : ""}
+      <small class="hint" style="display:block">${esc(a.titulo)} · ${esc(acaoQuando(a))}</small>${x.em ? `<small class="hint" style="display:block">🕒 inscrito em ${quando(x.em)}</small>` : ""}</span></button>`; }).join("")}</div>
+    ${L.length > 8 ? `<p class="hint" style="margin:6px 0 0">E mais ${L.length - 8}. Toque num evento para ver a lista toda.</p>` : ""}</section>`;
 }
 /* Respostas prontas: as perguntas do PDF, quem responde e o texto aprovado. config meta-faq {q0:{txt,por,em}} */
 const FAQ = [["Será que eu aguento?", "Hakunas", "Como é o preparo e o cuidado com a saúde, e o que fazer antes"], ["É seguro?", "Segurança", "Como a equipe cuida de quem sobe"],
@@ -6863,6 +6880,9 @@ document.addEventListener("click", e => {
   if (d.vtVer) { const [doc, id] = d.vtVer.split("|"), x = vtTodas().find(y => y.doc === doc && y.id === id);
     if (!x || x.lat == null) { toast("Esta anotação não tem local no mapa."); return; }
     if (mapaVT) { $("#vtMapa").scrollIntoView({ behavior: "smooth", block: "center" }); mapaVT.map.setView([x.lat, x.lng], 17); mapaVT.camada.eachLayer(m => { const p = m.getLatLng && m.getLatLng(); if (p && p.lat === x.lat && p.lng === x.lng) m.openPopup(); }); } return; }
+  if (d.vtTar) { const [doc, id] = d.vtTar.split("|"), x = vtTodas().find(y => y.doc === doc && y.id === id); if (!x) return;
+    const dt = new Date(x.dia + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    quadroForm(null, { titulo: x.txt.slice(0, 140), missao: "pista", obs: `Visita técnica ${dt}, anotado por ${(x.por || "").split(" ")[0]}`, visita: d.vtTar, ...(x.lat != null ? { lat: x.lat, lng: x.lng } : {}) }); return; }
   if (d.vtBaixar) { vtBaixarMapa(t); return; }
   if (d.vtPdf) { const b = t; b.disabled = true; vtPdf().catch(e => toast("Não consegui gerar o PDF. " + (e.message || ""))).finally(() => { b.disabled = false; }); return; }
   if (d.acaoVer) { const [doc, id] = d.acaoVer.split("|"), a = acoesTodas().find(x => x.doc === doc && x.id === id); if (a) acaoVer(a); return; }
