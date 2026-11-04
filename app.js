@@ -6517,7 +6517,10 @@ function render() {
   if (S.view !== "aovivo") S.mapaCheio = false;
   document.body.classList.toggle("av-mapa-cheio", !!S.mapaCheio);
   if (S.view !== "feed") S.feedVisto0 = undefined;
-  document.body.classList.toggle("fd2-on", S.view === "feed" && FEED2());   // Feed 3Colinas em tela cheia, sem o cabeçalho do app
+  document.body.classList.toggle("fd2-on", S.view === "feed" && FEED2());
+  if (S.view === "feed" && FEED2() && !window._fd2Rolar) { let ult = scrollY;   // título some ao descer a tela e volta ao subir (igual ao Instagram)
+    window._fd2Rolar = () => { const t = document.querySelector(".fd2-top"); if (!t) return; const y = scrollY; if (y > ult + 6 && y > 70) t.classList.add("some"); else if (y < ult - 6 || y < 70) t.classList.remove("some"); ult = y; };
+    addEventListener("scroll", window._fd2Rolar, { passive: true }); }   // Feed 3Colinas em tela cheia, sem o cabeçalho do app
   if (S.view === "visita") montarMapaVisita(); else if (mapaVT) vtParar();
   if (S.view === "aovivo") montarMapaVivo(); else if (mapaAV) { try { mapaAV.map.remove(); } catch (e) {} mapaAV = null; }
   if (nfcPendente && ME.acesso && S.P.length && !$("#modalRoot").innerHTML) { const t = nfcPendente; nfcPendente = ""; try { history.replaceState(null, "", location.pathname + location.search.replace(/[?&]nfc=[\w-]+/, "").replace(/^&/, "?") + location.hash); } catch {} setTimeout(() => abrirPorToken(t), 200); }
