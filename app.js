@@ -3711,17 +3711,18 @@ const feedVistoK = () => "adm3-feed-visto-" + (ME.id || "");
 const feedNovos = () => { const v = store.get(feedVistoK()) || ""; return feedPosts().filter(p => p.porId !== ME.id && String(p.em) > v).length; };
 function feedPosts() {
   const pre = feedPre();
-  return Object.entries(S.cfgDocs || {}).filter(([k, d]) => k.startsWith(pre) && d && !d.apagado).map(([k, d]) => ({ ...d, id: k })).sort((a, b) => String(b.em).localeCompare(String(a.em)));
+  return Object.entries(S.cfgDocs || {}).filter(([k, d]) => k.startsWith(pre) && d && !d.apagado && !d.story).map(([k, d]) => ({ ...d, id: k })).sort((a, b) => String(b.em).localeCompare(String(a.em)));
 }
 function feedAtiv() {   // curtidas e comentários de todo mundo, por post
-  const pre = "feedeu-" + curTopId() + "-", likes = {}, coms = {}, vis = {};
+  const pre = "feedeu-" + curTopId() + "-", likes = {}, coms = {}, vis = {}, reac = {};
   Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).forEach(([k, d]) => { const quem = d.por || "Alguém", mid = k.slice(pre.length);
     Object.keys(d.likes || {}).forEach(p => (likes[p] = likes[p] || []).push({ quem, mid }));
     Object.entries(d.vistos || {}).forEach(([p, em]) => (vis[p] = vis[p] || []).push({ quem, mid, em }));
+    Object.keys(d.likes || {}).forEach(p => (reac[p] = reac[p] || []).push({ quem, mid, e: (d.reac || {})[p] || "❤️" }));
     (d.coms || []).forEach(c => (coms[c.post] = coms[c.post] || []).push({ ...c, quem, mid, eq: d.eq || "" })); });
   Object.values(coms).forEach(L => L.sort((a, b) => String(a.em).localeCompare(String(b.em))));
   Object.values(vis).forEach(L => L.sort((a, b) => String(b.em).localeCompare(String(a.em))));
-  return { likes, coms, vis };
+  return { likes, coms, vis, reac };
 }
 // quem dá para marcar: os usuários do app que aparecem (cadastro, quem já postou ou comentou)
 function feedPessoas() {
@@ -3746,6 +3747,7 @@ async function feedSalvarEu(patch, msg) {
   catch (e) { toast("Não consegui salvar. " + erroAmigavel(e)); }
 }
 function vFeed() {
+  if (FEED2()) return vFeed2();
   if (S.feedVisto0 === undefined) S.feedVisto0 = store.get(feedVistoK()) || "";
   const ult = feedPosts()[0]; if (ult && String(ult.em) > (store.get(feedVistoK()) || "")) setTimeout(() => { store.set(feedVistoK(), String(ult.em)); renderNav(); }, 0);
   const P = feedPosts(), A = feedAtiv(), eu = feedEu(), men = feedMencoes(), so = S.feedSo || "";
@@ -3792,21 +3794,22 @@ function feedMarcar(input, onPick) {
   box.onclick = e => { const b = e.target.closest("button[data-id]"); if (!b) return; const x = L.find(y => y.id === b.dataset.id), nome = x.nome.split(" ").slice(0, 2).join(" ");
     input.value = (input.value.replace(/\s*$/, "") + " @" + nome + " ").trimStart(); onPick(x.id); box.remove(); input.focus(); };
 }
-function feedNovo(comFoto) {
+function feedNovo(comFoto, story) {
   let foto = "", arq = null, men = [];
-  modal(`<h3>Novo post</h3><div class="form">
+  modal(`<h3>${story ? "Novo story <small class=\"hint\">some em 24h</small>" : "Novo post"}</h3><div class="form">
     <div class="field full"><textarea id="fd-t" name="txt" rows="4" maxlength="1000" placeholder="Escreva algo… (use @ para marcar alguém)"></textarea></div>
     <div class="field full"><div class="actions"><label class="btn sm">📷 ${"Foto"}<input id="fdFotoIn" type="file" accept="image/*" hidden></label><button class="btn sm" type="button" id="fdMarcar">@ Marcar alguém</button></div>
       <img id="fdFotoImg" class="fd-foto" alt="" hidden></div>
   </div><div class="modal-foot"><span class="hint" id="fdMen"></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Postar</button></div></div>`,
   fd => {
     const txt = String(fd.get("txt") || "").trim(); if (!txt && !foto) { toast("Escreva algo ou escolha uma foto."); return; }
+    if (story && !foto) { toast("Story precisa de uma foto."); return; }
     const id = feedPre() + (ME.id || "eu") + "-" + Date.now().toString(36);
     men = men.filter(m => feedPessoas().some(x => x.id === m && txt.includes("@" + x.nome.split(" ").slice(0, 2).join(" "))));
     closeModal(); S.feedSo = ""; const em = new Date().toISOString();
     (async () => { const f = arq && !DEMO ? await fotoGuardar(arq, `feed/${curTopId()}/${ME.id}/post`, 720) : { foto, fotoPath: "" };
-      await api.set("config", id, { txt, ...f, por: ME.adm || "", porId: ME.id || "", eq: ME.equipeLgnd || "", men, em }); })()
-      .then(() => toast(navigator.onLine === false ? "Post guardado: sobe quando a internet voltar" : "Postado!"), e => toast("Não consegui postar. " + erroAmigavel(e)));
+      await api.set("config", id, { txt, ...f, por: ME.adm || "", porId: ME.id || "", eq: ME.equipeLgnd || "", men, em, ...(story ? { story: 1 } : {}) }); })()
+      .then(() => toast(navigator.onLine === false ? "Post guardado: sobe quando a internet voltar" : story ? "Story publicado!" : "Postado!"), e => toast("Não consegui postar. " + erroAmigavel(e)));
   });
   const fi = $("#fdFotoIn");
   fi.onchange = async e => { const fl = e.target.files[0]; if (!fl) return; try { arq = fl; foto = await reduzirFoto(fl, 1080); $("#fdFotoImg").src = foto; $("#fdFotoImg").hidden = false; } catch (er) { toast("Não consegui ler a foto."); } };
@@ -3837,6 +3840,124 @@ async function feedBaixar(p) {
     <p class="hint">Toque em <b>Salvar na galeria</b> e escolha <b>Salvar imagem</b>. Também dá para tocar e segurar a foto.</p>
     <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button><button class="btn primary" type="button" id="fdGal">Salvar na galeria</button></div></div>`);
   $("#fdGal").onclick = () => { compartilhar(); closeModal(); };
+}
+/* ---------- Feed estilo Instagram (demo, 04/11/2026): stories por equipe, reações do TOP, post fixado pela ADM ---------- */
+const FEED2 = () => DEMO;
+const FD_REAC = [["🔥", "Brutal"], ["💪", "Força"], ["🙏", "Oração"], ["🫡", "Legendário"], ["❤️", "Amei"]];
+const fdCor = eq => { let h = 0; for (const c of String(eq || "ADM")) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const fdAv = (nome, eq, cls = "") => `<span class="fd2-av ${cls}" style="--h:${fdCor(eq)}">${feedIni(nome)}</span>`;
+const FDI = {
+  heart: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.3C1.5 8 3.6 4.5 7 4.5c2 0 3.6 1.2 5 3 1.4-1.8 3-3 5-3 3.4 0 5.5 3.5 4.3 6.7-1.8 4.7-9.3 9.3-9.3 9.3z"/></svg>',
+  com: '<svg viewBox="0 0 24 24"><path d="M20.5 11.5a8.5 8.5 0 0 1-12.6 7.4L3.5 20.5l1.6-4.2A8.5 8.5 0 1 1 20.5 11.5z"/></svg>',
+  eye: '<svg viewBox="0 0 24 24"><path d="M1.8 12S5.5 5 12 5s10.2 7 10.2 7-3.7 7-10.2 7S1.8 12 1.8 12z"/><circle cx="12" cy="12" r="3.2"/></svg>',
+  down: '<svg viewBox="0 0 24 24"><path d="M12 3.5v12M6.5 10.5 12 16l5.5-5.5M4 20.5h16"/></svg>',
+  save: '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5.5L5 21V3.5h14z"/></svg>',
+  pin: '<svg viewBox="0 0 24 24"><path d="M9 3.5h6l-1 6 4 3.5H6l4-3.5zM12 13v7.5"/></svg>',
+};
+function feedStoriesAtivos() {
+  const pre = feedPre(), lim = new Date(Date.now() - 864e5).toISOString();
+  return Object.entries(S.cfgDocs || {}).filter(([k, d]) => k.startsWith(pre) && d && d.story && !d.apagado && String(d.em) > lim).map(([k, d]) => ({ ...d, id: k })).sort((a, b) => String(a.em).localeCompare(String(b.em)));
+}
+function feedStoryGrupos() {
+  const g = new Map(), vi = feedEu().vistos || {};
+  feedStoriesAtivos().forEach(p => { const k = p.eq || "ADM"; if (!g.has(k)) g.set(k, []); g.get(k).push(p); });
+  return [...g].map(([eq, L]) => ({ eq, L, novo: L.some(p => p.porId !== ME.id && !vi[p.id]), ult: L[L.length - 1].em })).sort((a, b) => (b.novo - a.novo) || String(b.ult).localeCompare(String(a.ult)));
+}
+function vFeed2() {
+  if (S.feedVisto0 === undefined) S.feedVisto0 = store.get(feedVistoK()) || "";
+  const ult = feedPosts()[0]; if (ult && String(ult.em) > (store.get(feedVistoK()) || "")) setTimeout(() => { store.set(feedVistoK(), String(ult.em)); renderNav(); }, 0);
+  const P0 = feedPosts(), A = feedAtiv(), eu = feedEu(), men = feedMencoes(), so = S.feedSo || "";
+  const naoVi = ME.id ? P0.filter(p => p.porId !== ME.id && !(eu.vistos || {})[p.id]) : [];
+  if (naoVi.length && !S.feedVisSalvando) { S.feedVisSalvando = 1; const ag = new Date().toISOString(), v = { ...(eu.vistos || {}) }; naoVi.forEach(p => { v[p.id] = ag; });
+    setTimeout(() => feedSalvarEu({ vistos: v }).finally(() => { S.feedVisSalvando = 0; }), 400); }
+  const P = [...P0].sort((a, b) => (b.fixado ? 1 : 0) - (a.fixado ? 1 : 0));
+  const L = so === "salvos" ? P.filter(p => (eu.salvos || {})[p.id]) : so === "meus" ? P.filter(p => p.porId === ME.id) : so === "fotos" ? P.filter(p => p.foto || p.fotoPath) : P;
+  const G = feedStoryGrupos(), meuEq = ME.equipeLgnd || "ADM";
+  const grade = so === "fotos";
+  return `<div class="fd2">
+  <header class="fd2-top"><h2 class="fd2-logo">Feed do TOP</h2><span class="grow"></span>
+    <button class="fd2-ic" type="button" data-fd-novo="1" aria-label="Novo post"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><path d="M12 8v8M8 12h8"/></svg></button></header>
+  <div class="fd2-stories" role="list">
+    <button class="fd2-st" type="button" data-fd-novo="story" role="listitem"><span class="fd2-ring eu">${fdAv(ME.adm, meuEq, "lg")}<b class="fd2-mais">+</b></span><small>Seu story</small></button>
+    ${G.map(x => `<button class="fd2-st" type="button" data-fd-st="${esc(x.eq)}" role="listitem"><span class="fd2-ring ${x.novo ? "" : "visto"}">${fdAv(x.eq, x.eq, "lg")}</span><small>${esc(x.eq)}</small></button>`).join("")}
+  </div>
+  ${men.length ? `<div class="fd2-men"><button type="button" data-fd-ir="${esc(men[0].post)}">🔔 <b>${esc(men[0].quem)}</b> marcou você${men.length > 1 ? ` e mais ${men.length - 1}` : ""}</button><button class="linkbtn" type="button" data-fd-visto="1">ok</button></div>` : ""}
+  <nav class="fd2-tabs">${[["", "Feed"], ["fotos", "Grade"], ["meus", "Meus"], ["salvos", "Salvos"]].map(([k, l]) => `<button type="button" data-fd-so="${k}" aria-selected="${so === k}">${l}</button>`).join("")}</nav>
+  ${!L.length ? `<div class="fd2-vazio">${so === "salvos" ? "Você ainda não salvou nenhum post." : so === "meus" ? "Você ainda não postou nada." : "Ninguém postou ainda. Seja o primeiro!"}</div>`
+    : grade ? `<div class="fd2-grade">${L.map(p => { const src = celFotoSrc(p); return `<button type="button" data-fd-ir="${esc(p.id)}" data-fd-so-volta="1">${src ? `<img src="${esc(src)}" alt="" loading="lazy">` : ""}</button>`; }).join("")}</div>`
+    : L.map(p => feedCard2(p, A, eu)).join("")}
+  </div>`;
+}
+function feedCard2(p, A, eu) {
+  const cs = A.coms[p.id] || [], rs = A.reac[p.id] || [], minha = (eu.likes || {})[p.id] ? ((eu.reac || {})[p.id] || "❤️") : "", salvo = !!(eu.salvos || {})[p.id], meu = p.porId === ME.id, aberto = S.feedCom === p.id,
+    temFoto = !!(p.foto || p.fotoPath), src = temFoto ? celFotoSrc(p) : "", vs = (A.vis[p.id] || []).filter(x => x.mid !== p.porId), novo = p.porId !== ME.id && S.feedVisto0 !== undefined && String(p.em) > S.feedVisto0;
+  const top = Object.entries(rs.reduce((m, x) => (m[x.e] = (m[x.e] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0]).join("");
+  const nome1 = rs.length ? rs[rs.length - 1].quem.split(" ")[0] : "";
+  return `<article class="fd2-post ${p.fixado ? "fixo" : ""}" id="fd-${esc(p.id)}">
+    ${p.fixado ? `<div class="fd2-fixo">${FDI.pin} Fixado pela ADM</div>` : ""}
+    <header class="fd2-h">${fdAv(p.por, p.eq)}<span class="grow"><b>${esc(p.por || "Alguém")}</b>${novo ? ` <i class="fd2-dot" title="novo"></i>` : ""}<small>${esc(p.eq || "ADM")}</small></span>
+      ${S.isOwner ? `<button class="fd2-ic sm ${p.fixado ? "on" : ""}" type="button" data-fd-fix="${esc(p.id)}" aria-label="${p.fixado ? "Desafixar" : "Fixar no topo"}">${FDI.pin}</button>` : ""}
+      ${meu || S.isOwner ? `<button class="fd2-ic sm" type="button" data-fd-del="${esc(p.id)}" aria-label="Apagar post">${ico("trash")}</button>` : ""}</header>
+    ${temFoto ? `<div class="fd2-midia">${src ? `<img src="${esc(src)}" alt="Foto de ${esc(p.por || "")}" loading="lazy" data-fd-like2="${esc(p.id)}">` : `<div class="fd-carregando">carregando a foto…</div>`}</div>`
+      : `<div class="fd2-cartao" style="--h:${fdCor(p.eq)}" data-fd-like2="${esc(p.id)}"><p>${feedTexto(p.txt)}</p></div>`}
+    <div class="fd2-acoes">
+      <button type="button" class="fd2-ic ${minha ? "on" : ""}" data-fd-reac="${esc(p.id)}" aria-label="Reagir">${minha && minha !== "❤️" ? `<span class="fd2-em">${minha}</span>` : FDI.heart}</button>
+      <button type="button" class="fd2-ic" data-fd-com="${esc(p.id)}" aria-label="Comentários">${FDI.com}</button>
+      ${temFoto ? `<button type="button" class="fd2-ic" data-fd-baixar="${esc(p.id)}" aria-label="Salvar a foto na galeria">${FDI.down}</button>` : ""}
+      <button type="button" class="fd2-ic fd2-vis" data-fd-vis="${esc(p.id)}" aria-label="Quem visualizou">${FDI.eye}<span>${vs.length}</span></button>
+      <span class="grow"></span>
+      <button type="button" class="fd2-ic ${salvo ? "on" : ""}" data-fd-salvar="${esc(p.id)}" aria-pressed="${salvo}" aria-label="Salvar">${FDI.save}</button></div>
+    ${rs.length ? `<button class="fd2-reac" type="button" data-fd-quemr="${esc(p.id)}"><span class="fd2-em">${top}</span> ${rs.length === 1 ? `<b>${esc(nome1)}</b>` : `<b>${esc(nome1)}</b> e ${rs.length === 2 ? "outra pessoa" : `outras <b>${rs.length - 1}</b> pessoas`}`}</button>` : ""}
+    ${p.txt && temFoto ? `<p class="fd2-leg"><b>${esc((p.por || "").split(" ").slice(0, 2).join(" "))}</b> ${feedTexto(p.txt)}</p>` : ""}
+    ${cs.length && !aberto ? `<button class="fd2-ver" type="button" data-fd-com="${esc(p.id)}">Ver ${cs.length > 1 ? `todos os ${cs.length} comentários` : "1 comentário"}</button>` : ""}
+    ${aberto ? `<div class="fd2-coms">${cs.map(c => `<div class="fd-c">${fdAv(c.quem, c.eq, "sm")}<div class="grow"><b>${esc(c.quem.split(" ").slice(0, 2).join(" "))}</b> ${feedTexto(c.txt)}<small>${feedQuando(c.em)}${c.mid === ME.id ? ` · <button class="linkbtn" type="button" data-fd-cdel="${esc(c.id)}">apagar</button>` : ""}</small></div></div>`).join("")}
+      <form class="fd-cform fd2-cform" data-fd-cform="${esc(p.id)}"><input name="c" placeholder="Adicione um comentário…" autocomplete="off" maxlength="400"><button class="fd2-txtbtn" type="button" data-fd-marcar="c">@</button><button class="fd2-txtbtn azul" type="submit">Publicar</button></form></div>` : ""}
+    <time class="fd2-quando">${feedQuando(p.em)}</time>
+  </article>`;
+}
+function feedReagir(id, em, soPor) {
+  const L = { ...(feedEu().likes || {}) }, Rc = { ...(feedEu().reac || {}) }, atual = L[id] ? (Rc[id] || "❤️") : "";
+  if (atual === em && !soPor) { delete L[id]; delete Rc[id]; } else { L[id] = L[id] || new Date().toISOString(); Rc[id] = em; }
+  feedSalvarEu({ likes: L, reac: Rc });
+}
+function feedReacBar(btn, id) {
+  document.querySelectorAll(".fd2-rbar").forEach(x => x.remove());
+  const atual = (feedEu().likes || {})[id] ? ((feedEu().reac || {})[id] || "❤️") : "", bar = document.createElement("div"); bar.className = "fd2-rbar";
+  bar.innerHTML = FD_REAC.map(([e, l]) => `<button type="button" class="${e === atual ? "on" : ""}" data-fd-r="${esc(id)}|${e}" title="${l}" aria-label="${l}">${e}</button>`).join("");
+  btn.closest(".fd2-acoes").appendChild(bar);
+  setTimeout(() => document.addEventListener("click", function fora(e) { if (!bar.contains(e.target)) { bar.remove(); document.removeEventListener("click", fora, true); } }, true), 0);
+}
+function feedQuemReagiu(id) {
+  const rs = feedAtiv().reac[id] || [];
+  modal(`<h3>Reações <small>${rs.length}</small></h3><div class="list">${rs.map(x => `<div class="li">${fdAv(x.quem, "", "sm")}<span class="grow"><b>${esc(x.quem)}</b></span><span style="font-size:22px">${x.e}</span></div>`).join("")}</div>
+    <div class="modal-foot"><span></span><button class="btn" type="button" data-close-btn>Fechar</button></div>`);
+}
+function feedEstouro(el) {
+  const box = el.closest(".fd2-midia, .fd2-cartao"); if (!box) return; const b = document.createElement("span"); b.className = "fd2-boom"; b.textContent = "🔥"; box.appendChild(b); setTimeout(() => b.remove(), 900);
+}
+// stories: tela cheia, barrinhas no topo, toque à direita avança, à esquerda volta, passa sozinho em 5s
+function feedStories(eq) {
+  const G = feedStoryGrupos(); let gi = Math.max(0, G.findIndex(x => x.eq === eq)); if (!G.length) return;
+  let i = 0, tm = 0; const vistos = new Set(), vi = feedEu().vistos || {};
+  { const k = G[gi].L.findIndex(p => !vi[p.id]); i = k < 0 ? 0 : k; }
+  const ov = document.createElement("div"); ov.className = "fd2-sv"; ov.setAttribute("role", "dialog"); document.body.appendChild(ov);
+  const fechar = () => { clearTimeout(tm); ov.remove(); document.removeEventListener("keydown", tecla);
+    const novos = [...vistos].filter(id => !(feedEu().vistos || {})[id]); if (novos.length) { const v = { ...(feedEu().vistos || {}) }, ag = new Date().toISOString(); novos.forEach(id => { v[id] = ag; }); feedSalvarEu({ vistos: v }); } else render(); };
+  const ir = d => { i += d; if (i >= G[gi].L.length) { gi++; i = 0; } if (i < 0) { gi--; i = gi >= 0 ? G[gi].L.length - 1 : 0; } if (gi < 0) { gi = 0; i = 0; } if (gi >= G.length) { fechar(); return; } mostra(); };
+  const tecla = e => { if (e.key === "Escape") fechar(); if (e.key === "ArrowRight") ir(1); if (e.key === "ArrowLeft") ir(-1); }; document.addEventListener("keydown", tecla);
+  const mostra = () => {
+    clearTimeout(tm); const g = G[gi], p = g.L[i], src = celFotoSrc(p); if (p.porId !== ME.id) vistos.add(p.id);
+    const vs = (feedAtiv().vis[p.id] || []).filter(x => x.mid !== p.porId).length;
+    ov.innerHTML = `<div class="fd2-sv-in"><div class="fd2-sv-bar">${g.L.map((_, k) => `<i class="${k < i ? "ok" : k === i ? "ag" : ""}"><b></b></i>`).join("")}</div>
+      <header>${fdAv(p.por, p.eq, "sm")}<span class="grow"><b>${esc(g.eq)}</b> <small>${esc((p.por || "").split(" ")[0])} · ${feedQuando(p.em)}</small></span><button type="button" class="fd2-sv-x" aria-label="Fechar">✕</button></header>
+      ${src ? `<img src="${esc(src)}" alt="">` : `<div class="fd2-cartao" style="--h:${fdCor(p.eq)}"><p>${feedTexto(p.txt || "")}</p></div>`}
+      ${p.txt && src ? `<p class="fd2-sv-txt">${feedTexto(p.txt)}</p>` : ""}
+      ${p.porId === ME.id ? `<p class="fd2-sv-vis">${FDI.eye} ${vs} visualizaç${vs === 1 ? "ão" : "ões"}</p>` : ""}
+      <button type="button" class="fd2-sv-l" aria-label="Anterior"></button><button type="button" class="fd2-sv-r" aria-label="Próximo"></button></div>`;
+    ov.querySelector(".fd2-sv-x").onclick = fechar; ov.querySelector(".fd2-sv-l").onclick = () => ir(-1); ov.querySelector(".fd2-sv-r").onclick = () => ir(1);
+    tm = setTimeout(() => ir(1), 5000);
+  };
+  mostra();
 }
 function marcarTrecho(i, campo) {
   const dias = pistaDias(), V = pistaVivo(), diaId = estadoMapa().dia.id, k = diaId + "-" + i;
@@ -7044,9 +7165,15 @@ document.addEventListener("click", e => {
   if (d.agTop) { const t = S.tops.find(x => x.id === d.agTop) || topDoc(); if (t) agTopVer(t); return; }
   if (d.prevEd) { prevForm(); return; }
   if (d.agPass) { S.agPass = !S.agPass; render(); return; }
-  if (d.fdNovo) { feedNovo(d.fdNovo === "foto"); return; }
+  if (d.fdNovo) { feedNovo(d.fdNovo === "foto" || d.fdNovo === "story", d.fdNovo === "story"); return; }
+  if (d.fdSt) { feedStories(d.fdSt); return; }
+  if (d.fdReac) { feedReacBar(t, d.fdReac); return; }
+  if (d.fdR) { const [id, em] = d.fdR.split("|"); feedReagir(id, em); document.querySelectorAll(".fd2-rbar").forEach(x => x.remove()); return; }
+  if (d.fdQuemr) { feedQuemReagiu(d.fdQuemr); return; }
+  if (d.fdFix) { const p = (S.cfgDocs || {})[d.fdFix]; if (p) api.set("config", d.fdFix, { ...p, fixado: p.fixado ? "" : new Date().toISOString() }).then(() => toast(p.fixado ? "Post desafixado" : "Post fixado no topo")); return; }
   if (d.fdSo != null) { S.feedSo = d.fdSo; render(); return; }
   if (d.fdLike || d.fdLike2) { const id = d.fdLike || d.fdLike2, L = { ...(feedEu().likes || {}) };
+    if (d.fdLike2 && FEED2()) { if (S.fdToque && S.fdToque.id === id && Date.now() - S.fdToque.t < 350) { S.fdToque = null; feedReagir(id, "🔥", true); feedEstouro(t); } else S.fdToque = { id, t: Date.now() }; return; }
     if (d.fdLike2) { if (S.fdToque && S.fdToque.id === id && Date.now() - S.fdToque.t < 350) { if (!L[id]) { L[id] = new Date().toISOString(); feedSalvarEu({ likes: L }); } S.fdToque = null; } else S.fdToque = { id, t: Date.now() }; return; }   // dois toques na foto curtem
     if (L[id]) delete L[id]; else L[id] = new Date().toISOString(); feedSalvarEu({ likes: L }); return; }
   if (d.fdSalvar) { const L = { ...(feedEu().salvos || {}) }, id = d.fdSalvar; if (L[id]) delete L[id]; else L[id] = new Date().toISOString(); feedSalvarEu({ salvos: L }, L[id] ? "Salvo em \"Salvos\"" : "Tirado dos salvos"); return; }
@@ -7060,6 +7187,7 @@ document.addEventListener("click", e => {
     modal(`<h3>👁 Visto por ${vs.length}</h3><div class="list">${vs.map(x => `<div class="li"><span class="fd-av sm">${feedIni(x.quem)}</span><span class="grow"><b>${esc(x.quem)}</b>${lk.has(x.mid) ? " ❤️" : ""}</span><small class="hint">${feedQuando(x.em)}</small></div>`).join("") || `<div class="empty">Ninguém viu ainda.</div>`}</div>
       <div class="modal-foot"><span></span><button class="btn" type="button" data-close-btn>Fechar</button></div>`); return; }
   if (d.fdVisto) { feedSalvarEu({ vistoMen: new Date().toISOString() }); return; }
+  if (d.fdIr && d.fdSoVolta) { S.feedSo = ""; render(); setTimeout(() => { const el = document.getElementById("fd-" + d.fdIr); if (el) el.scrollIntoView({ block: "start" }); }, 60); return; }
   if (d.fdIr) { S.feedSo = ""; S.feedCom = d.fdIr; feedSalvarEu({ vistoMen: new Date().toISOString() }); setTimeout(() => { const el = document.getElementById("fd-" + d.fdIr); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150); return; }
   if (d.vtDia) { S.vtDia = d.vtDia; render(); return; }
   if (d.vtQuem) { S.vtQuem = d.vtQuem; render(); return; }
