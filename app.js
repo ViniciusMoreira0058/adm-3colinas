@@ -3714,12 +3714,14 @@ function feedPosts() {
   return Object.entries(S.cfgDocs || {}).filter(([k, d]) => k.startsWith(pre) && d && !d.apagado).map(([k, d]) => ({ ...d, id: k })).sort((a, b) => String(b.em).localeCompare(String(a.em)));
 }
 function feedAtiv() {   // curtidas e comentários de todo mundo, por post
-  const pre = "feedeu-" + curTopId() + "-", likes = {}, coms = {};
+  const pre = "feedeu-" + curTopId() + "-", likes = {}, coms = {}, vis = {};
   Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).forEach(([k, d]) => { const quem = d.por || "Alguém", mid = k.slice(pre.length);
     Object.keys(d.likes || {}).forEach(p => (likes[p] = likes[p] || []).push({ quem, mid }));
+    Object.entries(d.vistos || {}).forEach(([p, em]) => (vis[p] = vis[p] || []).push({ quem, mid, em }));
     (d.coms || []).forEach(c => (coms[c.post] = coms[c.post] || []).push({ ...c, quem, mid, eq: d.eq || "" })); });
   Object.values(coms).forEach(L => L.sort((a, b) => String(a.em).localeCompare(String(b.em))));
-  return { likes, coms };
+  Object.values(vis).forEach(L => L.sort((a, b) => String(b.em).localeCompare(String(a.em))));
+  return { likes, coms, vis };
 }
 // quem dá para marcar: os usuários do app que aparecem (cadastro, quem já postou ou comentou)
 function feedPessoas() {
@@ -3747,6 +3749,10 @@ function vFeed() {
   if (S.feedVisto0 === undefined) S.feedVisto0 = store.get(feedVistoK()) || "";
   const ult = feedPosts()[0]; if (ult && String(ult.em) > (store.get(feedVistoK()) || "")) setTimeout(() => { store.set(feedVistoK(), String(ult.em)); renderNav(); }, 0);
   const P = feedPosts(), A = feedAtiv(), eu = feedEu(), men = feedMencoes(), so = S.feedSo || "";
+  // quem visualizou: ao abrir o Feed, os posts dos outros que eu ainda não tinha visto entram no meu documento (uma gravação só)
+  const naoVi = ME.id ? P.filter(p => p.porId !== ME.id && !(eu.vistos || {})[p.id]) : [];
+  if (naoVi.length && !S.feedVisSalvando) { S.feedVisSalvando = 1; const ag = new Date().toISOString(), v = { ...(eu.vistos || {}) }; naoVi.forEach(p => { v[p.id] = ag; });
+    setTimeout(() => feedSalvarEu({ vistos: v }).finally(() => { S.feedVisSalvando = 0; }), 400); }
   const L = so === "salvos" ? P.filter(p => (eu.salvos || {})[p.id]) : so === "meus" ? P.filter(p => p.porId === ME.id) : so === "fotos" ? P.filter(p => p.foto || p.fotoPath) : P;
   if (men.length && !S.feedMenAviso) S.feedMenAviso = men.length;
   return `<div class="head"><div><h2>Feed do TOP</h2><p class="sub">Fotos e recados da equipe, ao vivo. Curta, comente e marque quem estava junto.</p></div></div>
@@ -3759,7 +3765,7 @@ function vFeed() {
 }
 function feedCard(p, A, eu) {
   const lk = A.likes[p.id] || [], cs = A.coms[p.id] || [], curti = !!(eu.likes || {})[p.id], salvo = !!(eu.salvos || {})[p.id], meu = p.porId === ME.id, aberto = S.feedCom === p.id,
-    temFoto = !!(p.foto || p.fotoPath), src = temFoto ? celFotoSrc(p) : "";
+    temFoto = !!(p.foto || p.fotoPath), src = temFoto ? celFotoSrc(p) : "", vs = (A.vis[p.id] || []).filter(x => x.mid !== p.porId);
   return `<article class="panel fd-post" id="fd-${esc(p.id)}">
     <header class="fd-h"><span class="fd-av">${feedIni(p.por)}</span><span class="grow"><b>${esc(p.por || "Alguém")}</b><small class="hint" style="display:block">${p.eq ? esc(p.eq) + " · " : ""}${feedQuando(p.em)}${p.porId !== ME.id && S.feedVisto0 !== undefined && String(p.em) > S.feedVisto0 ? ` <span class="fd-novo-dot">● novo</span>` : ""}</small></span>
       ${meu || S.isOwner ? `<button class="linkbtn" type="button" data-fd-del="${esc(p.id)}" aria-label="Apagar post">${ico("trash")}</button>` : ""}</header>
@@ -3767,7 +3773,8 @@ function feedCard(p, A, eu) {
     ${temFoto ? (src ? `<img class="fd-foto" src="${esc(src)}" alt="Foto de ${esc(p.por || "")}" loading="lazy" data-fd-like2="${esc(p.id)}">` : `<div class="fd-foto fd-carregando">carregando a foto…</div>`) : ""}
     <div class="fd-acoes"><button type="button" class="fd-b ${curti ? "on" : ""}" data-fd-like="${esc(p.id)}" aria-pressed="${curti}">${curti ? "❤️" : "🤍"} <span>${lk.length || ""}</span></button>
       <button type="button" class="fd-b" data-fd-com="${esc(p.id)}">💬 <span>${cs.length || ""}</span></button>
-      ${temFoto ? `<button type="button" class="fd-b" data-fd-baixar="${esc(p.id)}" aria-label="Baixar a foto">⬇️</button>` : ""}
+      <button type="button" class="fd-b" data-fd-vis="${esc(p.id)}" aria-label="Quem visualizou">👁️ <span>${vs.length}</span></button>
+      ${temFoto ? `<button type="button" class="fd-b" data-fd-baixar="${esc(p.id)}" aria-label="Salvar a foto na galeria">⬇️</button>` : ""}
       <button type="button" class="fd-b fd-salvar ${salvo ? "on" : ""}" data-fd-salvar="${esc(p.id)}" aria-pressed="${salvo}">${salvo ? "🔖 Salvo" : "🔖"}</button></div>
     ${lk.length ? `<p class="hint fd-quem">Curtido por ${esc(lk.slice(0, 3).map(x => x.quem.split(" ")[0]).join(", "))}${lk.length > 3 ? ` e mais ${lk.length - 3}` : ""}</p>` : ""}
     ${cs.length && !aberto ? `<button class="linkbtn fd-ver" type="button" data-fd-com="${esc(p.id)}">Ver ${cs.length > 1 ? `os ${cs.length} comentários` : "1 comentário"}</button>` : ""}
@@ -3814,11 +3821,22 @@ document.addEventListener("submit", e => {
   const c = { id: "c" + Date.now().toString(36), post: f.dataset.fdCform, txt: txt.slice(0, 400), men, em: new Date().toISOString() };
   inp.value = ""; f._men = []; feedSalvarEu({ coms: [...(feedEu().coms || []), c] });
 });
+// salvar a foto: abre o menu de compartilhar do celular (tem "Salvar imagem"/galeria); sem ele, baixa como arquivo
 async function feedBaixar(p) {
-  if (!p || !(p.foto || p.fotoPath)) return; let href = p.foto, url = "";
-  if (!href) { try { const r = await sb.storage.from("adm-fotos").download(p.fotoPath); if (!r.data) throw 0; href = url = URL.createObjectURL(r.data); } catch { toast("Não consegui baixar a foto. Confira a internet."); return; } }
-  const a = document.createElement("a"); a.href = href; a.download = `TOP ${topName()} - ${(p.por || "foto").split(" ")[0]} ${String(p.em).slice(0, 10)}.jpg`;
-  document.body.appendChild(a); a.click(); a.remove(); if (url) setTimeout(() => URL.revokeObjectURL(url), 5000); toast("Foto salva no aparelho");
+  if (!p || !(p.foto || p.fotoPath)) return; let blob;
+  try { if (p.foto) blob = await (await fetch(p.foto)).blob(); else { const r = await sb.storage.from("adm-fotos").download(p.fotoPath); if (!r.data) throw 0; blob = r.data; } }
+  catch { toast("Não consegui pegar a foto. Confira a internet."); return; }
+  const nome = `TOP ${topName()} - ${(p.por || "foto").split(" ")[0]} ${String(p.em).slice(0, 10)}.jpg`.replace(/[\/:*?"<>|]/g, ""), fl = new File([blob], nome, { type: blob.type || "image/jpeg" });
+  const arquivo = () => { const u = URL.createObjectURL(blob), a = document.createElement("a"); a.href = u; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 5000); toast("Foto baixada"); };
+  if (!(navigator.canShare && navigator.canShare({ files: [fl] }))) { arquivo(); return; }
+  const compartilhar = () => navigator.share({ files: [fl] }).catch(e => { if (e && e.name === "NotAllowedError") return "toque"; if (!e || e.name !== "AbortError") arquivo(); });
+  if (await compartilhar() !== "toque") return;
+  // o celular pediu um toque novo (a foto demorou a chegar): mostra a foto com o botão
+  const u = URL.createObjectURL(blob);
+  modal(`<h3>Salvar na galeria</h3><img class="fd-foto" src="${u}" alt="Foto" style="border-radius:10px">
+    <p class="hint">Toque em <b>Salvar na galeria</b> e escolha <b>Salvar imagem</b>. Também dá para tocar e segurar a foto.</p>
+    <div class="modal-foot"><span></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Fechar</button><button class="btn primary" type="button" id="fdGal">Salvar na galeria</button></div></div>`);
+  $("#fdGal").onclick = () => { compartilhar(); closeModal(); };
 }
 function marcarTrecho(i, campo) {
   const dias = pistaDias(), V = pistaVivo(), diaId = estadoMapa().dia.id, k = diaId + "-" + i;
@@ -7038,6 +7056,9 @@ document.addEventListener("click", e => {
   if (d.fdBaixar) { feedBaixar(feedPosts().find(p => p.id === d.fdBaixar)); return; }
   if (d.fdDel) { const b = t.closest("[data-fd-del]"); if (b.dataset.ok !== "1") { b.dataset.ok = "1"; toast("Toque de novo para apagar o post"); setTimeout(() => { b.dataset.ok = ""; }, 3000); return; }
     const p = (S.cfgDocs || {})[d.fdDel]; if (p) api.set("config", d.fdDel, { ...p, apagado: true, foto: "" }).then(() => toast("Post apagado")); return; }
+  if (d.fdVis) { const p = feedPosts().find(x => x.id === d.fdVis), A = feedAtiv(), vs = (A.vis[d.fdVis] || []).filter(x => !p || x.mid !== p.porId), lk = new Set((A.likes[d.fdVis] || []).map(x => x.mid));
+    modal(`<h3>👁 Visto por ${vs.length}</h3><div class="list">${vs.map(x => `<div class="li"><span class="fd-av sm">${feedIni(x.quem)}</span><span class="grow"><b>${esc(x.quem)}</b>${lk.has(x.mid) ? " ❤️" : ""}</span><small class="hint">${feedQuando(x.em)}</small></div>`).join("") || `<div class="empty">Ninguém viu ainda.</div>`}</div>
+      <div class="modal-foot"><span></span><button class="btn" type="button" data-close-btn>Fechar</button></div>`); return; }
   if (d.fdVisto) { feedSalvarEu({ vistoMen: new Date().toISOString() }); return; }
   if (d.fdIr) { S.feedSo = ""; S.feedCom = d.fdIr; feedSalvarEu({ vistoMen: new Date().toISOString() }); setTimeout(() => { const el = document.getElementById("fd-" + d.fdIr); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150); return; }
   if (d.vtDia) { S.vtDia = d.vtDia; render(); return; }
