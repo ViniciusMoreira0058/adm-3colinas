@@ -183,6 +183,7 @@ const VIEWS = [
   { id: "checklist", l: "Checklist", i: "list" },
   { id: "estoque", l: "Estoque", i: "box" },
   { id: "pista", l: "Pista", i: "route" },
+  { id: "feed", l: "Feed do TOP", c: "Feed", i: "heart", all: true, menu: true },   // fotos e recados da equipe (rede social do TOP)
   { id: "visita", l: "Visita técnica", c: "Visita", i: "route", all: true, menu: true },   // anotações no mapa da pista nas visitas técnicas (ADM e coordenadores)
   { id: "meta", l: "Meta do TOP", c: "Meta", i: "chart", all: true, menu: true },   // meta de inscrições até o TOP e indicações das equipes (Estratégia 150)
   { id: "agenda", l: "Agenda", i: "clock", all: true, menu: true },   // todos os eventos de divulgação e o TOP, com quem vai e o link de presença
@@ -202,14 +203,14 @@ const NIVEIS = [
 // todas as páginas podem ser liberadas por usuário (menos Dashboard, que todos veem, e Usuários/Histórico, que são só do dono)
 const ABAS = () => VIEWS.filter(v => !v.owner && !v.all && v.id !== "painel" && (!v.demo || DEMO) && liberada(v));
 // a página já foi lançada no app real? (o que ainda está só na demo não aparece no menu nem em Usuários)
-const liberada = v => !(v.id === "visita" && !VISITA()) && !(v.org && !ORG()) && !(v.extra && !EXTRA()) && !(v.nfc && !NFC()) && !(v.id === "campo" && !CAMPO()) && !(v.id === "celulares" && !CEL())
+const liberada = v => !(v.id === "feed" && !FEED()) && !(v.id === "visita" && !VISITA()) && !(v.org && !ORG()) && !(v.extra && !EXTRA()) && !(v.nfc && !NFC()) && !(v.id === "campo" && !CAMPO()) && !(v.id === "celulares" && !CEL())
   && !(TOP2_VIEWS.includes(v.id) && !TOP2() && !(v.id === "transporte" && TRANSP())) && !(v.id === "carros" && TRANSP()) && !((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) && !(v.id === "comunicacao" && !COM()) && !(v.id === "meta" && !META()) && !(v.id === "agenda" && !META());
 // "_v2" marca o cadastro salvo já com a escolha página por página; cadastros antigos seguem a regra antiga (página que usa dados de outra aparece junto)
 const ABA_V2 = "_v2";
 /* Coordenadores e subcoordenadores de equipe (demo): perfil "coord" no cadastro, só leitura, vê só a própria equipe */
 const COORD = () => true;   // liberado no app real em 31/10/2026 (precisa do supabase/coordenadores.sql)
 const COORD_ABAS = ["equipes", "familias", "consagracao", "emergencia", "cronograma", "aovivo", "pista", "financeiro"];   // no Financeiro o coordenador só lança os gastos da equipe
-const COORD_VER = ["painel", ...COORD_ABAS, "meta", "agenda", "visita"];
+const COORD_VER = ["painel", ...COORD_ABAS, "meta", "agenda", "visita", "feed"];
 const coordAbasSalvar = () => [...COORD_ABAS, "legendarios", ABA_V2];   // "legendarios" só para o banco liberar a equipe dele (a página Legendários fica escondida)
 const ehCoordEq = () => COORD() && !!ME.coord;
 const ehCoordCad = e => COORD() && e && e.perfil === "coord";
@@ -228,6 +229,7 @@ const canSee = v => {
   if ((v.id === "financeiro" || v.id === "emergencia") && !TOP3()) return false;
   if (v.id === "comunicacao" && !COM()) return false;
   if (v.id === "visita" && !VISITA()) return false;
+  if (v.id === "feed" && !FEED()) return false;
   if ((v.id === "meta" || v.id === "agenda") && !META()) return false;
   if (!ME.acesso) return v.id === "painel";
   if (ehCoordEq()) return COORD_VER.includes(v.id);   // coordenador de equipe: só as páginas dele, sem saúde, telefones e pagamentos
@@ -1197,7 +1199,7 @@ const RELATORIO_FINAL = () => true; // ocorrências e relatório final do TOP
 const DASH_NOVO = () => true; // Dashboard novo (contagem regressiva, blocos, o que fazer hoje)
 const ORG = () => true; // organização: importação do dia, menu em grupos, títulos padrão, busca geral e backup semanal
 const MENU_GRUPOS = [["", ["painel"]], ["Pessoas", ["meta", "agenda", "participantes", "legendarios", "equipes", "pendencias", "comunicados", "nfc", "familias", "consagracao"]],
-  ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista", "visita"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
+  ["Operação", ["checkin", "cronograma", "aovivo", "comunicacao", "campo", "celulares", "remedios", "transporte", "carros", "emergencia", "ocorrencias", "checklist", "pista", "visita", "feed"]], ["Itens", ["estoque", "pins"]], ["Gestão", ["importacao", "financeiro", "tops", "postop", "usuarios", "historico"]], ["Ajuda", ["guia"]]];
 const EXTRA = () => true; // cobrança em sequência melhorada, Pós-TOP e guia "Como usar"
 
 /* Importação do dia: as 4 planilhas, na ordem, com quem importou e a que horas. Fica em config/importacoes-<top> {ultimo:{k:{dia,em,por,arquivo,txt}}, hist:[]}. */
@@ -3694,6 +3696,120 @@ async function vtPdf() {
       if (x.foto) try { doc.addImage(x.foto, "JPEG", W - 52, X.y + 2, 36, h - 4, undefined, "FAST"); } catch (e) {}
       X.y += h + 3; }); X.y += 3; });
   await entregarPdf(doc.output("blob"), `Visita tecnica ${dia}.pdf`, `Visita técnica · ${dl}`, true);
+}
+/* ---------- Feed do TOP (04/11/2026, só DEMO) ----------
+   Rede social da equipe: foto ou só texto, curtir, comentar, marcar (@) e salvar a foto.
+   Cada post é um documento config post-<top>-<membroId>-<id> {txt,foto,por,porId,eq,men:[membroId],em}.
+   Curtidas, salvos e comentários de cada pessoa ficam no documento dela feedeu-<top>-<membroId> {likes:{postId:iso}, salvos:{postId:iso}, coms:[{id,post,txt,men,em}], por, eq, vistoMen}.
+   Assim cada um só grava o que é seu (igual à Visita técnica). */
+const FEED = () => DEMO;
+const feedPre = () => "post-" + curTopId() + "-";
+const feedEuId = (id = ME.id || "eu") => "feedeu-" + curTopId() + "-" + id;
+const feedEu = () => (S.cfgDocs || {})[feedEuId()] || {};
+function feedPosts() {
+  const pre = feedPre();
+  return Object.entries(S.cfgDocs || {}).filter(([k, d]) => k.startsWith(pre) && d && !d.apagado).map(([k, d]) => ({ ...d, id: k })).sort((a, b) => String(b.em).localeCompare(String(a.em)));
+}
+function feedAtiv() {   // curtidas e comentários de todo mundo, por post
+  const pre = "feedeu-" + curTopId() + "-", likes = {}, coms = {};
+  Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).forEach(([k, d]) => { const quem = d.por || "Alguém", mid = k.slice(pre.length);
+    Object.keys(d.likes || {}).forEach(p => (likes[p] = likes[p] || []).push({ quem, mid }));
+    (d.coms || []).forEach(c => (coms[c.post] = coms[c.post] || []).push({ ...c, quem, mid, eq: d.eq || "" })); });
+  Object.values(coms).forEach(L => L.sort((a, b) => String(a.em).localeCompare(String(b.em))));
+  return { likes, coms };
+}
+// quem dá para marcar: os usuários do app que aparecem (cadastro, quem já postou ou comentou)
+function feedPessoas() {
+  const m = new Map(); (S.equipe || []).filter(x => x.ativo !== false).forEach(x => m.set(x.id, x.nome));
+  feedPosts().forEach(p => p.porId && m.set(p.porId, p.por)); const pre = "feedeu-" + curTopId() + "-";
+  Object.entries(S.cfgDocs || {}).filter(([k]) => k.startsWith(pre)).forEach(([k, d]) => d.por && m.set(k.slice(pre.length), d.por));
+  m.delete(ME.id); return [...m].map(([id, nome]) => ({ id, nome })).filter(x => x.nome).sort((a, b) => a.nome.localeCompare(b.nome));
+}
+const feedQuando = iso => { const m = Math.round((Date.now() - new Date(iso)) / 6e4); return m < 1 ? "agora" : m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); };
+const feedIni = n => String(n || "?").split(" ").filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase();
+const feedTexto = t => esc(t).replace(/@([A-Za-zÀ-ú]+(?: [A-Za-zÀ-ú]+)?)/g, '<b class="fd-men">@$1</b>').replace(/\n/g, "<br>");
+// marcações em mim que eu ainda não vi
+function feedMencoes() {
+  const eu = ME.id, visto = feedEu().vistoMen || "", A = feedAtiv(); if (!eu) return [];
+  const L = feedPosts().filter(p => (p.men || []).includes(eu)).map(p => ({ em: p.em, quem: p.por, post: p.id, txt: p.txt, tipo: "post" }));
+  Object.entries(A.coms).forEach(([post, cs]) => cs.filter(c => (c.men || []).includes(eu)).forEach(c => L.push({ em: c.em, quem: c.quem, post, txt: c.txt, tipo: "com" })));
+  return L.filter(x => String(x.em) > visto).sort((a, b) => String(b.em).localeCompare(String(a.em)));
+}
+async function feedSalvarEu(patch, msg) {
+  const d = feedEu();
+  try { await api.set("config", feedEuId(), { likes: {}, salvos: {}, coms: [], ...d, ...patch, por: ME.adm || "", eq: ME.equipeLgnd || "" }); if (msg) toast(msg); }
+  catch (e) { toast("Não consegui salvar. " + erroAmigavel(e)); }
+}
+function vFeed() {
+  const P = feedPosts(), A = feedAtiv(), eu = feedEu(), men = feedMencoes(), so = S.feedSo || "";
+  const L = so === "salvos" ? P.filter(p => (eu.salvos || {})[p.id]) : so === "meus" ? P.filter(p => p.porId === ME.id) : so === "fotos" ? P.filter(p => p.foto) : P;
+  if (men.length && !S.feedMenAviso) S.feedMenAviso = men.length;
+  return `<div class="head"><div><h2>Feed do TOP</h2><p class="sub">Fotos e recados da equipe, ao vivo. Curta, comente e marque quem estava junto.</p></div></div>
+  ${men.length ? `<section class="panel fd-avisos"><h3>🔔 Marcaram você <small>${men.length}</small><button class="linkbtn" type="button" data-fd-visto="1">marcar como visto</button></h3>
+    <div class="list">${men.slice(0, 5).map(x => `<button class="li" type="button" data-fd-ir="${esc(x.post)}"><span class="grow"><b>${esc(x.quem)}</b> marcou você ${x.tipo === "com" ? "num comentário" : "num post"}<small class="hint" style="display:block">${esc(String(x.txt || "").slice(0, 80))}</small></span><small class="hint">${feedQuando(x.em)}</small></button>`).join("")}</div></section>` : ""}
+  <section class="panel fd-novo"><div class="fd-novo-l"><span class="fd-av">${feedIni(ME.adm)}</span><button class="fd-abrir" type="button" data-fd-novo="1">No que está pensando, ${esc((ME.adm || "").split(" ")[0])}?</button></div>
+    <div class="actions"><button class="btn sm" type="button" data-fd-novo="foto">📷 Foto</button><button class="btn sm" type="button" data-fd-novo="1">✏️ Texto</button></div></section>
+  <div class="seg fd-filtro" role="tablist">${[["", "Tudo"], ["fotos", "Fotos"], ["meus", "Meus posts"], ["salvos", "Salvos"]].map(([k, l]) => `<button type="button" role="tab" data-fd-so="${k}" aria-selected="${so === k}">${l}</button>`).join("")}</div>
+  ${L.length ? L.map(p => feedCard(p, A, eu)).join("") : `<div class="empty">${so === "salvos" ? "Você ainda não salvou nenhum post." : so === "meus" ? "Você ainda não postou nada." : "Ninguém postou ainda. Seja o primeiro!"}</div>`}`;
+}
+function feedCard(p, A, eu) {
+  const lk = A.likes[p.id] || [], cs = A.coms[p.id] || [], curti = !!(eu.likes || {})[p.id], salvo = !!(eu.salvos || {})[p.id], meu = p.porId === ME.id, aberto = S.feedCom === p.id;
+  return `<article class="panel fd-post" id="fd-${esc(p.id)}">
+    <header class="fd-h"><span class="fd-av">${feedIni(p.por)}</span><span class="grow"><b>${esc(p.por || "Alguém")}</b><small class="hint" style="display:block">${p.eq ? esc(p.eq) + " · " : ""}${feedQuando(p.em)}</small></span>
+      ${meu || S.isOwner ? `<button class="linkbtn" type="button" data-fd-del="${esc(p.id)}" aria-label="Apagar post">${ico("trash")}</button>` : ""}</header>
+    ${p.txt ? `<p class="fd-txt ${p.foto ? "" : "fd-so-txt"}">${feedTexto(p.txt)}</p>` : ""}
+    ${p.foto ? `<img class="fd-foto" src="${p.foto}" alt="Foto de ${esc(p.por || "")}" loading="lazy" data-fd-like2="${esc(p.id)}">` : ""}
+    <div class="fd-acoes"><button type="button" class="fd-b ${curti ? "on" : ""}" data-fd-like="${esc(p.id)}" aria-pressed="${curti}">${curti ? "❤️" : "🤍"} <span>${lk.length || ""}</span></button>
+      <button type="button" class="fd-b" data-fd-com="${esc(p.id)}">💬 <span>${cs.length || ""}</span></button>
+      ${p.foto ? `<button type="button" class="fd-b" data-fd-baixar="${esc(p.id)}" aria-label="Baixar a foto">⬇️</button>` : ""}
+      <button type="button" class="fd-b fd-salvar ${salvo ? "on" : ""}" data-fd-salvar="${esc(p.id)}" aria-pressed="${salvo}">${salvo ? "🔖 Salvo" : "🔖"}</button></div>
+    ${lk.length ? `<p class="hint fd-quem">Curtido por ${esc(lk.slice(0, 3).map(x => x.quem.split(" ")[0]).join(", "))}${lk.length > 3 ? ` e mais ${lk.length - 3}` : ""}</p>` : ""}
+    ${cs.length && !aberto ? `<button class="linkbtn fd-ver" type="button" data-fd-com="${esc(p.id)}">Ver ${cs.length > 1 ? `os ${cs.length} comentários` : "1 comentário"}</button>` : ""}
+    ${aberto ? `<div class="fd-coms">${cs.map(c => `<div class="fd-c"><span class="fd-av sm">${feedIni(c.quem)}</span><div class="grow"><b>${esc(c.quem)}</b> ${feedTexto(c.txt)}<small class="hint" style="display:block">${feedQuando(c.em)}${c.mid === ME.id ? ` · <button class="linkbtn" type="button" data-fd-cdel="${esc(c.id)}">apagar</button>` : ""}</small></div></div>`).join("")}
+      <form class="fd-cform" data-fd-cform="${esc(p.id)}"><input name="c" placeholder="Escreva um comentário… use @ para marcar" autocomplete="off" maxlength="400"><button class="btn sm" type="button" data-fd-marcar="c">@</button><button class="btn sm primary" type="submit">Enviar</button></form></div>` : ""}
+  </article>`;
+}
+// marcar alguém: abre a lista e coloca @Nome no campo
+function feedMarcar(input, onPick) {
+  const L = feedPessoas(); if (!L.length) { toast("Ainda não tem ninguém para marcar."); return; }
+  const box = document.createElement("div"); box.className = "fd-pick"; box.innerHTML = `<input placeholder="Buscar nome" aria-label="Buscar nome"><div class="fd-pick-l"></div>`;
+  input.closest("form, .form").appendChild(box);
+  const lista = q => { box.querySelector(".fd-pick-l").innerHTML = L.filter(x => norm(x.nome).includes(norm(q))).slice(0, 12).map(x => `<button type="button" data-id="${esc(x.id)}">${esc(x.nome)}</button>`).join("") || `<small class="hint">Ninguém com esse nome.</small>`; };
+  lista(""); const bq = box.querySelector("input"); bq.focus(); bq.oninput = () => lista(bq.value);
+  box.onclick = e => { const b = e.target.closest("button[data-id]"); if (!b) return; const x = L.find(y => y.id === b.dataset.id), nome = x.nome.split(" ").slice(0, 2).join(" ");
+    input.value = (input.value.replace(/\s*$/, "") + " @" + nome + " ").trimStart(); onPick(x.id); box.remove(); input.focus(); };
+}
+function feedNovo(comFoto) {
+  let foto = "", men = [];
+  modal(`<h3>Novo post</h3><div class="form">
+    <div class="field full"><textarea id="fd-t" name="txt" rows="4" maxlength="1000" placeholder="Escreva algo… (use @ para marcar alguém)"></textarea></div>
+    <div class="field full"><div class="actions"><label class="btn sm">📷 ${"Foto"}<input id="fdFotoIn" type="file" accept="image/*" hidden></label><button class="btn sm" type="button" id="fdMarcar">@ Marcar alguém</button></div>
+      <img id="fdFotoImg" class="fd-foto" alt="" hidden></div>
+  </div><div class="modal-foot"><span class="hint" id="fdMen"></span><div class="actions"><button class="btn ghost" type="button" data-close-btn>Cancelar</button><button class="btn primary" type="submit">Postar</button></div></div>`,
+  fd => {
+    const txt = String(fd.get("txt") || "").trim(); if (!txt && !foto) { toast("Escreva algo ou escolha uma foto."); return; }
+    const id = feedPre() + (ME.id || "eu") + "-" + Date.now().toString(36);
+    men = men.filter(m => feedPessoas().some(x => x.id === m && txt.includes("@" + x.nome.split(" ").slice(0, 2).join(" "))));
+    closeModal(); S.feedSo = "";
+    api.set("config", id, { txt, foto, por: ME.adm || "", porId: ME.id || "", eq: ME.equipeLgnd || "", men, em: new Date().toISOString() })
+      .then(() => toast(navigator.onLine === false ? "Post guardado: sobe quando a internet voltar" : "Postado!"), e => toast("Não consegui postar. " + erroAmigavel(e)));
+  });
+  const fi = $("#fdFotoIn");
+  fi.onchange = async e => { const fl = e.target.files[0]; if (!fl) return; try { foto = await reduzirFoto(fl, 1080); $("#fdFotoImg").src = foto; $("#fdFotoImg").hidden = false; } catch (er) { toast("Não consegui ler a foto."); } };
+  $("#fdMarcar").onclick = () => feedMarcar($("#fd-t"), id => { men.push(id); $("#fdMen").textContent = `${men.length} marcado(s)`; });
+  if (comFoto) fi.click(); else $("#fd-t").focus();
+}
+// comentário: cada um grava no próprio documento
+document.addEventListener("submit", e => {
+  const f = e.target.closest && e.target.closest("[data-fd-cform]"); if (!f) return; e.preventDefault();
+  const inp = f.querySelector("input[name=c]"), txt = inp.value.trim(); if (!txt) return;
+  const men = (f._men || []).filter(m => feedPessoas().some(x => x.id === m && txt.includes("@" + x.nome.split(" ").slice(0, 2).join(" "))));
+  const c = { id: "c" + Date.now().toString(36), post: f.dataset.fdCform, txt: txt.slice(0, 400), men, em: new Date().toISOString() };
+  inp.value = ""; f._men = []; feedSalvarEu({ coms: [...(feedEu().coms || []), c] });
+});
+function feedBaixar(p) {
+  if (!p || !p.foto) return; const a = document.createElement("a"); a.href = p.foto; a.download = `TOP ${topName()} - ${(p.por || "foto").split(" ")[0]} ${String(p.em).slice(0, 10)}.jpg`;
+  document.body.appendChild(a); a.click(); a.remove(); toast("Foto salva no aparelho");
 }
 function marcarTrecho(i, campo) {
   const dias = pistaDias(), V = pistaVivo(), diaId = estadoMapa().dia.id, k = diaId + "-" + i;
@@ -6209,6 +6325,7 @@ function render() {
     : v === "financeiro" ? vFinanceiro()
     : v === "guia" ? vGuia()
     : v === "visita" ? vVisita()
+    : v === "feed" ? vFeed()
     : vPista());
   if (D2()) { if (carregando(v)) html = faixa + other + esqueleto(v); else html = vazios(html); }
   // padrão das telas: o nome do grupo do menu aparece em cima do título de cada tela
@@ -6820,7 +6937,7 @@ document.addEventListener("click", e => {
   if (nl) { const p = S.P.find(x => x.id === nl.dataset.nfcLink); if (p) linkEnviado(p); return; }
   const cobPag = e.target.closest("a[data-cobrar-pag]");
   if (cobPag) { const p = S.P.find(x => x.id === cobPag.dataset.cobrarPag); if (p) registrarAvisoPag(p); return; }
-  const t = e.target.closest("button, [data-close], [data-hist-ver], [data-fin-det]");
+  const t = e.target.closest("button, [data-close], [data-hist-ver], [data-fin-det], [data-fd-like2]");
   if (!t) return;
   if (t.matches("[data-close]") && e.target === t) { closeModal(); return; }
   if (t.matches("[data-close-btn]")) { closeModal(); return; }
@@ -6871,6 +6988,20 @@ document.addEventListener("click", e => {
   if (d.agTop) { const t = S.tops.find(x => x.id === d.agTop) || topDoc(); if (t) agTopVer(t); return; }
   if (d.prevEd) { prevForm(); return; }
   if (d.agPass) { S.agPass = !S.agPass; render(); return; }
+  if (d.fdNovo) { feedNovo(d.fdNovo === "foto"); return; }
+  if (d.fdSo != null) { S.feedSo = d.fdSo; render(); return; }
+  if (d.fdLike || d.fdLike2) { const id = d.fdLike || d.fdLike2, L = { ...(feedEu().likes || {}) };
+    if (d.fdLike2) { if (S.fdToque && S.fdToque.id === id && Date.now() - S.fdToque.t < 350) { if (!L[id]) { L[id] = new Date().toISOString(); feedSalvarEu({ likes: L }); } S.fdToque = null; } else S.fdToque = { id, t: Date.now() }; return; }   // dois toques na foto curtem
+    if (L[id]) delete L[id]; else L[id] = new Date().toISOString(); feedSalvarEu({ likes: L }); return; }
+  if (d.fdSalvar) { const L = { ...(feedEu().salvos || {}) }, id = d.fdSalvar; if (L[id]) delete L[id]; else L[id] = new Date().toISOString(); feedSalvarEu({ salvos: L }, L[id] ? "Salvo em \"Salvos\"" : "Tirado dos salvos"); return; }
+  if (d.fdCom) { S.feedCom = S.feedCom === d.fdCom ? "" : d.fdCom; render(); if (S.feedCom) setTimeout(() => { const i = document.querySelector(`[data-fd-cform="${CSS.escape(d.fdCom)}"] input`); if (i) i.focus(); }, 50); return; }
+  if (d.fdMarcar) { const f = t.closest("form"), inp = f.querySelector("input[name=c]"); f._men = f._men || []; feedMarcar(inp, id => f._men.push(id)); return; }
+  if (d.fdCdel) { feedSalvarEu({ coms: (feedEu().coms || []).filter(c => c.id !== d.fdCdel) }, "Comentário apagado"); return; }
+  if (d.fdBaixar) { feedBaixar(feedPosts().find(p => p.id === d.fdBaixar)); return; }
+  if (d.fdDel) { const b = t.closest("[data-fd-del]"); if (b.dataset.ok !== "1") { b.dataset.ok = "1"; toast("Toque de novo para apagar o post"); setTimeout(() => { b.dataset.ok = ""; }, 3000); return; }
+    const p = (S.cfgDocs || {})[d.fdDel]; if (p) api.set("config", d.fdDel, { ...p, apagado: true, foto: "" }).then(() => toast("Post apagado")); return; }
+  if (d.fdVisto) { feedSalvarEu({ vistoMen: new Date().toISOString() }); return; }
+  if (d.fdIr) { S.feedSo = ""; S.feedCom = d.fdIr; feedSalvarEu({ vistoMen: new Date().toISOString() }); setTimeout(() => { const el = document.getElementById("fd-" + d.fdIr); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150); return; }
   if (d.vtDia) { S.vtDia = d.vtDia; render(); return; }
   if (d.vtQuem) { S.vtQuem = d.vtQuem; render(); return; }
   if (d.vtGps) { vtForm(null, null, true); return; }
@@ -8305,7 +8436,7 @@ function conectarDados() {
     S.cronoCriando = S.cronoCriando || new Set();
     if (ficha && navigator.onLine !== false && !db.estado().offline && !S.cfgDocs[ficha] && !S.cronoCriando.has(ficha)) {
       S.cronoCriando.add(ficha); db.doc("config/" + ficha).set({ _adm: eu() }).catch(() => {}).finally(() => S.cronoCriando.delete(ficha)); }
-    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios", "aovivo", "ocorrencias", "tops", "visita"].includes(S.view)) render();
+    if (["cronograma", "consagracao", "pins", "painel", "usuarios", "participantes", "legendarios", "aovivo", "ocorrencias", "tops", "visita", "feed"].includes(S.view)) render();
   });
   db.doc("config/geral").onSnapshot(snap => { if (snap.exists && !pending.has("kits")) { S.config = { ...S.config, ...snap.data() }; render(); } });
   db.doc("config/aviso").onSnapshot(snap => { S.aviso = snap.exists ? snap.data() : null; render(); setTimeout(checarAviso, 400); });

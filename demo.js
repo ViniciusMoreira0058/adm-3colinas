@@ -1881,6 +1881,17 @@ window.ADM_DEMO.docs.push({ col: "config", id: "nfc-codigo", data: { codigo: "12
     { id: "vt5", dia: d, tipo: "falta", txt: "Falta placa de sinalização na bifurcação (seguir à direita).", lat: -20.2165, lng: -47.2805, em: h(9, 40) },
     { id: "vt6", dia: d, tipo: "sugestao", txt: "Fazer a prédica aqui no alto, vista boa para o pôr do sol.", lat: -20.2052, lng: -47.2741, em: h(10, 30) } ] } });
 })();
+// FEED DO TOP (demo): posts de foto e texto, curtidas, comentários e uma marcação no dono
+(function () {
+  const h = m => new Date(Date.now() - m * 6e4).toISOString(), D = window.ADM_DEMO.docs, P = "post-top1922-";
+  D.push({ col: "config", id: P + "m-hen-a1", data: { txt: "Amanhecer no acampamento. Que lugar, meu Deus! 🙏", foto: "assets/bg.jpg", por: "Henrique", porId: "m-hen", eq: "", men: [], em: h(180) } });
+  D.push({ col: "config", id: P + "m-coord-a2", data: { txt: "Segurança posicionada no trecho do barranco. Tudo tranquilo por aqui. @Vinicius Moreira já conferimos as cordas.", foto: "", por: "Fábio Henrique Alves", porId: "m-coord", eq: "Segurança", men: ["m-dono"], em: h(95) } });
+  D.push({ col: "config", id: P + "m-rafa-a3", data: { txt: "Convite da próxima apresentação já está rodando! Mandem nos grupos 🔥", foto: "assets/convite-og.jpg", por: "Rafael Lima", porId: "m-rafa", eq: "", men: [], em: h(40) } });
+  D.push({ col: "config", id: P + "m-bru-a4", data: { txt: "Hidratação 2 abastecida: 20 galões. Bora, família!", foto: "", por: "Bruno Costa", porId: "m-bru", eq: "", men: [], em: h(12) } });
+  D.push({ col: "config", id: "feedeu-top1922-m-hen", data: { por: "Henrique", likes: { [P + "m-rafa-a3"]: h(30), [P + "m-coord-a2"]: h(80) }, salvos: {}, coms: [{ id: "c1", post: P + "m-rafa-a3", txt: "Ficou top demais!", men: [], em: h(30) }] } });
+  D.push({ col: "config", id: "feedeu-top1922-m-coord", data: { por: "Fábio Henrique Alves", eq: "Segurança", likes: { [P + "m-hen-a1"]: h(170), [P + "m-rafa-a3"]: h(35) }, salvos: {}, coms: [{ id: "c2", post: P + "m-hen-a1", txt: "Lugar abençoado 🙌", men: [], em: h(160) }] } });
+  D.push({ col: "config", id: "feedeu-top1922-m-rafa", data: { por: "Rafael Lima", likes: { [P + "m-hen-a1"]: h(150), [P + "m-bru-a4"]: h(10) }, salvos: {}, coms: [{ id: "c3", post: P + "m-bru-a4", txt: "Valeu @Bruno Costa! Já passo aí com mais gelo.", men: ["m-bru"], em: h(9) }] } });
+})();
 // META DO TOP (demo): meta pequena para a demo (10 vagas) e algumas indicações das equipes
 (function () {
   const h = horas => new Date(Date.now() - horas * 3600e3).toISOString(), D = window.ADM_DEMO.docs;
