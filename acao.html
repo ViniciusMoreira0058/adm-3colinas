@@ -76,8 +76,8 @@ form.perg #legW .l{font-size:22px;font-weight:800;color:var(--fg,#fff);text-tran
   const v2 = I.v === 2, aberto = v2 && I.x === 1, legSel = () => !aberto || (document.querySelector('input[name="leg"]:checked') || {}).value === "1";
   if (v2) { $("#numW").hidden = false; $("#infoW").hidden = false; $("#lgpd").hidden = false; $("#legW").hidden = !aberto; if (I.q) $("#eb").textContent = "Convite · " + (/legend/i.test(I.q) ? I.q : "equipe " + I.q); }
   const troca = () => { const l = legSel(); $("#numW").hidden = !v2 || !l; $("#eqW").hidden = !l; $("#igW").hidden = l; };
-  // demo (05/11/2026): primeiro pergunta "Você é legendário?" e só depois mostra os campos de cada um
-  const PERG = demo && aberto;
+  // desde 05/11/2026 (app real): primeiro pergunta "Você é legendário?" e só depois mostra os campos de cada um
+  const PERG = aberto;
   if (PERG) { f.classList.add("perg"); document.querySelectorAll('input[name="leg"]').forEach(x => { x.checked = false; }); $("#legW .l").textContent = "Você é legendário?";
     const sn = $("#legW .sn"); sn.children[0].querySelector("span").textContent = "Não, ainda não sou"; sn.insertBefore(sn.children[1], sn.children[0]);
     const tl = document.createElement("button"); tl.type = "button"; tl.className = "trocaLeg full"; tl.hidden = true; $("#legW").after(tl);
